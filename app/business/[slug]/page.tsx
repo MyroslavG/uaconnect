@@ -1,0 +1,291 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import {
+  Clock,
+  ExternalLink,
+  Globe,
+  Instagram,
+  Languages,
+  MapPin,
+  Phone,
+} from "lucide-react";
+
+import { BusinessCard } from "@/components/business-card";
+import { BusinessProfileActions } from "@/components/business-profile-actions";
+import { MapEmbed } from "@/components/map-embed";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import {
+  getDirectoryBusiness,
+  getRelatedDirectoryBusinesses,
+} from "@/lib/directory-data";
+import { copy, localizeBusiness, localizeBusinesses } from "@/lib/i18n";
+import { getRequestLocale } from "@/lib/locale";
+import { getCurrentUser } from "@/lib/supabase/auth";
+import {
+  formatExternalUrl,
+  formatInstagramHandle,
+  getInstagramUrl,
+} from "@/lib/utils";
+
+type BusinessProfilePageProps = {
+  params: Promise<{
+    slug: string;
+  }>;
+};
+
+export function generateStaticParams() {
+  return [];
+}
+
+export async function generateMetadata({
+  params,
+}: BusinessProfilePageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const locale = await getRequestLocale();
+  const labels = copy[locale].business;
+  const business = await getDirectoryBusiness(slug);
+
+  if (!business) {
+    return {
+      title: labels.metadataFallback,
+    };
+  }
+
+  const localizedBusiness = localizeBusiness(business, locale);
+
+  return {
+    title: labels.metadataTitle(localizedBusiness.name, localizedBusiness.city),
+    description: localizedBusiness.description,
+    alternates: {
+      canonical: `/business/${business.slug}`,
+    },
+    openGraph: {
+      title: `${business.name} | UAConnect`,
+      description: localizedBusiness.description,
+    },
+  };
+}
+
+export default async function BusinessProfilePage({
+  params,
+}: BusinessProfilePageProps) {
+  const { slug } = await params;
+  const locale = await getRequestLocale();
+  const labels = copy[locale];
+  const [rawBusiness, user] = await Promise.all([
+    getDirectoryBusiness(slug),
+    getCurrentUser(),
+  ]);
+
+  if (!rawBusiness) {
+    notFound();
+  }
+
+  const isOwner = Boolean(
+    user && rawBusiness.ownerId && rawBusiness.ownerId === user.id,
+  );
+  const dashboardHref = rawBusiness.registrationId
+    ? `/dashboard#business-${rawBusiness.registrationId}`
+    : "/dashboard";
+  const business = localizeBusiness(rawBusiness, locale);
+  const relatedBusinesses = localizeBusinesses(
+    await getRelatedDirectoryBusinesses(rawBusiness, 3),
+    locale,
+  );
+  const instagramUrl = rawBusiness.instagram
+    ? getInstagramUrl(rawBusiness.instagram)
+    : "";
+  const instagramHandle = rawBusiness.instagram
+    ? formatInstagramHandle(rawBusiness.instagram)
+    : "";
+
+  return (
+    <article>
+      <section className="container py-6">
+        <div className="mb-5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <Link href="/" className="hover:text-hover-blue-foreground dark:hover:text-hover-blue">
+            {labels.common.home}
+          </Link>
+          <span>/</span>
+          <Link
+            href={`/${rawBusiness.citySlug}/${rawBusiness.categorySlug}`}
+            className="hover:text-hover-blue-foreground dark:hover:text-hover-blue"
+          >
+            {business.city} {business.category}
+          </Link>
+          <span>/</span>
+          <span>{business.name}</span>
+        </div>
+
+        <div className="relative overflow-hidden rounded-lg border bg-[linear-gradient(135deg,hsl(var(--primary)/0.12),hsl(var(--accent)/0.18)_48%,hsl(var(--muted)))] p-6 md:p-10">
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0,transparent_39px,hsl(var(--foreground)/0.05)_40px),linear-gradient(0deg,transparent_0,transparent_39px,hsl(var(--foreground)/0.05)_40px)] bg-[size:40px_40px]" />
+          <div className="relative max-w-4xl">
+            <Badge className="border-accent/30 bg-accent/15 text-accent">
+              {business.category}
+            </Badge>
+            <h1 className="mt-5 text-balance text-4xl font-black tracking-normal md:text-6xl">
+              {business.name}
+            </h1>
+            <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <MapPin className="h-4 w-4 text-primary" />
+                {business.neighborhood}, {business.city}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Clock className="h-4 w-4 text-primary" />
+                {business.hours}
+              </span>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="container grid gap-8 pb-12 lg:grid-cols-[1fr_360px]">
+        <div>
+          <div className="grid gap-8">
+            <div>
+              <h2 className="text-2xl font-bold">{labels.business.about}</h2>
+              <p className="mt-3 max-w-3xl text-base leading-8 text-muted-foreground">
+                {business.longDescription}
+              </p>
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold">
+                {labels.business.languages}
+              </h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {business.languages.map((language) => (
+                  <Badge key={language} variant="green">
+                    <Languages className="mr-1.5 h-3.5 w-3.5" />
+                    {language}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold">{labels.business.tags}</h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {business.tags.map((tag) => (
+                  <Badge key={tag} variant="outline">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold">{labels.business.location}</h2>
+              {business.address ? (
+                <>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {business.address}
+                  </p>
+                  <div className="mt-4 overflow-hidden rounded-lg border bg-card">
+                    <MapEmbed
+                      query={rawBusiness.address}
+                      title={labels.business.mapTitle(business.name)}
+                      className="h-80 w-full"
+                    />
+                  </div>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {labels.business.noAddress}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <aside className="lg:pt-16">
+          <div className="sticky top-24 rounded-lg border bg-card p-5 shadow-sm">
+            <h2 className="text-lg font-bold">{labels.common.contact}</h2>
+            <div className="mt-4 grid gap-3 text-sm">
+              {business.phone ? (
+                <a
+                  href={`tel:${business.phone}`}
+                  className="flex items-center gap-3 rounded-md border bg-background p-3 transition hover:border-hover-blue-border hover:bg-hover-blue/35"
+                >
+                  <Phone className="h-4 w-4 text-primary" />
+                  {business.phone}
+                </a>
+              ) : null}
+              {business.website ? (
+                <a
+                  href={business.website}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-3 rounded-md border bg-background p-3 transition hover:border-hover-blue-border hover:bg-hover-blue/35"
+                >
+                  <Globe className="h-4 w-4 text-primary" />
+                  <span className="truncate">
+                    {formatExternalUrl(business.website)}
+                  </span>
+                  <ExternalLink className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+                </a>
+              ) : null}
+              {business.instagram ? (
+                <a
+                  href={instagramUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-3 rounded-md border bg-background p-3 transition hover:border-hover-blue-border hover:bg-hover-blue/35"
+                >
+                  <Instagram className="h-4 w-4 text-primary" />
+                  {instagramHandle}
+                  <ExternalLink className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+                </a>
+              ) : null}
+              {business.address ? (
+                <div className="flex items-start gap-3 rounded-md border bg-background p-3">
+                  <MapPin className="mt-0.5 h-4 w-4 text-primary" />
+                  <span>{business.address}</span>
+                </div>
+              ) : null}
+            </div>
+            {isOwner ? (
+              <>
+                <Separator className="my-5" />
+                <BusinessProfileActions
+                  dashboardHref={dashboardHref}
+                  locale={locale}
+                />
+              </>
+            ) : null}
+          </div>
+        </aside>
+      </section>
+
+      <section className="border-t bg-card/40 py-12">
+        <div className="container">
+          <div className="mb-6 flex items-end justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold uppercase text-primary">
+                {labels.business.keepExploring}
+              </p>
+              <h2 className="mt-2 text-3xl font-black tracking-normal">
+                {labels.business.related}
+              </h2>
+            </div>
+            <Button asChild variant="outline" className="hidden sm:inline-flex">
+              <Link href={`/${business.citySlug}/${business.categorySlug}`}>
+                {labels.business.exploreSimilar}
+              </Link>
+            </Button>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {relatedBusinesses.map((relatedBusiness) => (
+              <BusinessCard
+                key={relatedBusiness.slug}
+                business={relatedBusiness}
+                locale={locale}
+              />
+            ))}
+          </div>
+        </div>
+      </section>
+    </article>
+  );
+}

@@ -1,0 +1,82 @@
+[
+  {
+    "name": "Restaurants",
+    "slug": "restaurants",
+    "description": "Cafes, bakeries, caterers, and modern Ukrainian kitchens."
+  },
+  {
+    "name": "Food",
+    "slug": "grocery-stores",
+    "description": "Prepared food, specialty groceries, bakeries, catering, and local food makers."
+  },
+  {
+    "name": "Shop",
+    "slug": "shops",
+    "description": "Retail shops, online stores, local products, gifts, and specialty goods."
+  },
+  {
+    "name": "Legal Services",
+    "slug": "lawyers",
+    "description": "Immigration, family, business, contracts, and real estate legal support."
+  },
+  {
+    "name": "Realtors",
+    "slug": "realtors",
+    "description": "Buying, selling, leasing, and relocation guidance."
+  },
+  {
+    "name": "Beauty",
+    "slug": "beauty",
+    "description": "Hair, nails, skin care, brows, and makeup studios."
+  },
+  {
+    "name": "Construction",
+    "slug": "construction",
+    "description": "Renovations, repairs, custom builds, and skilled trades."
+  },
+  {
+    "name": "Repair Services",
+    "slug": "repair-services",
+    "description": "Home repairs, handyman work, furniture repair, appliance fixes, and maintenance."
+  },
+  {
+    "name": "Textiles & Decor",
+    "slug": "textile-decor",
+    "description": "Home textiles, custom pillows, upholstery, curtains, soft furnishings, and decor."
+  },
+  {
+    "name": "Cleaning",
+    "slug": "cleaning",
+    "description": "Residential cleaning, move-out cleaning, deep cleaning, and office cleaning."
+  },
+  {
+    "name": "Auto Repair",
+    "slug": "auto-repair",
+    "description": "Diagnostics, maintenance, tires, body work, and detailing."
+  },
+  {
+    "name": "Tutors",
+    "slug": "tutors",
+    "description": "Language, math, music, coding, and newcomer learning support."
+  },
+  {
+    "name": "IT Services",
+    "slug": "it-services",
+    "description": "Websites, software support, cybersecurity, automation, and technical consulting."
+  },
+  {
+    "name": "Flowers",
+    "slug": "flowers",
+    "description": "Floral studios, event arrangements, bouquets, and seasonal flower delivery."
+  },
+  {
+    "name": "Events",
+    "slug": "events",
+    "description": "Event planning, decor, photography, music, catering support, and celebrations."
+  },
+  {
+    "name": "Advertising Services",
+    "slug": "advertising-services",
+    "description": "Branding, design, printing, social media, ads, content, and local promotion."
+  }
+]
