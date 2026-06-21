@@ -39,4 +39,5 @@ export type Business = {
   hours: string;
   tags: string[];
   distanceInKm?: number;
+  verifiedAt?: string;
 };

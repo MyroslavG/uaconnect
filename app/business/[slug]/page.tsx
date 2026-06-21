@@ -9,19 +9,15 @@ import {
   Languages,
   MapPin,
   Phone,
+  ShieldCheck,
 } from "lucide-react";
 
-import { BusinessCard } from "@/components/business-card";
 import { BusinessProfileActions } from "@/components/business-profile-actions";
 import { MapEmbed } from "@/components/map-embed";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import {
-  getDirectoryBusiness,
-  getRelatedDirectoryBusinesses,
-} from "@/lib/directory-data";
-import { copy, localizeBusiness, localizeBusinesses } from "@/lib/i18n";
+import { getDirectoryBusiness } from "@/lib/directory-data";
+import { copy, localizeBusiness } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/locale";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import {
@@ -91,10 +87,6 @@ export default async function BusinessProfilePage({
     ? `/dashboard#business-${rawBusiness.registrationId}`
     : "/dashboard";
   const business = localizeBusiness(rawBusiness, locale);
-  const relatedBusinesses = localizeBusinesses(
-    await getRelatedDirectoryBusinesses(rawBusiness, 3),
-    locale,
-  );
   const instagramUrl = rawBusiness.instagram
     ? getInstagramUrl(rawBusiness.instagram)
     : "";
@@ -126,9 +118,17 @@ export default async function BusinessProfilePage({
             <Badge className="border-accent/30 bg-accent/15 text-accent">
               {business.category}
             </Badge>
-            <h1 className="mt-5 text-balance text-4xl font-black tracking-normal md:text-6xl">
-              {business.name}
-            </h1>
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <h1 className="text-balance text-4xl font-black tracking-normal md:text-6xl">
+                {business.name}
+              </h1>
+              {business.verifiedAt ? (
+                <Badge variant="green" className="h-8 gap-1.5 px-3">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  {labels.business.verified}
+                </Badge>
+              ) : null}
+            </div>
             <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <MapPin className="h-4 w-4 text-primary" />
@@ -258,34 +258,6 @@ export default async function BusinessProfilePage({
         </aside>
       </section>
 
-      <section className="border-t bg-card/40 py-12">
-        <div className="container">
-          <div className="mb-6 flex items-end justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold uppercase text-primary">
-                {labels.business.keepExploring}
-              </p>
-              <h2 className="mt-2 text-3xl font-black tracking-normal">
-                {labels.business.related}
-              </h2>
-            </div>
-            <Button asChild variant="outline" className="hidden sm:inline-flex">
-              <Link href={`/${business.citySlug}/${business.categorySlug}`}>
-                {labels.business.exploreSimilar}
-              </Link>
-            </Button>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {relatedBusinesses.map((relatedBusiness) => (
-              <BusinessCard
-                key={relatedBusiness.slug}
-                business={relatedBusiness}
-                locale={locale}
-              />
-            ))}
-          </div>
-        </div>
-      </section>
     </article>
   );
 }

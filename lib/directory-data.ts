@@ -163,6 +163,7 @@ function mapPublishedBusiness(row: PublishedBusiness): Business {
     gallery: [],
     featured: false,
     hours: "See website",
-    tags: [category.name, "Verified"],
+    tags: [category.name],
+    verifiedAt: row.verified_at ?? undefined,
   };
 }

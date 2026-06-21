@@ -8,11 +8,14 @@ import {
   rejectRegistration,
 } from "@/app/admin/registrations/actions";
 import { signInWithGoogle } from "@/app/auth/actions";
+import { AdminBusinessTools } from "@/components/admin-business-tools";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { categories, cities } from "@/lib/data";
+import { localizeCategories, localizeCities } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/locale";
 import { getCurrentUser, isCurrentUserAdmin } from "@/lib/supabase/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -30,6 +33,7 @@ export const metadata: Metadata = {
 
 type Registration =
   Database["public"]["Tables"]["business_registrations"]["Row"];
+type BusinessRow = Database["public"]["Tables"]["businesses"]["Row"];
 
 const text = {
   uk: {
@@ -41,6 +45,7 @@ const text = {
     noAccess: "У вас немає доступу до адмін-перевірки.",
     setup: "Supabase ще не налаштовано.",
     empty: "Заявок поки немає.",
+    submissionsTitle: "Заявки на перевірку",
     reviewNote: "Нотатка перевірки",
     approve: "Схвалити",
     reject: "Відхилити",
@@ -69,6 +74,7 @@ const text = {
     noAccess: "You do not have access to admin verification.",
     setup: "Supabase is not configured yet.",
     empty: "No submissions yet.",
+    submissionsTitle: "Submissions to review",
     reviewNote: "Review note",
     approve: "Approve",
     reject: "Reject",
@@ -98,17 +104,30 @@ export default async function AdminRegistrationsPage() {
     isCurrentUserAdmin(),
   ]);
   let registrations: Registration[] = [];
+  let unownedBusinesses: Pick<BusinessRow, "id" | "name" | "city">[] = [];
   let errorMessage = "";
+  const localizedCategories = localizeCategories(categories, locale);
+  const localizedCities = localizeCities(cities, locale);
 
   if (isSupabaseConfigured() && user && isAdmin) {
     const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("business_registrations")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const [registrationsResult, businessesResult] = await Promise.all([
+      supabase
+        .from("business_registrations")
+        .select("*")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("businesses")
+        .select("id, name, city")
+        .is("owner_id", null)
+        .eq("status", "published")
+        .order("created_at", { ascending: false }),
+    ]);
 
-    registrations = data ?? [];
-    errorMessage = error?.message ?? "";
+    registrations = registrationsResult.data ?? [];
+    unownedBusinesses = businessesResult.data ?? [];
+    errorMessage =
+      registrationsResult.error?.message ?? businessesResult.error?.message ?? "";
   }
 
   return (
@@ -139,18 +158,33 @@ export default async function AdminRegistrationsPage() {
         <StateCard icon={<UserRoundX />} title={labels.noAccess} />
       ) : errorMessage ? (
         <StateCard icon={<ShieldCheck />} title={errorMessage} />
-      ) : registrations.length === 0 ? (
-        <StateCard icon={<ShieldCheck />} title={labels.empty} />
       ) : (
-        <div className="grid gap-5">
-          {registrations.map((registration) => (
-            <RegistrationReviewCard
-              key={registration.id}
-              registration={registration}
-              labels={labels}
-            />
-          ))}
-        </div>
+        <>
+          <AdminBusinessTools
+            categories={localizedCategories}
+            cities={localizedCities}
+            locale={locale}
+            unownedBusinesses={unownedBusinesses}
+          />
+
+          <div className="mb-4">
+            <h2 className="text-2xl font-black">{labels.submissionsTitle}</h2>
+          </div>
+
+          {registrations.length === 0 ? (
+            <StateCard icon={<ShieldCheck />} title={labels.empty} />
+          ) : (
+            <div className="grid gap-5">
+              {registrations.map((registration) => (
+                <RegistrationReviewCard
+                  key={registration.id}
+                  registration={registration}
+                  labels={labels}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </section>
   );

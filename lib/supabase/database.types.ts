@@ -8,6 +8,7 @@ export type Json =
 
 export type AppRole = "user" | "admin";
 export type BusinessRegistrationStatus = "pending" | "approved" | "rejected";
+export type BusinessStatus = "published" | "hidden";
 
 export type Database = {
   public: {
@@ -113,7 +114,7 @@ export type Database = {
           website: string | null;
           instagram: string | null;
           description: string;
-          status: "published" | "hidden";
+          status: BusinessStatus;
           verified_at: string | null;
           created_at: string;
           updated_at: string;
@@ -131,7 +132,7 @@ export type Database = {
           website?: string | null;
           instagram?: string | null;
           description: string;
-          status?: "published" | "hidden";
+          status?: BusinessStatus;
           verified_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -149,8 +150,50 @@ export type Database = {
           website?: string | null;
           instagram?: string | null;
           description?: string;
-          status?: "published" | "hidden";
+          status?: BusinessStatus;
           verified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      business_claim_invites: {
+        Row: {
+          id: string;
+          business_id: string;
+          token_hash: string;
+          invited_email: string | null;
+          expires_at: string;
+          used_at: string | null;
+          claimed_by: string | null;
+          created_by: string | null;
+          revoked_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          business_id: string;
+          token_hash: string;
+          invited_email?: string | null;
+          expires_at?: string;
+          used_at?: string | null;
+          claimed_by?: string | null;
+          created_by?: string | null;
+          revoked_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          business_id?: string;
+          token_hash?: string;
+          invited_email?: string | null;
+          expires_at?: string;
+          used_at?: string | null;
+          claimed_by?: string | null;
+          created_by?: string | null;
+          revoked_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -159,6 +202,26 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      claim_business_with_token: {
+        Args: {
+          invite_token: string;
+        };
+        Returns: string;
+      };
+      get_business_claim_invite: {
+        Args: {
+          invite_token: string;
+        };
+        Returns: {
+          business_id: string;
+          business_slug: string;
+          business_name: string;
+          city: string;
+          category_slug: string;
+          invited_email: string | null;
+          expires_at: string;
+        }[];
+      };
       is_admin: {
         Args: {
           user_id?: string;

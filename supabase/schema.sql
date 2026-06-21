@@ -69,6 +69,26 @@ create table if not exists public.businesses (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.business_claim_invites (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  token_hash text not null unique,
+  invited_email text,
+  expires_at timestamptz not null default (now() + interval '14 days'),
+  used_at timestamptz,
+  claimed_by uuid references auth.users(id) on delete set null,
+  created_by uuid references auth.users(id) on delete set null,
+  revoked_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists business_claim_invites_business_id_idx
+on public.business_claim_invites (business_id);
+
+create index if not exists business_claim_invites_token_hash_idx
+on public.business_claim_invites (token_hash);
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -92,6 +112,11 @@ for each row execute function public.set_updated_at();
 drop trigger if exists businesses_set_updated_at on public.businesses;
 create trigger businesses_set_updated_at
 before update on public.businesses
+for each row execute function public.set_updated_at();
+
+drop trigger if exists business_claim_invites_set_updated_at on public.business_claim_invites;
+create trigger business_claim_invites_set_updated_at
+before update on public.business_claim_invites
 for each row execute function public.set_updated_at();
 
 create or replace function public.handle_new_user()
@@ -179,9 +204,145 @@ create trigger protect_owner_registration_update
 before update on public.business_registrations
 for each row execute function public.protect_owner_registration_update();
 
+create or replace function public.get_business_claim_invite(invite_token text)
+returns table (
+  business_id uuid,
+  business_slug text,
+  business_name text,
+  city text,
+  category_slug text,
+  invited_email text,
+  expires_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    businesses.id,
+    businesses.slug,
+    businesses.name,
+    businesses.city,
+    businesses.category_slug,
+    business_claim_invites.invited_email,
+    business_claim_invites.expires_at
+  from public.business_claim_invites
+  join public.businesses on businesses.id = business_claim_invites.business_id
+  where business_claim_invites.token_hash = encode(digest(invite_token, 'sha256'), 'hex')
+    and business_claim_invites.used_at is null
+    and business_claim_invites.revoked_at is null
+    and business_claim_invites.expires_at > now()
+    and businesses.owner_id is null
+    and businesses.status = 'published'
+  limit 1;
+$$;
+
+create or replace function public.claim_business_with_token(invite_token text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  requester uuid := auth.uid();
+  requester_email text := auth.jwt() ->> 'email';
+  invite_row public.business_claim_invites%rowtype;
+  business_row public.businesses%rowtype;
+  new_registration_id uuid;
+begin
+  if requester is null then
+    raise exception 'Please sign in before claiming this business.';
+  end if;
+
+  select *
+  into invite_row
+  from public.business_claim_invites
+  where token_hash = encode(digest(invite_token, 'sha256'), 'hex')
+    and used_at is null
+    and revoked_at is null
+    and expires_at > now()
+  for update;
+
+  if not found then
+    raise exception 'This claim link is expired, used, or invalid.';
+  end if;
+
+  if invite_row.invited_email is not null
+    and lower(invite_row.invited_email) <> lower(coalesce(requester_email, '')) then
+    raise exception 'This claim link was created for a different Google account.';
+  end if;
+
+  select *
+  into business_row
+  from public.businesses
+  where id = invite_row.business_id
+  for update;
+
+  if not found then
+    raise exception 'Business not found.';
+  end if;
+
+  if business_row.owner_id is not null then
+    raise exception 'This business already has an owner.';
+  end if;
+
+  if business_row.registration_id is not null then
+    raise exception 'This business is already connected to a registration.';
+  end if;
+
+  insert into public.business_registrations (
+    owner_id,
+    business_name,
+    category_slug,
+    city,
+    address,
+    phone,
+    website,
+    instagram,
+    description,
+    status,
+    reviewer_id,
+    reviewed_at
+  )
+  values (
+    requester,
+    business_row.name,
+    business_row.category_slug,
+    business_row.city,
+    nullif(business_row.address, ''),
+    business_row.phone,
+    business_row.website,
+    business_row.instagram,
+    business_row.description,
+    'approved',
+    invite_row.created_by,
+    now()
+  )
+  returning id into new_registration_id;
+
+  update public.businesses
+  set
+    owner_id = requester,
+    registration_id = new_registration_id,
+    updated_at = now()
+  where id = business_row.id;
+
+  update public.business_claim_invites
+  set
+    used_at = now(),
+    claimed_by = requester,
+    updated_at = now()
+  where id = invite_row.id;
+
+  return new_registration_id;
+end;
+$$;
+
 alter table public.profiles enable row level security;
 alter table public.business_registrations enable row level security;
 alter table public.businesses enable row level security;
+alter table public.business_claim_invites enable row level security;
 
 drop policy if exists "Profiles are visible to owner and admins" on public.profiles;
 create policy "Profiles are visible to owner and admins"
@@ -243,6 +404,15 @@ drop policy if exists "Admins can delete businesses" on public.businesses;
 create policy "Admins can delete businesses"
 on public.businesses for delete
 using (public.is_admin());
+
+drop policy if exists "Admins can manage claim invites" on public.business_claim_invites;
+create policy "Admins can manage claim invites"
+on public.business_claim_invites for all
+using (public.is_admin())
+with check (public.is_admin());
+
+grant execute on function public.get_business_claim_invite(text) to anon, authenticated;
+grant execute on function public.claim_business_with_token(text) to authenticated;
 
 -- After your first Google sign-in, promote yourself:
 -- update public.profiles set role = 'admin' where email = 'you@example.com';
