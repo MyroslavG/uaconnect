@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { uploadProfileAvatar } from "@/lib/supabase/avatar-upload";
 import { uploadBusinessLogo } from "@/lib/supabase/logo-upload";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
@@ -20,6 +21,89 @@ function optionalText(value: FormDataEntryValue | null) {
 
 type RegistrationUpdate =
   Database["public"]["Tables"]["business_registrations"]["Update"];
+type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
+
+export async function updateOwnerProfile(
+  _previousState: DashboardActionState,
+  formData: FormData,
+): Promise<DashboardActionState> {
+  if (!isSupabaseConfigured()) {
+    return {
+      ok: false,
+      message: "Supabase is not configured yet.",
+    };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return {
+      ok: false,
+      message: "Please sign in before editing your profile.",
+    };
+  }
+
+  const fullName = String(formData.get("fullName") ?? "").trim();
+  const contactEmail = optionalText(formData.get("contactEmail"));
+
+  if (!fullName) {
+    return {
+      ok: false,
+      message: "Please enter your name.",
+    };
+  }
+
+  let avatarUrl: string | null = null;
+
+  try {
+    avatarUrl = await uploadProfileAvatar(
+      supabase,
+      formData.get("avatarFile"),
+      user.id,
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error ? error.message : "Profile photo upload failed.",
+    };
+  }
+
+  const updates: ProfileUpdate = {
+    full_name: fullName,
+    contact_email: contactEmail,
+    email: user.email ?? null,
+  };
+
+  if (avatarUrl) {
+    updates.avatar_url = avatarUrl;
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update(updates)
+    .eq("id", user.id);
+
+  if (error) {
+    return {
+      ok: false,
+      message: error.message,
+    };
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/search");
+  revalidatePath("/");
+
+  return {
+    ok: true,
+    message: "Profile details saved.",
+  };
+}
 
 export async function updateBusinessRegistration(
   _previousState: DashboardActionState,

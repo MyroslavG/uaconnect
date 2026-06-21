@@ -18,12 +18,21 @@ end $$;
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
+  contact_email text,
   full_name text,
   avatar_url text,
   role public.app_role not null default 'user',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.profiles
+  add column if not exists contact_email text;
+
+update public.profiles
+set contact_email = email
+where contact_email is null
+  and email is not null;
 
 create table if not exists public.business_registrations (
   id uuid primary key default gen_random_uuid(),
@@ -124,6 +133,31 @@ set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
+insert into storage.buckets (
+  id,
+  name,
+  public,
+  file_size_limit,
+  allowed_mime_types
+)
+values (
+  'profile-avatars',
+  'profile-avatars',
+  true,
+  2097152,
+  array[
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/gif'
+  ]
+)
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -161,9 +195,10 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, email, full_name, avatar_url)
+  insert into public.profiles (id, email, contact_email, full_name, avatar_url)
   values (
     new.id,
+    new.email,
     new.email,
     new.raw_user_meta_data ->> 'full_name',
     new.raw_user_meta_data ->> 'avatar_url'
@@ -171,8 +206,9 @@ begin
   on conflict (id) do update
   set
     email = excluded.email,
-    full_name = excluded.full_name,
-    avatar_url = excluded.avatar_url;
+    contact_email = coalesce(public.profiles.contact_email, excluded.contact_email),
+    full_name = coalesce(public.profiles.full_name, excluded.full_name),
+    avatar_url = coalesce(public.profiles.avatar_url, excluded.avatar_url);
 
   return new;
 end;
@@ -483,6 +519,20 @@ create policy "Authenticated users can upload business logos"
 on storage.objects for insert
 to authenticated
 with check (bucket_id = 'business-logos');
+
+drop policy if exists "Anyone can view profile avatars" on storage.objects;
+create policy "Anyone can view profile avatars"
+on storage.objects for select
+using (bucket_id = 'profile-avatars');
+
+drop policy if exists "Users can upload their own profile avatars" on storage.objects;
+create policy "Users can upload their own profile avatars"
+on storage.objects for insert
+to authenticated
+with check (
+  bucket_id = 'profile-avatars'
+  and (storage.foldername(name))[1] = (select auth.uid())::text
+);
 
 grant execute on function public.get_business_claim_invite(text) to anon, authenticated;
 grant execute on function public.claim_business_with_token(text) to authenticated;

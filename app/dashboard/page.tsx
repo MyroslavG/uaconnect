@@ -11,6 +11,7 @@ import {
 
 import { signInWithGoogle } from "@/app/auth/actions";
 import { DashboardBusinessEditor } from "@/components/dashboard-business-editor";
+import { DashboardProfileEditor } from "@/components/dashboard-profile-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,10 +32,12 @@ export const metadata: Metadata = {
 type Registration =
   Database["public"]["Tables"]["business_registrations"]["Row"];
 type BusinessRow = Database["public"]["Tables"]["businesses"]["Row"];
+type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
 type OwnerProfile = {
   avatarUrl: string;
-  email: string;
+  contactEmail: string;
+  googleEmail: string;
   name: string;
 };
 
@@ -85,16 +88,21 @@ export default async function DashboardPage() {
   const localizedCities = localizeCities(cities, locale);
   let registrations: Registration[] = [];
   let publishedBusinessesByRegistrationId = new Map<string, BusinessRow>();
+  let profile: ProfileRow | null = null;
   let errorMessage = "";
 
   if (isSupabaseConfigured() && user) {
     const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("business_registrations")
-      .select("*")
-      .eq("owner_id", user.id)
-      .order("created_at", { ascending: false });
+    const [{ data: profileData }, { data, error }] = await Promise.all([
+      supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
+      supabase
+        .from("business_registrations")
+        .select("*")
+        .eq("owner_id", user.id)
+        .order("created_at", { ascending: false }),
+    ]);
 
+    profile = profileData ?? null;
     registrations = data ?? [];
     errorMessage = error?.message ?? "";
 
@@ -116,7 +124,7 @@ export default async function DashboardPage() {
   }
 
   const ownerProfile = user
-    ? getOwnerProfile(user, labels.fallbackName)
+    ? getOwnerProfile(user, profile, labels.fallbackName)
     : null;
 
   return (
@@ -124,6 +132,7 @@ export default async function DashboardPage() {
       {ownerProfile ? (
         <DashboardHero
           labels={labels}
+          locale={locale}
           owner={ownerProfile}
           registrations={registrations}
         />
@@ -178,27 +187,42 @@ export default async function DashboardPage() {
 
 function getOwnerProfile(
   user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>,
+  profile: ProfileRow | null,
   fallbackName: string,
 ): OwnerProfile {
-  const fullName = user.user_metadata.full_name;
-  const avatarUrl = user.user_metadata.avatar_url;
+  const metadataName = user.user_metadata.full_name;
+  const metadataAvatarUrl = user.user_metadata.avatar_url;
+  const profileName = profile?.full_name;
+  const profileAvatarUrl = profile?.avatar_url;
+  const googleEmail = user.email ?? "";
+  const contactEmail = profile?.contact_email ?? profile?.email ?? googleEmail;
 
   return {
-    avatarUrl: typeof avatarUrl === "string" ? avatarUrl : "",
-    email: user.email ?? "",
+    avatarUrl:
+      typeof profileAvatarUrl === "string" && profileAvatarUrl.trim()
+        ? profileAvatarUrl
+        : typeof metadataAvatarUrl === "string"
+          ? metadataAvatarUrl
+          : "",
+    contactEmail,
+    googleEmail,
     name:
-      typeof fullName === "string" && fullName.trim()
-        ? fullName
-        : user.email ?? fallbackName,
+      typeof profileName === "string" && profileName.trim()
+        ? profileName
+        : typeof metadataName === "string" && metadataName.trim()
+          ? metadataName
+          : googleEmail || fallbackName,
   };
 }
 
 function DashboardHero({
   labels,
+  locale,
   owner,
   registrations,
 }: {
   labels: Record<string, string>;
+  locale: Locale;
   owner: OwnerProfile;
   registrations: Registration[];
 }) {
@@ -208,6 +232,8 @@ function DashboardHero({
   const pendingCount = registrations.filter(
     (registration) => registration.status === "pending",
   ).length;
+  const contactEmailLabel =
+    locale === "uk" ? "Контактний email" : "Contact email";
 
   return (
     <div className="mb-8 overflow-hidden rounded-lg border bg-card shadow-sm">
@@ -222,11 +248,23 @@ function DashboardHero({
                 {labels.greeting}, {owner.name}
               </h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                {owner.email}
+                <span className="font-semibold text-foreground">
+                  {contactEmailLabel}:
+                </span>{" "}
+                {owner.contactEmail || owner.googleEmail}
               </p>
               <p className="mt-3 max-w-2xl text-muted-foreground">
                 {labels.intro}
               </p>
+              <div className="mt-4">
+                <DashboardProfileEditor
+                  avatarUrl={owner.avatarUrl}
+                  contactEmail={owner.contactEmail}
+                  googleEmail={owner.googleEmail}
+                  locale={locale}
+                  name={owner.name}
+                />
+              </div>
             </div>
           </div>
           <div className="grid gap-2 sm:min-w-96 sm:grid-cols-3">
