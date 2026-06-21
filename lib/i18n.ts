@@ -32,6 +32,10 @@ export const copy = {
       signOut: "Вийти",
       dashboard: "Кабінет",
       admin: "Адмін",
+      menu: "Відкрити меню",
+      mobileMenuDescription: "Навігація, акаунт і налаштування",
+      language: "Мова",
+      appearance: "Тема",
     },
     theme: {
       toggle: "Перемкнути темну тему",
@@ -171,6 +175,10 @@ export const copy = {
       signOut: "Sign out",
       dashboard: "Dashboard",
       admin: "Admin",
+      menu: "Open menu",
+      mobileMenuDescription: "Navigation, account, and settings",
+      language: "Language",
+      appearance: "Theme",
     },
     theme: {
       toggle: "Toggle dark mode",

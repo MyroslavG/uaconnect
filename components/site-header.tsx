@@ -2,9 +2,12 @@ import Link from "next/link";
 
 import { AuthMenu } from "@/components/auth-menu";
 import { LanguageToggle } from "@/components/language-toggle";
+import { MobileNav } from "@/components/mobile-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { copy, type Locale } from "@/lib/i18n";
+import { getCurrentUser, isCurrentUserAdmin } from "@/lib/supabase/auth";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 type SiteHeaderProps = {
   locale: Locale;
@@ -12,6 +15,11 @@ type SiteHeaderProps = {
 
 export async function SiteHeader({ locale }: SiteHeaderProps) {
   const labels = copy[locale];
+  const supabaseConfigured = isSupabaseConfigured();
+  const [user, isAdmin] = supabaseConfigured
+    ? await Promise.all([getCurrentUser(), isCurrentUserAdmin()])
+    : [null, false];
+  const isSignedIn = Boolean(user);
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/50 bg-background/80 backdrop-blur-xl dark:border-white/10">
@@ -27,14 +35,25 @@ export async function SiteHeader({ locale }: SiteHeaderProps) {
             UA<span className="text-primary">Connect</span>
           </span>
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="hidden items-center gap-2 sm:flex">
           <Button asChild className="hidden sm:inline-flex" variant="outline" size="sm">
             <Link href="/register">{labels.header.listBusiness}</Link>
           </Button>
-          <AuthMenu locale={locale} />
+          <AuthMenu
+            isAdmin={isAdmin}
+            isSignedIn={isSignedIn}
+            locale={locale}
+            supabaseConfigured={supabaseConfigured}
+          />
           <LanguageToggle locale={locale} />
           <ThemeToggle locale={locale} />
         </div>
+        <MobileNav
+          isAdmin={isAdmin}
+          isSignedIn={isSignedIn}
+          locale={locale}
+          supabaseConfigured={supabaseConfigured}
+        />
       </div>
     </header>
   );

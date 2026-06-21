@@ -9,12 +9,22 @@ import { copy, type Locale } from "@/lib/i18n";
 
 type AuthMenuProps = {
   locale: Locale;
+  isAdmin?: boolean;
+  isSignedIn?: boolean;
+  supabaseConfigured?: boolean;
 };
 
-export async function AuthMenu({ locale }: AuthMenuProps) {
+export async function AuthMenu({
+  locale,
+  isAdmin: initialIsAdmin,
+  isSignedIn: initialIsSignedIn,
+  supabaseConfigured: initialSupabaseConfigured,
+}: AuthMenuProps) {
   const labels = copy[locale].header;
+  const supabaseConfigured =
+    initialSupabaseConfigured ?? isSupabaseConfigured();
 
-  if (!isSupabaseConfigured()) {
+  if (!supabaseConfigured) {
     return (
       <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
         <Link href="/register">{labels.setupSupabase}</Link>
@@ -22,12 +32,20 @@ export async function AuthMenu({ locale }: AuthMenuProps) {
     );
   }
 
-  const [user, isAdmin] = await Promise.all([
-    getCurrentUser(),
-    isCurrentUserAdmin(),
-  ]);
+  let isSignedIn = initialIsSignedIn;
+  let isAdmin = initialIsAdmin ?? false;
 
-  if (!user) {
+  if (isSignedIn === undefined) {
+    const [user, resolvedIsAdmin] = await Promise.all([
+      getCurrentUser(),
+      isCurrentUserAdmin(),
+    ]);
+
+    isSignedIn = Boolean(user);
+    isAdmin = resolvedIsAdmin;
+  }
+
+  if (!isSignedIn) {
     return (
       <form action={signInWithGoogle}>
         <input type="hidden" name="next" value="/dashboard" />
