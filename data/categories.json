@@ -25,6 +25,11 @@
     "description": "Buying, selling, leasing, and relocation guidance."
   },
   {
+    "name": "Insurance Broker",
+    "slug": "insurance-brokers",
+    "description": "Insurance advice, policy comparison, claims guidance, and personal or business coverage."
+  },
+  {
     "name": "Beauty",
     "slug": "beauty",
     "description": "Hair, nails, skin care, brows, and makeup studios."

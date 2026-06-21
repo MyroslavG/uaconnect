@@ -31,6 +31,19 @@ export type LocationCoordinates = {
   coordinates: Coordinates;
 };
 
+const cityNameAliases: Record<string, string[]> = {
+  ottawa: ["оттава"],
+  gatineau: ["гатіно", "гатино"],
+  toronto: ["торонто"],
+  montreal: ["монреаль"],
+  vancouver: ["ванкувер"],
+  calgary: ["калгарі", "калгари"],
+  edmonton: ["едмонтон"],
+  winnipeg: ["вінніпег", "виннипег"],
+  halifax: ["галіфакс", "галифакс"],
+  "quebec-city": ["квебек", "квебек сіті", "квебек сити"],
+};
+
 const knownLocations: KnownLocation[] = [
   {
     label: "Stittsville",
@@ -44,12 +57,32 @@ const knownLocations: KnownLocation[] = [
   },
   {
     label: "Mississauga",
-    names: ["mississauga", "brampton", "oakville", "gta"],
+    names: [
+      "mississauga",
+      "missisauga",
+      "міссіссага",
+      "місіссага",
+      "миссиссага",
+      "brampton",
+      "брамптон",
+      "oakville",
+      "gta",
+    ],
     coordinates: { latitude: 43.589, longitude: -79.6441 },
   },
   {
     label: "North York",
-    names: ["scarborough", "north york", "etobicoke", "markham", "vaughan"],
+    names: [
+      "scarborough",
+      "north york",
+      "etobicoke",
+      "markham",
+      "vaughan",
+      "скарборо",
+      "норт йорк",
+      "етобіко",
+      "маркем",
+    ],
     coordinates: { latitude: 43.7615, longitude: -79.4111 },
   },
   {
@@ -141,7 +174,7 @@ export function normalizeLocationInput(value: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/[^a-z0-9а-яіїєґё]+/giu, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 }
 
@@ -151,6 +184,7 @@ function getDirectCityNames(city: City) {
     city.name,
     `${city.name} ${city.province}`,
     `${city.name}, ${city.province}`,
+    ...(cityNameAliases[city.slug] ?? []),
   ];
 }
 

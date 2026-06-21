@@ -30,6 +30,28 @@ export function getSafeImageUrl(value: string | null | undefined) {
   }
 }
 
+export function formatLocationParts(...parts: Array<string | null | undefined>) {
+  const normalizedParts = new Set<string>();
+  const displayParts = parts
+    .map((part) => part?.trim() ?? "")
+    .filter((part) => {
+      if (!part) {
+        return false;
+      }
+
+      const normalizedPart = part.toLowerCase();
+
+      if (normalizedParts.has(normalizedPart)) {
+        return false;
+      }
+
+      normalizedParts.add(normalizedPart);
+      return true;
+    });
+
+  return displayParts.join(", ");
+}
+
 export function getInstagramUrl(value: string) {
   const trimmedValue = value.trim();
 

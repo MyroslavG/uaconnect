@@ -330,6 +330,11 @@ const categoryUk: Record<string, Pick<Category, "name" | "description">> = {
     name: "Рієлтори",
     description: "Купівля, продаж, оренда та переїзд у нове місто.",
   },
+  "insurance-brokers": {
+    name: "Страховий брокер",
+    description:
+      "Підбір страхування, порівняння полісів, допомога із заявками та покриттям для людей і бізнесів.",
+  },
   beauty: {
     name: "Краса",
     description: "Волосся, нігті, догляд за шкірою, брови та макіяж.",

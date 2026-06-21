@@ -4,7 +4,7 @@ import { ExternalLink, MapPin, Phone } from "lucide-react";
 import { BusinessLogo } from "@/components/business-logo";
 import { BusinessOwnerChip } from "@/components/business-owner-chip";
 import type { Business } from "@/lib/types";
-import { formatExternalUrl } from "@/lib/utils";
+import { formatExternalUrl, formatLocationParts } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Locale } from "@/lib/i18n";
@@ -23,6 +23,10 @@ export function BusinessCard({
     typeof business.distanceInKm === "number"
       ? `${business.distanceInKm} km`
       : "";
+  const locationLabel = formatLocationParts(
+    business.neighborhood,
+    business.city,
+  );
 
   return (
     <Card className="group overflow-hidden border-white/70 bg-card/95 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-1 hover:border-hover-blue-border hover:shadow-lift dark:border-white/10">
@@ -52,10 +56,12 @@ export function BusinessCard({
               ) : null}
             </div>
             <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5" />
-                {business.neighborhood}, {business.city}
-              </span>
+              {locationLabel ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5" />
+                  {locationLabel}
+                </span>
+              ) : null}
             </p>
             <BusinessOwnerChip
               avatarUrl={business.ownerAvatarUrl}

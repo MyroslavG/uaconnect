@@ -2,6 +2,7 @@ import { categories, cities, searchBusinesses } from "@/lib/data";
 import {
   getDistanceInKm,
   resolveCityFromLocationInput,
+  resolveLocationCoordinates,
   type Coordinates,
 } from "@/lib/location";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -73,18 +74,19 @@ export async function searchDirectoryBusinesses({
         return business;
       }
 
-      const businessCity = cities.find(
-        (candidate) => candidate.slug === business.citySlug,
+      const businessLocation = resolveLocationCoordinates(
+        cities,
+        business.city || business.neighborhood,
       );
 
-      if (!businessCity) {
+      if (!businessLocation) {
         return business;
       }
 
       return {
         ...business,
         distanceInKm: Math.round(
-          getDistanceInKm(coordinates, businessCity.coordinates),
+          getDistanceInKm(coordinates, businessLocation.coordinates),
         ),
       };
     })
@@ -168,8 +170,8 @@ function mapPublishedBusiness(
   const category =
     categories.find((candidate) => candidate.slug === row.category_slug) ??
     categories[0];
-  const cityResolution = resolveCityFromLocationInput(cities, row.city);
-  const city = cityResolution?.city ?? cities[0];
+  const rawLocation = row.city.trim();
+  const cityResolution = resolveCityFromLocationInput(cities, rawLocation);
   const businessName = row.name;
   const address = row.address ?? "";
 
@@ -181,9 +183,9 @@ function mapPublishedBusiness(
     name: businessName,
     category: category.name,
     categorySlug: category.slug,
-    city: city.name,
-    citySlug: city.slug,
-    neighborhood: row.city,
+    city: rawLocation || cityResolution?.city.name || "",
+    citySlug: cityResolution?.city.slug ?? "",
+    neighborhood: cityResolution?.kind === "nearby" ? rawLocation : "",
     description: row.description,
     longDescription: row.description,
     phone: row.phone ?? "",

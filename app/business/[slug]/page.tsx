@@ -25,6 +25,7 @@ import { getCurrentUser } from "@/lib/supabase/auth";
 import {
   formatExternalUrl,
   formatInstagramHandle,
+  formatLocationParts,
   getInstagramUrl,
 } from "@/lib/utils";
 
@@ -95,6 +96,15 @@ export default async function BusinessProfilePage({
   const instagramHandle = rawBusiness.instagram
     ? formatInstagramHandle(rawBusiness.instagram)
     : "";
+  const locationLabel = formatLocationParts(
+    business.neighborhood,
+    business.city,
+  );
+  const categoryHref = rawBusiness.citySlug
+    ? `/${rawBusiness.citySlug}/${rawBusiness.categorySlug}`
+    : `/search?category=${rawBusiness.categorySlug}&near=${encodeURIComponent(
+        business.city,
+      )}`;
 
   return (
     <article>
@@ -105,7 +115,7 @@ export default async function BusinessProfilePage({
           </Link>
           <span>/</span>
           <Link
-            href={`/${rawBusiness.citySlug}/${rawBusiness.categorySlug}`}
+            href={categoryHref}
             className="hover:text-hover-blue-foreground dark:hover:text-hover-blue"
           >
             {business.city} {business.category}
@@ -145,10 +155,12 @@ export default async function BusinessProfilePage({
               name={business.ownerName}
             />
             <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <MapPin className="h-4 w-4 text-primary" />
-                {business.neighborhood}, {business.city}
-              </span>
+              {locationLabel ? (
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="h-4 w-4 text-primary" />
+                  {locationLabel}
+                </span>
+              ) : null}
               <span className="flex items-center gap-1.5">
                 <Clock className="h-4 w-4 text-primary" />
                 {business.hours}
