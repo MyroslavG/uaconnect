@@ -1,11 +1,12 @@
 "use server";
 
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 
 import { getCurrentUser, isCurrentUserAdmin } from "@/lib/supabase/auth";
+import { uploadBusinessLogo } from "@/lib/supabase/logo-upload";
 import { createClient } from "@/lib/supabase/server";
 import type { BusinessRegistrationStatus } from "@/lib/supabase/database.types";
 import { slugify } from "@/lib/utils";
@@ -120,6 +121,7 @@ async function reviewRegistration(formData: FormData, status: BusinessRegistrati
         phone: registration.phone,
         website: registration.website,
         instagram: registration.instagram,
+        logo_url: registration.logo_url,
         description: registration.description,
         status: "published",
         verified_at: reviewedAt,
@@ -149,7 +151,7 @@ export async function createAdminBusiness(
   formData: FormData,
 ): Promise<AdminBusinessActionState> {
   try {
-    await requireAdmin();
+    const user = await requireAdmin();
 
     const businessName = String(formData.get("businessName") ?? "").trim();
     const categorySlug = String(formData.get("categorySlug") ?? "").trim();
@@ -168,7 +170,15 @@ export async function createAdminBusiness(
       supabase,
       slugify(`${businessName}-${city}`),
     );
+    const businessId = randomUUID();
+    const logoUrl = await uploadBusinessLogo(
+      supabase,
+      formData.get("logoFile"),
+      user.id,
+      businessId,
+    );
     const { error } = await supabase.from("businesses").insert({
+      id: businessId,
       owner_id: null,
       registration_id: null,
       slug,
@@ -179,6 +189,7 @@ export async function createAdminBusiness(
       phone: optionalText(formData.get("phone")),
       website: optionalText(formData.get("website")),
       instagram: optionalText(formData.get("instagram")),
+      logo_url: logoUrl,
       description,
       status: "published",
       verified_at: new Date().toISOString(),

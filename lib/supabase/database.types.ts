@@ -54,6 +54,7 @@ export type Database = {
           phone: string | null;
           website: string | null;
           instagram: string | null;
+          logo_url: string | null;
           description: string;
           status: BusinessRegistrationStatus;
           reviewer_id: string | null;
@@ -72,6 +73,7 @@ export type Database = {
           phone?: string | null;
           website?: string | null;
           instagram?: string | null;
+          logo_url?: string | null;
           description: string;
           status?: BusinessRegistrationStatus;
           reviewer_id?: string | null;
@@ -90,6 +92,7 @@ export type Database = {
           phone?: string | null;
           website?: string | null;
           instagram?: string | null;
+          logo_url?: string | null;
           description?: string;
           status?: BusinessRegistrationStatus;
           reviewer_id?: string | null;
@@ -113,6 +116,7 @@ export type Database = {
           phone: string | null;
           website: string | null;
           instagram: string | null;
+          logo_url: string | null;
           description: string;
           status: BusinessStatus;
           verified_at: string | null;
@@ -131,6 +135,7 @@ export type Database = {
           phone?: string | null;
           website?: string | null;
           instagram?: string | null;
+          logo_url?: string | null;
           description: string;
           status?: BusinessStatus;
           verified_at?: string | null;
@@ -149,6 +154,7 @@ export type Database = {
           phone?: string | null;
           website?: string | null;
           instagram?: string | null;
+          logo_url?: string | null;
           description?: string;
           status?: BusinessStatus;
           verified_at?: string | null;
@@ -220,6 +226,16 @@ export type Database = {
           category_slug: string;
           invited_email: string | null;
           expires_at: string;
+        }[];
+      };
+      get_public_business_owners: {
+        Args: {
+          owner_ids: string[];
+        };
+        Returns: {
+          owner_id: string;
+          owner_name: string | null;
+          owner_avatar_url: string | null;
         }[];
       };
       is_admin: {

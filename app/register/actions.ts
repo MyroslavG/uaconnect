@@ -1,8 +1,11 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+
 import { revalidatePath } from "next/cache";
 
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { uploadBusinessLogo } from "@/lib/supabase/logo-upload";
 import { createClient } from "@/lib/supabase/server";
 import type { BusinessRegistrationStatus } from "@/lib/supabase/database.types";
 
@@ -54,7 +57,25 @@ export async function submitBusinessRegistration(
   }
 
   const status: BusinessRegistrationStatus = "pending";
+  const registrationId = randomUUID();
+  let logoUrl: string | null = null;
+
+  try {
+    logoUrl = await uploadBusinessLogo(
+      supabase,
+      formData.get("logoFile"),
+      user.id,
+      registrationId,
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "Logo upload failed.",
+    };
+  }
+
   const { error } = await supabase.from("business_registrations").insert({
+    id: registrationId,
     owner_id: user.id,
     business_name: businessName,
     category_slug: categorySlug,
@@ -64,6 +85,7 @@ export async function submitBusinessRegistration(
     phone: optionalText(formData.get("phone")),
     website: optionalText(formData.get("website")),
     instagram: optionalText(formData.get("instagram")),
+    logo_url: logoUrl,
     status,
   });
 

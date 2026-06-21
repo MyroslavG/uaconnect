@@ -16,6 +16,20 @@ export function formatExternalUrl(url: string) {
   return url.replace(/^https?:\/\//, "").replace(/\/$/, "");
 }
 
+export function getSafeImageUrl(value: string | null | undefined) {
+  if (!value) {
+    return "";
+  }
+
+  try {
+    const url = new URL(value);
+
+    return ["http:", "https:"].includes(url.protocol) ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
 export function getInstagramUrl(value: string) {
   const trimmedValue = value.trim();
 

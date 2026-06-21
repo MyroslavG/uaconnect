@@ -34,6 +34,8 @@ const text = {
     phone: "Телефон",
     website: "Сайт",
     instagram: "Instagram",
+    logoFile: "Логотип",
+    logoHint: "PNG, JPG, WebP, GIF або SVG до 2 MB.",
     description: "Опис бізнесу",
     submit: "Надіслати на перевірку",
     pending: "Надсилаємо...",
@@ -54,6 +56,8 @@ const text = {
     phone: "Phone",
     website: "Website",
     instagram: "Instagram",
+    logoFile: "Logo",
+    logoHint: "PNG, JPG, WebP, GIF, or SVG up to 2 MB.",
     description: "Business description",
     submit: "Submit for review",
     pending: "Submitting...",
@@ -173,6 +177,18 @@ export function BusinessRegistrationForm({
             </FieldLabel>
             <Input id="instagram" name="instagram" />
           </div>
+        </div>
+        <div className="grid gap-2">
+          <FieldLabel htmlFor="logoFile" badge={labels.optional}>
+            {labels.logoFile}
+          </FieldLabel>
+          <Input
+            id="logoFile"
+            name="logoFile"
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+          />
+          <p className="text-xs text-muted-foreground">{labels.logoHint}</p>
         </div>
       </div>
 

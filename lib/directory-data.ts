@@ -10,6 +10,8 @@ import type { Database } from "@/lib/supabase/database.types";
 import type { Business } from "@/lib/types";
 
 type PublishedBusiness = Database["public"]["Tables"]["businesses"]["Row"];
+type PublicBusinessOwner =
+  Database["public"]["Functions"]["get_public_business_owners"]["Returns"][number];
 
 type SearchDirectoryBusinessesOptions = {
   query?: string;
@@ -129,10 +131,40 @@ async function getPublishedBusinesses(): Promise<Business[]> {
     return [];
   }
 
-  return data.map(mapPublishedBusiness);
+  const ownerIds = Array.from(
+    new Set(
+      data
+        .map((row) => row.owner_id)
+        .filter((ownerId): ownerId is string => Boolean(ownerId)),
+    ),
+  );
+  const ownersById = new Map<string, PublicBusinessOwner>();
+
+  if (ownerIds.length > 0) {
+    const { data: owners, error: ownersError } = await supabase.rpc(
+      "get_public_business_owners",
+      { owner_ids: ownerIds },
+    );
+
+    if (!ownersError && owners) {
+      for (const owner of owners) {
+        ownersById.set(owner.owner_id, owner);
+      }
+    }
+  }
+
+  return data.map((row) =>
+    mapPublishedBusiness(
+      row,
+      row.owner_id ? ownersById.get(row.owner_id) : undefined,
+    ),
+  );
 }
 
-function mapPublishedBusiness(row: PublishedBusiness): Business {
+function mapPublishedBusiness(
+  row: PublishedBusiness,
+  owner?: PublicBusinessOwner,
+): Business {
   const category =
     categories.find((candidate) => candidate.slug === row.category_slug) ??
     categories[0];
@@ -157,6 +189,9 @@ function mapPublishedBusiness(row: PublishedBusiness): Business {
     phone: row.phone ?? "",
     website: row.website ?? "",
     instagram: row.instagram ?? "",
+    logoUrl: row.logo_url ?? "",
+    ownerName: owner?.owner_name ?? "",
+    ownerAvatarUrl: owner?.owner_avatar_url ?? "",
     address,
     languages: ["Ukrainian", "English"],
     image: "",

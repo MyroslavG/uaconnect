@@ -31,6 +31,9 @@ export type Business = {
   phone: string;
   website: string;
   instagram: string;
+  logoUrl: string;
+  ownerName?: string;
+  ownerAvatarUrl?: string;
   address: string;
   languages: string[];
   image: string;

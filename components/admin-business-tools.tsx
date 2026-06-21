@@ -51,6 +51,8 @@ const text = {
     phone: "Телефон",
     website: "Сайт",
     instagram: "Instagram",
+    logoFile: "Логотип",
+    logoHint: "PNG, JPG, WebP, GIF або SVG до 2 MB.",
     required: "Обов'язково",
     optional: "Необов'язково",
     create: "Опублікувати бізнес",
@@ -78,6 +80,8 @@ const text = {
     phone: "Phone",
     website: "Website",
     instagram: "Instagram",
+    logoFile: "Logo",
+    logoHint: "PNG, JPG, WebP, GIF, or SVG up to 2 MB.",
     required: "Required",
     optional: "Optional",
     create: "Publish business",
@@ -201,6 +205,14 @@ export function AdminBusinessTools({
                 <Input name="instagram" />
               </Field>
             </div>
+            <Field label={labels.logoFile} badge={labels.optional}>
+              <Input
+                name="logoFile"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+              />
+              <p className="text-xs text-muted-foreground">{labels.logoHint}</p>
+            </Field>
 
             <div className="grid gap-3 sm:grid-cols-[auto_1fr] sm:items-center">
               <Button type="submit" disabled={isCreating}>

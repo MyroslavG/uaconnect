@@ -12,6 +12,8 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
+import { BusinessLogo } from "@/components/business-logo";
+import { BusinessOwnerChip } from "@/components/business-owner-chip";
 import { BusinessProfileActions } from "@/components/business-profile-actions";
 import { MapEmbed } from "@/components/map-embed";
 import { Badge } from "@/components/ui/badge";
@@ -115,9 +117,17 @@ export default async function BusinessProfilePage({
         <div className="relative overflow-hidden rounded-lg border bg-[linear-gradient(135deg,hsl(var(--primary)/0.12),hsl(var(--accent)/0.18)_48%,hsl(var(--muted)))] p-6 md:p-10">
           <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0,transparent_39px,hsl(var(--foreground)/0.05)_40px),linear-gradient(0deg,transparent_0,transparent_39px,hsl(var(--foreground)/0.05)_40px)] bg-[size:40px_40px]" />
           <div className="relative max-w-4xl">
-            <Badge className="border-accent/30 bg-accent/15 text-accent">
-              {business.category}
-            </Badge>
+            <div className="flex flex-wrap items-center gap-3">
+              <BusinessLogo
+                className="h-14 w-14 bg-background/85"
+                iconClassName="h-6 w-6"
+                logoUrl={business.logoUrl}
+                name={business.name}
+              />
+              <Badge className="border-accent/30 bg-accent/15 text-accent">
+                {business.category}
+              </Badge>
+            </div>
             <div className="mt-5 flex flex-wrap items-center gap-3">
               <h1 className="text-balance text-4xl font-black tracking-normal md:text-6xl">
                 {business.name}
@@ -129,6 +139,11 @@ export default async function BusinessProfilePage({
                 </Badge>
               ) : null}
             </div>
+            <BusinessOwnerChip
+              avatarUrl={business.ownerAvatarUrl}
+              className="mt-4"
+              name={business.ownerName}
+            />
             <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <MapPin className="h-4 w-4 text-primary" />

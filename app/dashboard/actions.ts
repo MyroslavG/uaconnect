@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { uploadBusinessLogo } from "@/lib/supabase/logo-upload";
 import { createClient } from "@/lib/supabase/server";
+import type { Database } from "@/lib/supabase/database.types";
 
 export type DashboardActionState = {
   ok: boolean;
@@ -15,6 +17,9 @@ function optionalText(value: FormDataEntryValue | null) {
 
   return text.length > 0 ? text : null;
 }
+
+type RegistrationUpdate =
+  Database["public"]["Tables"]["business_registrations"]["Update"];
 
 export async function updateBusinessRegistration(
   _previousState: DashboardActionState,
@@ -53,22 +58,44 @@ export async function updateBusinessRegistration(
     };
   }
 
+  let logoUrl: string | null = null;
+
+  try {
+    logoUrl = await uploadBusinessLogo(
+      supabase,
+      formData.get("logoFile"),
+      user.id,
+      id,
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "Logo upload failed.",
+    };
+  }
+
+  const updates: RegistrationUpdate = {
+    business_name: businessName,
+    category_slug: categorySlug,
+    city,
+    address: optionalText(formData.get("address")),
+    description,
+    phone: optionalText(formData.get("phone")),
+    website: optionalText(formData.get("website")),
+    instagram: optionalText(formData.get("instagram")),
+    status: "pending",
+    reviewer_id: null,
+    review_note: null,
+    reviewed_at: null,
+  };
+
+  if (logoUrl) {
+    updates.logo_url = logoUrl;
+  }
+
   const { error } = await supabase
     .from("business_registrations")
-    .update({
-      business_name: businessName,
-      category_slug: categorySlug,
-      city,
-      address: optionalText(formData.get("address")),
-      description,
-      phone: optionalText(formData.get("phone")),
-      website: optionalText(formData.get("website")),
-      instagram: optionalText(formData.get("instagram")),
-      status: "pending",
-      reviewer_id: null,
-      review_note: null,
-      reviewed_at: null,
-    })
+    .update(updates)
     .eq("id", id)
     .eq("owner_id", user.id);
 

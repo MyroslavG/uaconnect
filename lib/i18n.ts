@@ -377,6 +377,11 @@ const categoryUk: Record<string, Pick<Category, "name" | "description">> = {
     description:
       "Організація подій, декор, фото, музика, підтримка кейтерингу та святкування.",
   },
+  photographers: {
+    name: "Фотограф",
+    description:
+      "Портрети, сімейні зйомки, події, контент для брендів і персональні фотосесії.",
+  },
   "advertising-services": {
     name: "Рекламні послуги",
     description:

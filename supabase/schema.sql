@@ -1,4 +1,5 @@
-create extension if not exists "pgcrypto";
+create schema if not exists extensions;
+create extension if not exists "pgcrypto" with schema extensions;
 
 do $$
 begin
@@ -34,6 +35,7 @@ create table if not exists public.business_registrations (
   phone text,
   website text,
   instagram text,
+  logo_url text,
   description text not null,
   status public.business_registration_status not null default 'pending',
   reviewer_id uuid references auth.users(id) on delete set null,
@@ -50,6 +52,9 @@ alter table public.business_registrations
 alter table public.business_registrations
   alter column address drop not null;
 
+alter table public.business_registrations
+  add column if not exists logo_url text;
+
 create table if not exists public.businesses (
   id uuid primary key default gen_random_uuid(),
   registration_id uuid unique references public.business_registrations(id) on delete set null,
@@ -62,12 +67,16 @@ create table if not exists public.businesses (
   phone text,
   website text,
   instagram text,
+  logo_url text,
   description text not null,
   status text not null default 'published' check (status in ('published', 'hidden')),
   verified_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.businesses
+  add column if not exists logo_url text;
 
 create table if not exists public.business_claim_invites (
   id uuid primary key default gen_random_uuid(),
@@ -88,6 +97,32 @@ on public.business_claim_invites (business_id);
 
 create index if not exists business_claim_invites_token_hash_idx
 on public.business_claim_invites (token_hash);
+
+insert into storage.buckets (
+  id,
+  name,
+  public,
+  file_size_limit,
+  allowed_mime_types
+)
+values (
+  'business-logos',
+  'business-logos',
+  true,
+  2097152,
+  array[
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/gif',
+    'image/svg+xml'
+  ]
+)
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -153,7 +188,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   select exists (
     select 1
@@ -167,7 +202,7 @@ create or replace function public.protect_owner_registration_update()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   requester uuid := auth.uid();
@@ -217,7 +252,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   select
     businesses.id,
@@ -242,7 +277,7 @@ create or replace function public.claim_business_with_token(invite_token text)
 returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   requester uuid := auth.uid();
@@ -300,6 +335,7 @@ begin
     phone,
     website,
     instagram,
+    logo_url,
     description,
     status,
     reviewer_id,
@@ -314,6 +350,7 @@ begin
     business_row.phone,
     business_row.website,
     business_row.instagram,
+    business_row.logo_url,
     business_row.description,
     'approved',
     invite_row.created_by,
@@ -337,6 +374,31 @@ begin
 
   return new_registration_id;
 end;
+$$;
+
+create or replace function public.get_public_business_owners(owner_ids uuid[])
+returns table (
+  owner_id uuid,
+  owner_name text,
+  owner_avatar_url text
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    profiles.id,
+    nullif(profiles.full_name, ''),
+    profiles.avatar_url
+  from public.profiles
+  where profiles.id = any(owner_ids)
+    and exists (
+      select 1
+      from public.businesses
+      where businesses.owner_id = profiles.id
+        and businesses.status = 'published'
+    );
 $$;
 
 alter table public.profiles enable row level security;
@@ -411,8 +473,20 @@ on public.business_claim_invites for all
 using (public.is_admin())
 with check (public.is_admin());
 
+drop policy if exists "Anyone can view business logos" on storage.objects;
+create policy "Anyone can view business logos"
+on storage.objects for select
+using (bucket_id = 'business-logos');
+
+drop policy if exists "Authenticated users can upload business logos" on storage.objects;
+create policy "Authenticated users can upload business logos"
+on storage.objects for insert
+to authenticated
+with check (bucket_id = 'business-logos');
+
 grant execute on function public.get_business_claim_invite(text) to anon, authenticated;
 grant execute on function public.claim_business_with_token(text) to authenticated;
+grant execute on function public.get_public_business_owners(uuid[]) to anon, authenticated;
 
 -- After your first Google sign-in, promote yourself:
 -- update public.profiles set role = 'admin' where email = 'you@example.com';

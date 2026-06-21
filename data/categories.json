@@ -75,6 +75,11 @@
     "description": "Event planning, decor, photography, music, catering support, and celebrations."
   },
   {
+    "name": "Photographers",
+    "slug": "photographers",
+    "description": "Portraits, family shoots, events, brand photography, and content sessions."
+  },
+  {
     "name": "Advertising Services",
     "slug": "advertising-services",
     "description": "Branding, design, printing, social media, ads, content, and local promotion."
