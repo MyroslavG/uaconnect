@@ -62,6 +62,14 @@
     scroll-behavior: smooth;
   }
 
+  @media (max-width: 767px) {
+    input,
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     background-image:

@@ -112,6 +112,8 @@ export function SearchPanel({
         params.set("near", searchLocation.label);
         params.set("lat", searchLocation.coordinates.latitude.toFixed(6));
         params.set("lng", searchLocation.coordinates.longitude.toFixed(6));
+      } else if (location.trim()) {
+        params.set("near", location.trim());
       } else if (!location.trim() && citySlug) {
         params.set("city", citySlug);
       }

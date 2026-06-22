@@ -94,6 +94,7 @@ export function LocationField({
       return;
     }
 
+    onCitySlugChange("");
     setStatus("");
   }
 

@@ -46,6 +46,11 @@ const cityNameAliases: Record<string, string[]> = {
 
 const knownLocations: KnownLocation[] = [
   {
+    label: "Manotick",
+    names: ["manotick", "manitouk", "manotik"],
+    coordinates: { latitude: 45.2262, longitude: -75.681 },
+  },
+  {
     label: "Stittsville",
     names: ["stittsville", "kanata", "barrhaven", "nepean"],
     coordinates: { latitude: 45.2573, longitude: -75.9153 },
@@ -147,6 +152,7 @@ export const manualLocationSuggestions = [
   "Kanata",
   "Barrhaven",
   "Nepean",
+  "Manotick",
   "Kingston",
   "Mississauga",
   "Brampton",

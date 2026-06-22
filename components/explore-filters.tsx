@@ -89,6 +89,13 @@ export function ExploreFilters({
         return;
       }
 
+      if (!searchLocation && location.trim() && !locationResolution) {
+        params.set("near", location.trim());
+        params.set("category", categorySlug);
+        router.push(`/search?${params}`);
+        return;
+      }
+
       const nextCitySlug = locationResolution?.city.slug ?? citySlug;
 
       router.push(
