@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { logServerError, logServerEvent } from "@/lib/diagnostics";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { uploadProfileAvatar } from "@/lib/supabase/avatar-upload";
 import { uploadBusinessLogo } from "@/lib/supabase/logo-upload";
@@ -29,6 +30,8 @@ export async function updateOwnerProfile(
   formData: FormData,
 ): Promise<DashboardActionState> {
   if (!isSupabaseConfigured()) {
+    logServerEvent("owner_profile.not_configured");
+
     return {
       ok: false,
       message: "Supabase is not configured yet.",
@@ -42,6 +45,10 @@ export async function updateOwnerProfile(
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
+    logServerError("owner_profile.auth_failed", userError, {
+      hasUser: Boolean(user),
+    });
+
     return {
       ok: false,
       message: "Please sign in before editing your profile.",
@@ -52,6 +59,11 @@ export async function updateOwnerProfile(
   const contactEmail = optionalText(formData.get("contactEmail"));
 
   if (!fullName) {
+    logServerEvent("owner_profile.validation_failed", {
+      missing: { fullName: true },
+      userId: user.id,
+    });
+
     return {
       ok: false,
       message: "Please enter your name.",
@@ -67,6 +79,10 @@ export async function updateOwnerProfile(
       user.id,
     );
   } catch (error) {
+    logServerError("owner_profile.avatar_upload_failed", error, {
+      userId: user.id,
+    });
+
     return {
       ok: false,
       message:
@@ -90,6 +106,10 @@ export async function updateOwnerProfile(
     .eq("id", user.id);
 
   if (error) {
+    logServerError("owner_profile.update_failed", error, {
+      userId: user.id,
+    });
+
     return {
       ok: false,
       message: error.message,
@@ -99,6 +119,11 @@ export async function updateOwnerProfile(
   revalidatePath("/dashboard");
   revalidatePath("/search");
   revalidatePath("/");
+
+  logServerEvent("owner_profile.updated", {
+    hasAvatar: Boolean(avatarUrl),
+    userId: user.id,
+  });
 
   return {
     ok: true,
@@ -111,6 +136,8 @@ export async function updateBusinessRegistration(
   formData: FormData,
 ): Promise<DashboardActionState> {
   if (!isSupabaseConfigured()) {
+    logServerEvent("business_update.not_configured");
+
     return {
       ok: false,
       message: "Supabase is not configured yet.",
@@ -124,6 +151,10 @@ export async function updateBusinessRegistration(
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
+    logServerError("business_update.auth_failed", userError, {
+      hasUser: Boolean(user),
+    });
+
     return {
       ok: false,
       message: "Please sign in before editing your business.",
@@ -137,6 +168,18 @@ export async function updateBusinessRegistration(
   const description = String(formData.get("description") ?? "").trim();
 
   if (!id || !businessName || !categorySlug || !city || !description) {
+    logServerEvent("business_update.validation_failed", {
+      missing: {
+        businessName: !businessName,
+        categorySlug: !categorySlug,
+        city: !city,
+        description: !description,
+        id: !id,
+      },
+      registrationId: id,
+      userId: user.id,
+    });
+
     return {
       ok: false,
       message: "Please fill in the required business details.",
@@ -151,6 +194,11 @@ export async function updateBusinessRegistration(
     .single();
 
   if (registrationError || !existingRegistration) {
+    logServerError("business_update.registration_read_failed", registrationError, {
+      registrationId: id,
+      userId: user.id,
+    });
+
     return {
       ok: false,
       message: registrationError?.message ?? "Business registration not found.",
@@ -165,6 +213,11 @@ export async function updateBusinessRegistration(
     .maybeSingle();
 
   if (linkedBusinessError) {
+    logServerError("business_update.linked_business_read_failed", linkedBusinessError, {
+      registrationId: id,
+      userId: user.id,
+    });
+
     return {
       ok: false,
       message: linkedBusinessError.message,
@@ -185,6 +238,11 @@ export async function updateBusinessRegistration(
       id,
     );
   } catch (error) {
+    logServerError("business_update.logo_upload_failed", error, {
+      registrationId: id,
+      userId: user.id,
+    });
+
     return {
       ok: false,
       message: error instanceof Error ? error.message : "Logo upload failed.",
@@ -213,21 +271,36 @@ export async function updateBusinessRegistration(
     updates.logo_url = logoUrl;
   }
 
-  const { error } = await supabase
+  const { data: updatedRegistration, error } = await supabase
     .from("business_registrations")
     .update(updates)
     .eq("id", id)
-    .eq("owner_id", user.id);
+    .eq("owner_id", user.id)
+    .select("id")
+    .single();
 
-  if (error) {
+  if (error || !updatedRegistration) {
+    logServerError("business_update.registration_update_failed", error, {
+      categorySlug,
+      city,
+      isPublishedUpdate,
+      registrationId: id,
+      userId: user.id,
+    });
+
     return {
       ok: false,
-      message: error.message,
+      message:
+        error?.message ??
+        "No business was updated. Make sure this Google account owns the business.",
     };
   }
 
-  if (isPublishedUpdate && linkedBusiness) {
-    const publicUpdates: BusinessUpdate = {
+  let publicBusinessSlug = linkedBusiness?.slug ?? null;
+
+  if (isPublishedUpdate) {
+    const businessUpdates: BusinessUpdate = {
+      owner_id: user.id,
       name: businessName,
       category_slug: categorySlug,
       city,
@@ -240,34 +313,56 @@ export async function updateBusinessRegistration(
     };
 
     if (logoUrl) {
-      publicUpdates.logo_url = logoUrl;
+      businessUpdates.logo_url = logoUrl;
     }
 
-    const { error: businessUpdateError } = await supabase
+    const { data: syncedBusiness, error: syncError } = await supabase
       .from("businesses")
-      .update(publicUpdates)
-      .eq("id", linkedBusiness.id)
-      .eq("owner_id", user.id);
+      .update(businessUpdates)
+      .eq("registration_id", id)
+      .eq("owner_id", user.id)
+      .select("slug")
+      .single();
 
-    if (businessUpdateError) {
+    if (syncError || !syncedBusiness) {
+      logServerError("business_update.public_sync_failed", syncError, {
+        categorySlug,
+        city,
+        registrationId: id,
+        userId: user.id,
+      });
+
       return {
         ok: false,
-        message: businessUpdateError.message,
+        message:
+          syncError?.message ??
+          "Business details were saved, but the public profile was not updated.",
       };
     }
+
+    publicBusinessSlug = syncedBusiness.slug ?? publicBusinessSlug;
   }
 
   revalidatePath("/dashboard");
   revalidatePath("/");
   revalidatePath("/search");
 
-  if (linkedBusiness?.slug) {
-    revalidatePath(`/business/${linkedBusiness.slug}`);
+  if (publicBusinessSlug) {
+    revalidatePath(`/business/${publicBusinessSlug}`);
   }
 
   if (shouldRefreshAdmin) {
     revalidatePath("/admin/registrations");
   }
+
+  logServerEvent("business_update.updated", {
+    categorySlug,
+    city,
+    isPublishedUpdate,
+    publicBusinessSlug,
+    registrationId: id,
+    userId: user.id,
+  });
 
   return {
     ok: true,

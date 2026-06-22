@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, UserRound } from "lucide-react";
+import { ShieldCheck, UserRound, UsersRound } from "lucide-react";
 
 import { signInWithGoogle, signOut } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
@@ -60,12 +60,30 @@ export async function AuthMenu({
   return (
     <div className="flex items-center gap-2">
       {isAdmin ? (
-        <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
-          <Link href="/admin/registrations">
-            <ShieldCheck className="h-4 w-4" />
-            {labels.admin}
-          </Link>
-        </Button>
+        <>
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="hidden md:inline-flex"
+          >
+            <Link href="/admin/registrations">
+              <ShieldCheck className="h-4 w-4" />
+              {labels.admin}
+            </Link>
+          </Button>
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="hidden md:inline-flex"
+          >
+            <Link href="/admin/users">
+              <UsersRound className="h-4 w-4" />
+              {labels.adminUsers}
+            </Link>
+          </Button>
+        </>
       ) : null}
       <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
         <Link href="/dashboard">{labels.dashboard}</Link>

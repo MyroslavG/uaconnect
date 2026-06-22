@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import { revalidatePath } from "next/cache";
 
+import { logServerError, logServerEvent } from "@/lib/diagnostics";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { uploadBusinessLogo } from "@/lib/supabase/logo-upload";
 import { createClient } from "@/lib/supabase/server";
@@ -25,6 +26,8 @@ export async function submitBusinessRegistration(
   formData: FormData,
 ): Promise<RegistrationActionState> {
   if (!isSupabaseConfigured()) {
+    logServerEvent("business_registration.not_configured");
+
     return {
       ok: false,
       message: "Supabase is not configured yet. Add env vars and restart the server.",
@@ -38,6 +41,10 @@ export async function submitBusinessRegistration(
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
+    logServerError("business_registration.auth_failed", userError, {
+      hasUser: Boolean(user),
+    });
+
     return {
       ok: false,
       message: "Please sign in with Google before registering a business.",
@@ -50,6 +57,16 @@ export async function submitBusinessRegistration(
   const description = String(formData.get("description") ?? "").trim();
 
   if (!businessName || !categorySlug || !city || !description) {
+    logServerEvent("business_registration.validation_failed", {
+      missing: {
+        businessName: !businessName,
+        categorySlug: !categorySlug,
+        city: !city,
+        description: !description,
+      },
+      userId: user.id,
+    });
+
     return {
       ok: false,
       message: "Please fill in the required business details.",
@@ -68,6 +85,11 @@ export async function submitBusinessRegistration(
       registrationId,
     );
   } catch (error) {
+    logServerError("business_registration.logo_upload_failed", error, {
+      registrationId,
+      userId: user.id,
+    });
+
     return {
       ok: false,
       message: error instanceof Error ? error.message : "Logo upload failed.",
@@ -90,6 +112,13 @@ export async function submitBusinessRegistration(
   });
 
   if (error) {
+    logServerError("business_registration.insert_failed", error, {
+      categorySlug,
+      city,
+      registrationId,
+      userId: user.id,
+    });
+
     return {
       ok: false,
       message: error.message,
@@ -98,6 +127,13 @@ export async function submitBusinessRegistration(
 
   revalidatePath("/dashboard");
   revalidatePath("/admin/registrations");
+
+  logServerEvent("business_registration.submitted", {
+    categorySlug,
+    city,
+    registrationId,
+    userId: user.id,
+  });
 
   return {
     ok: true,

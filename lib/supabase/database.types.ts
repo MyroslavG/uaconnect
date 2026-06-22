@@ -247,6 +247,12 @@ export type Database = {
         };
         Returns: boolean;
       };
+      sync_owned_business_from_registration: {
+        Args: {
+          target_registration_id: string;
+        };
+        Returns: string;
+      };
     };
     Enums: {
       app_role: AppRole;

@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { CheckCircle2, ShieldCheck, UserRoundX, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  ShieldCheck,
+  UserRoundX,
+  UsersRound,
+  XCircle,
+} from "lucide-react";
 
 import { signInWithGoogle } from "@/app/auth/actions";
 import { AdminBusinessTools } from "@/components/admin-business-tools";
@@ -64,6 +70,7 @@ const text = {
     noWebsite: "Сайт не вказано",
     noInstagram: "Instagram не вказано",
     noAddress: "Адресу не вказано",
+    users: "Користувачі",
   },
   en: {
     kicker: "Admin",
@@ -93,6 +100,7 @@ const text = {
     noWebsite: "No website",
     noInstagram: "No Instagram",
     noAddress: "No address",
+    users: "Users",
   },
 } satisfies Record<Locale, Record<string, string>>;
 
@@ -151,12 +159,22 @@ export default async function AdminRegistrationsPage() {
 
   return (
     <section className="container py-10 md:py-14">
-      <div className="mb-8 max-w-3xl">
-        <Badge variant="accent">{labels.kicker}</Badge>
-        <h1 className="mt-4 text-4xl font-black tracking-normal md:text-5xl">
-          {labels.title}
-        </h1>
-        <p className="mt-3 text-muted-foreground">{labels.intro}</p>
+      <div className="mb-8 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div className="max-w-3xl">
+          <Badge variant="accent">{labels.kicker}</Badge>
+          <h1 className="mt-4 text-4xl font-black tracking-normal md:text-5xl">
+            {labels.title}
+          </h1>
+          <p className="mt-3 text-muted-foreground">{labels.intro}</p>
+        </div>
+        {user && isAdmin ? (
+          <Button asChild variant="outline" className="justify-center">
+            <Link href="/admin/users">
+              <UsersRound className="h-4 w-4" />
+              {labels.users}
+            </Link>
+          </Button>
+        ) : null}
       </div>
 
       {!isSupabaseConfigured() ? (

@@ -452,6 +452,56 @@ begin
 end;
 $$;
 
+create or replace function public.sync_owned_business_from_registration(target_registration_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  requester uuid := auth.uid();
+  registration_row public.business_registrations%rowtype;
+  synced_slug text;
+begin
+  if requester is null then
+    raise exception 'Please sign in before editing this business.';
+  end if;
+
+  select *
+  into registration_row
+  from public.business_registrations
+  where id = target_registration_id
+    and owner_id = requester;
+
+  if not found then
+    raise exception 'Business registration not found for this owner.';
+  end if;
+
+  update public.businesses
+  set
+    owner_id = registration_row.owner_id,
+    name = registration_row.business_name,
+    category_slug = registration_row.category_slug,
+    city = registration_row.city,
+    address = coalesce(registration_row.address, ''),
+    phone = registration_row.phone,
+    website = registration_row.website,
+    instagram = registration_row.instagram,
+    logo_url = registration_row.logo_url,
+    description = registration_row.description,
+    status = 'published',
+    updated_at = now()
+  where public.businesses.registration_id = registration_row.id
+  returning slug into synced_slug;
+
+  if synced_slug is null then
+    raise exception 'Public business profile is not linked to this registration yet.';
+  end if;
+
+  return synced_slug;
+end;
+$$;
+
 create or replace function public.get_public_business_owners(owner_ids uuid[])
 returns table (
   owner_id uuid,
@@ -503,6 +553,11 @@ drop policy if exists "Owners can create registrations" on public.business_regis
 create policy "Owners can create registrations"
 on public.business_registrations for insert
 with check ((select auth.uid()) = owner_id);
+
+drop policy if exists "Admins can create registrations" on public.business_registrations;
+create policy "Admins can create registrations"
+on public.business_registrations for insert
+with check (public.is_admin());
 
 drop policy if exists "Owners and admins can view registrations" on public.business_registrations;
 create policy "Owners and admins can view registrations"
@@ -580,8 +635,15 @@ with check (
   and (storage.foldername(name))[1] = (select auth.uid())::text
 );
 
+drop policy if exists "Admins can upload profile avatars" on storage.objects;
+create policy "Admins can upload profile avatars"
+on storage.objects for insert
+to authenticated
+with check (bucket_id = 'profile-avatars' and public.is_admin());
+
 grant execute on function public.get_business_claim_invite(text) to anon, authenticated;
 grant execute on function public.claim_business_with_token(text) to authenticated;
+grant execute on function public.sync_owned_business_from_registration(uuid) to authenticated;
 grant execute on function public.get_public_business_owners(uuid[]) to anon, authenticated;
 
 -- After your first Google sign-in, promote yourself:

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 
 import "@/app/globals.css";
+import { ClientErrorReporter } from "@/components/client-error-reporter";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -43,6 +44,7 @@ export default async function RootLayout({
     <html lang={locale} suppressHydrationWarning>
       <body>
         <ThemeProvider>
+          <ClientErrorReporter />
           <div className="flex min-h-screen flex-col">
             <SiteHeader locale={locale} />
             <main className="flex-1">{children}</main>
