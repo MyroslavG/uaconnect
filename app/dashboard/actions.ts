@@ -21,6 +21,7 @@ function optionalText(value: FormDataEntryValue | null) {
 
 type RegistrationUpdate =
   Database["public"]["Tables"]["business_registrations"]["Update"];
+type BusinessUpdate = Database["public"]["Tables"]["businesses"]["Update"];
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
 
 export async function updateOwnerProfile(
@@ -223,6 +224,37 @@ export async function updateBusinessRegistration(
       ok: false,
       message: error.message,
     };
+  }
+
+  if (isPublishedUpdate && linkedBusiness) {
+    const publicUpdates: BusinessUpdate = {
+      name: businessName,
+      category_slug: categorySlug,
+      city,
+      address: optionalText(formData.get("address")) ?? "",
+      description,
+      phone: optionalText(formData.get("phone")),
+      website: optionalText(formData.get("website")),
+      instagram: optionalText(formData.get("instagram")),
+      status: "published",
+    };
+
+    if (logoUrl) {
+      publicUpdates.logo_url = logoUrl;
+    }
+
+    const { error: businessUpdateError } = await supabase
+      .from("businesses")
+      .update(publicUpdates)
+      .eq("id", linkedBusiness.id)
+      .eq("owner_id", user.id);
+
+    if (businessUpdateError) {
+      return {
+        ok: false,
+        message: businessUpdateError.message,
+      };
+    }
   }
 
   revalidatePath("/dashboard");

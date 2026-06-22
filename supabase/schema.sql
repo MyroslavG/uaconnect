@@ -538,6 +538,12 @@ on public.businesses for update
 using (public.is_admin())
 with check (public.is_admin());
 
+drop policy if exists "Owners can update their published businesses" on public.businesses;
+create policy "Owners can update their published businesses"
+on public.businesses for update
+using ((select auth.uid()) = owner_id)
+with check ((select auth.uid()) = owner_id and status = 'published');
+
 drop policy if exists "Admins can delete businesses" on public.businesses;
 create policy "Admins can delete businesses"
 on public.businesses for delete
