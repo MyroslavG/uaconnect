@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -34,6 +34,7 @@ export function AdminRegistrationReviewForm({
   reviewNote,
 }: AdminRegistrationReviewFormProps) {
   const router = useRouter();
+  const statusRef = useRef<HTMLInputElement>(null);
   const [state, formAction, isPending] = useActionState(
     reviewBusinessRegistration,
     initialState,
@@ -51,27 +52,38 @@ export function AdminRegistrationReviewForm({
       className="grid gap-3 rounded-lg border bg-background/70 p-4"
     >
       <input type="hidden" name="id" value={registrationId} />
+      <input
+        ref={statusRef}
+        type="hidden"
+        name="status"
+        defaultValue="approved"
+      />
       <Label htmlFor={`review-${registrationId}`}>{labels.reviewNote}</Label>
       <Textarea
         id={`review-${registrationId}`}
         name="reviewNote"
         defaultValue={reviewNote ?? ""}
-        placeholder={labels.reviewNote}
       />
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
         <Button
           disabled={isPending}
-          name="status"
+          onClick={() => {
+            if (statusRef.current) {
+              statusRef.current.value = "approved";
+            }
+          }}
           type="submit"
-          value="approved"
         >
           {isPending ? labels.approving : labels.approve}
         </Button>
         <Button
           disabled={isPending}
-          name="status"
+          onClick={() => {
+            if (statusRef.current) {
+              statusRef.current.value = "rejected";
+            }
+          }}
           type="submit"
-          value="rejected"
           variant="outline"
         >
           {isPending ? labels.rejecting : labels.reject}

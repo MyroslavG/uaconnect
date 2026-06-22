@@ -394,23 +394,31 @@ function getBusinessChanges(
     },
     {
       label: reviewLabels.fieldAddress,
-      before: existingBusiness.address,
-      after: registration.address ?? labels.noAddress,
+      before: existingBusiness.address || labels.noAddress,
+      after: registration.address || labels.noAddress,
+      compareBefore: existingBusiness.address ?? "",
+      compareAfter: registration.address ?? "",
     },
     {
       label: reviewLabels.fieldPhone,
       before: existingBusiness.phone ?? labels.noPhone,
       after: registration.phone ?? labels.noPhone,
+      compareBefore: existingBusiness.phone ?? "",
+      compareAfter: registration.phone ?? "",
     },
     {
       label: reviewLabels.fieldWebsite,
       before: existingBusiness.website ?? labels.noWebsite,
       after: registration.website ?? labels.noWebsite,
+      compareBefore: existingBusiness.website ?? "",
+      compareAfter: registration.website ?? "",
     },
     {
       label: reviewLabels.fieldInstagram,
       before: existingBusiness.instagram ?? labels.noInstagram,
       after: registration.instagram ?? labels.noInstagram,
+      compareBefore: existingBusiness.instagram ?? "",
+      compareAfter: registration.instagram ?? "",
     },
     {
       label: reviewLabels.fieldDescription,
