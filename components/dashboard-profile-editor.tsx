@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Mail, Save, Upload, UserRound } from "lucide-react";
 
 import {
@@ -77,11 +78,18 @@ export function DashboardProfileEditor({
   name,
 }: DashboardProfileEditorProps) {
   const labels = text[locale];
+  const router = useRouter();
   const [state, formAction, isPending] = useActionState(
     updateOwnerProfile,
     initialState,
   );
   const safeAvatarUrl = getSafeImageUrl(avatarUrl);
+
+  useEffect(() => {
+    if (state.ok) {
+      router.refresh();
+    }
+  }, [router, state.ok]);
 
   return (
     <Dialog>

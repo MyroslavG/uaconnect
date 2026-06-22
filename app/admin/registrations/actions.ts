@@ -18,6 +18,11 @@ type AdminBusinessActionState = {
   ownerEmail?: string;
 };
 
+export type ReviewActionState = {
+  ok: boolean;
+  message: string;
+};
+
 function optionalText(value: FormDataEntryValue | null) {
   const text = String(value ?? "").trim();
 
@@ -144,6 +149,40 @@ export async function approveRegistration(formData: FormData) {
 
 export async function rejectRegistration(formData: FormData) {
   await reviewRegistration(formData, "rejected");
+}
+
+export async function reviewBusinessRegistration(
+  _previousState: ReviewActionState,
+  formData: FormData,
+): Promise<ReviewActionState> {
+  const status = String(formData.get("status") ?? "");
+
+  if (status !== "approved" && status !== "rejected") {
+    return {
+      ok: false,
+      message: "Choose whether to approve or reject this business.",
+    };
+  }
+
+  try {
+    await reviewRegistration(formData, status);
+
+    return {
+      ok: true,
+      message:
+        status === "approved"
+          ? "Business approved and published."
+          : "Business rejected.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "Unable to review this business.",
+    };
+  }
 }
 
 export async function createAdminBusiness(

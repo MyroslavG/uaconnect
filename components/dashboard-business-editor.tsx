@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { type ReactNode, useActionState, useState } from "react";
+import { type ReactNode, useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Edit3,
   ExternalLink,
@@ -122,6 +123,7 @@ export function DashboardBusinessEditor({
   registration,
 }: DashboardBusinessEditorProps) {
   const labels = text[locale];
+  const router = useRouter();
   const [state, formAction, isPending] = useActionState(
     updateBusinessRegistration,
     initialState,
@@ -139,6 +141,12 @@ export function DashboardBusinessEditor({
   const hasContact = Boolean(
     registration.phone || registration.website || registration.instagram,
   );
+
+  useEffect(() => {
+    if (state.ok) {
+      router.refresh();
+    }
+  }, [router, state.ok]);
 
   return (
     <Card

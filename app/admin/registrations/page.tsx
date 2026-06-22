@@ -3,17 +3,12 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { CheckCircle2, ShieldCheck, UserRoundX, XCircle } from "lucide-react";
 
-import {
-  approveRegistration,
-  rejectRegistration,
-} from "@/app/admin/registrations/actions";
 import { signInWithGoogle } from "@/app/auth/actions";
 import { AdminBusinessTools } from "@/components/admin-business-tools";
+import { AdminRegistrationReviewForm } from "@/components/admin-registration-review-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { categories, cities } from "@/lib/data";
 import { localizeCategories, localizeCities } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/locale";
@@ -34,6 +29,11 @@ export const metadata: Metadata = {
 type Registration =
   Database["public"]["Tables"]["business_registrations"]["Row"];
 type BusinessRow = Database["public"]["Tables"]["businesses"]["Row"];
+type BusinessChange = {
+  after: string;
+  before: string;
+  label: string;
+};
 
 const text = {
   uk: {
@@ -104,6 +104,7 @@ export default async function AdminRegistrationsPage() {
     isCurrentUserAdmin(),
   ]);
   let registrations: Registration[] = [];
+  let businessesByRegistrationId = new Map<string, BusinessRow>();
   let unownedBusinesses: Pick<BusinessRow, "id" | "name" | "city">[] = [];
   let errorMessage = "";
   const localizedCategories = localizeCategories(categories, locale);
@@ -115,7 +116,7 @@ export default async function AdminRegistrationsPage() {
       supabase
         .from("business_registrations")
         .select("*")
-        .order("created_at", { ascending: false }),
+        .order("updated_at", { ascending: false }),
       supabase
         .from("businesses")
         .select("id, name, city")
@@ -128,6 +129,24 @@ export default async function AdminRegistrationsPage() {
     unownedBusinesses = businessesResult.data ?? [];
     errorMessage =
       registrationsResult.error?.message ?? businessesResult.error?.message ?? "";
+
+    if (registrations.length > 0) {
+      const { data: existingBusinesses, error: existingBusinessesError } =
+        await supabase
+          .from("businesses")
+          .select("*")
+          .in(
+            "registration_id",
+            registrations.map((registration) => registration.id),
+          );
+
+      businessesByRegistrationId = new Map(
+        (existingBusinesses ?? [])
+          .filter((business) => business.registration_id)
+          .map((business) => [business.registration_id as string, business]),
+      );
+      errorMessage = errorMessage || existingBusinessesError?.message || "";
+    }
   }
 
   return (
@@ -179,6 +198,11 @@ export default async function AdminRegistrationsPage() {
                 <RegistrationReviewCard
                   key={registration.id}
                   registration={registration}
+                  existingBusiness={businessesByRegistrationId.get(
+                    registration.id,
+                  )}
+                  categories={localizedCategories}
+                  locale={locale}
                   labels={labels}
                 />
               ))}
@@ -191,12 +215,27 @@ export default async function AdminRegistrationsPage() {
 }
 
 function RegistrationReviewCard({
+  categories,
+  existingBusiness,
+  locale,
   registration,
   labels,
 }: {
+  categories: { name: string; slug: string }[];
+  existingBusiness?: BusinessRow;
+  locale: Locale;
   registration: Registration;
   labels: Record<string, string>;
 }) {
+  const reviewLabels = getReviewLabels(locale);
+  const changes = getBusinessChanges(
+    registration,
+    existingBusiness,
+    labels,
+    categories,
+    reviewLabels,
+  );
+
   return (
     <Card className="border-white/70 bg-card/95 shadow-sm dark:border-white/10">
       <CardContent className="grid gap-5 p-5 lg:grid-cols-[1fr_320px]">
@@ -244,39 +283,206 @@ function RegistrationReviewCard({
               </p>
             </InfoBlock>
           </div>
+          {registration.status === "pending" && existingBusiness ? (
+            <ChangesPanel changes={changes} labels={reviewLabels} />
+          ) : null}
         </div>
 
         {registration.status === "pending" ? (
-          <form className="grid gap-3 rounded-lg border bg-background/70 p-4">
-            <input type="hidden" name="id" value={registration.id} />
-            <Label htmlFor={`review-${registration.id}`}>
-              {labels.reviewNote}
-            </Label>
-            <Textarea
-              id={`review-${registration.id}`}
-              name="reviewNote"
-              defaultValue={registration.review_note ?? ""}
-              placeholder={labels.reviewNote}
-            />
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              <Button formAction={approveRegistration} type="submit">
-                {labels.approve}
-              </Button>
-              <Button
-                formAction={rejectRegistration}
-                type="submit"
-                variant="outline"
-              >
-                {labels.reject}
-              </Button>
-            </div>
-          </form>
+          <AdminRegistrationReviewForm
+            labels={{
+              approve: labels.approve,
+              approving: reviewLabels.approving,
+              reject: labels.reject,
+              rejecting: reviewLabels.rejecting,
+              reviewNote: labels.reviewNote,
+            }}
+            registrationId={registration.id}
+            reviewNote={registration.review_note}
+          />
         ) : (
           <ReviewedPanel registration={registration} labels={labels} />
         )}
       </CardContent>
     </Card>
   );
+}
+
+function ChangesPanel({
+  changes,
+  labels,
+}: {
+  changes: BusinessChange[];
+  labels: ReturnType<typeof getReviewLabels>;
+}) {
+  return (
+    <div className="mt-5 rounded-lg border bg-background/70 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="font-black">{labels.changesTitle}</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {labels.changesIntro}
+          </p>
+        </div>
+        <Badge variant="outline" className="border-hover-blue-border bg-hover-blue">
+          {changes.length}
+        </Badge>
+      </div>
+      {changes.length > 0 ? (
+        <div className="mt-4 grid gap-3">
+          {changes.map((change) => (
+            <div key={change.label} className="rounded-md border bg-card p-3">
+              <p className="text-sm font-black">{change.label}</p>
+              <div className="mt-2 grid gap-2 text-sm md:grid-cols-2">
+                <div className="rounded-md bg-muted/70 p-3">
+                  <p className="text-xs font-bold uppercase text-muted-foreground">
+                    {labels.changedFrom}
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-muted-foreground">
+                    {change.before || labels.emptyValue}
+                  </p>
+                </div>
+                <div className="rounded-md bg-primary/10 p-3">
+                  <p className="text-xs font-bold uppercase text-primary">
+                    {labels.changedTo}
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap break-words">
+                    {change.after || labels.emptyValue}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 rounded-md bg-muted/70 p-3 text-sm text-muted-foreground">
+          {labels.noChanges}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function getBusinessChanges(
+  registration: Registration,
+  existingBusiness: BusinessRow | undefined,
+  labels: Record<string, string>,
+  categories: { name: string; slug: string }[],
+  reviewLabels: ReturnType<typeof getReviewLabels>,
+) {
+  if (!existingBusiness) {
+    return [];
+  }
+
+  const categoryName = (slug: string) =>
+    categories.find((category) => category.slug === slug)?.name ?? slug;
+  const fields = [
+    {
+      label: reviewLabels.fieldName,
+      before: existingBusiness.name,
+      after: registration.business_name,
+    },
+    {
+      label: reviewLabels.fieldCategory,
+      before: categoryName(existingBusiness.category_slug),
+      after: categoryName(registration.category_slug),
+    },
+    {
+      label: reviewLabels.fieldCity,
+      before: existingBusiness.city,
+      after: registration.city,
+    },
+    {
+      label: reviewLabels.fieldAddress,
+      before: existingBusiness.address,
+      after: registration.address ?? labels.noAddress,
+    },
+    {
+      label: reviewLabels.fieldPhone,
+      before: existingBusiness.phone ?? labels.noPhone,
+      after: registration.phone ?? labels.noPhone,
+    },
+    {
+      label: reviewLabels.fieldWebsite,
+      before: existingBusiness.website ?? labels.noWebsite,
+      after: registration.website ?? labels.noWebsite,
+    },
+    {
+      label: reviewLabels.fieldInstagram,
+      before: existingBusiness.instagram ?? labels.noInstagram,
+      after: registration.instagram ?? labels.noInstagram,
+    },
+    {
+      label: reviewLabels.fieldDescription,
+      before: existingBusiness.description,
+      after: registration.description,
+    },
+    {
+      label: reviewLabels.fieldLogo,
+      before: existingBusiness.logo_url ? reviewLabels.hasLogo : reviewLabels.noLogo,
+      after: registration.logo_url ? reviewLabels.hasLogo : reviewLabels.noLogo,
+      compareBefore: existingBusiness.logo_url ?? "",
+      compareAfter: registration.logo_url ?? "",
+    },
+  ];
+
+  return fields.filter(
+    (field) =>
+      normalizeChangeValue(field.compareBefore ?? field.before) !==
+      normalizeChangeValue(field.compareAfter ?? field.after),
+  );
+}
+
+function normalizeChangeValue(value: string | null | undefined) {
+  return (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function getReviewLabels(locale: Locale) {
+  if (locale === "uk") {
+    return {
+      approving: "Схвалюємо...",
+      rejecting: "Відхиляємо...",
+      changesTitle: "Зміни на перевірку",
+      changesIntro: "Порівняння з останньою опублікованою версією.",
+      changedFrom: "Було",
+      changedTo: "Стало",
+      noChanges: "Видимих змін не знайдено.",
+      emptyValue: "Не вказано",
+      fieldName: "Назва",
+      fieldCategory: "Категорія",
+      fieldCity: "Локація",
+      fieldAddress: "Адреса",
+      fieldPhone: "Телефон",
+      fieldWebsite: "Сайт",
+      fieldInstagram: "Instagram",
+      fieldDescription: "Опис",
+      fieldLogo: "Логотип",
+      hasLogo: "Є логотип",
+      noLogo: "Немає логотипу",
+    };
+  }
+
+  return {
+    approving: "Approving...",
+    rejecting: "Rejecting...",
+    changesTitle: "Changes to review",
+    changesIntro: "Compared with the last published version.",
+    changedFrom: "Before",
+    changedTo: "After",
+    noChanges: "No visible changes found.",
+    emptyValue: "Not provided",
+    fieldName: "Name",
+    fieldCategory: "Category",
+    fieldCity: "Location",
+    fieldAddress: "Address",
+    fieldPhone: "Phone",
+    fieldWebsite: "Website",
+    fieldInstagram: "Instagram",
+    fieldDescription: "Description",
+    fieldLogo: "Logo",
+    hasLogo: "Logo present",
+    noLogo: "No logo",
+  };
 }
 
 function ReviewedPanel({
