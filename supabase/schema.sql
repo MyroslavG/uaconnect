@@ -242,29 +242,69 @@ set search_path = public, extensions
 as $$
 declare
   requester uuid := auth.uid();
+  requester_is_admin boolean := coalesce(public.is_admin(requester), false);
+  has_linked_business boolean;
+  should_sync_public_business boolean := false;
 begin
-  if public.is_admin(requester) then
-    return new;
-  end if;
-
-  if requester is null or requester <> old.owner_id then
+  if requester is not null
+    and not requester_is_admin
+    and requester <> old.owner_id then
     raise exception 'Only the owner can update this business registration.';
   end if;
 
-  if new.owner_id is distinct from old.owner_id then
+  if not requester_is_admin
+    and new.owner_id is distinct from old.owner_id then
     raise exception 'Business registration ownership cannot be changed.';
   end if;
 
   new.id = old.id;
   new.created_at = old.created_at;
-  new.status = 'pending';
-  new.reviewer_id = null;
-  new.review_note = null;
-  new.reviewed_at = null;
 
-  update public.businesses
-  set status = 'hidden', updated_at = now()
-  where registration_id = old.id;
+  select exists (
+    select 1
+    from public.businesses
+    where registration_id = old.id
+  ) into has_linked_business;
+
+  if requester is not null and not requester_is_admin then
+    if old.status = 'approved' or has_linked_business then
+      new.status = 'approved';
+      new.reviewer_id = old.reviewer_id;
+      new.review_note = old.review_note;
+      new.reviewed_at = coalesce(old.reviewed_at, now());
+      should_sync_public_business = true;
+    else
+      new.status = 'pending';
+      new.reviewer_id = null;
+      new.review_note = null;
+      new.reviewed_at = null;
+    end if;
+  elsif new.status = 'approved' and has_linked_business then
+    should_sync_public_business = true;
+  end if;
+
+  if should_sync_public_business then
+    new.status = 'approved';
+
+    update public.businesses
+    set
+      name = new.business_name,
+      category_slug = new.category_slug,
+      city = new.city,
+      address = coalesce(new.address, ''),
+      phone = new.phone,
+      website = new.website,
+      instagram = new.instagram,
+      logo_url = new.logo_url,
+      description = new.description,
+      status = 'published',
+      updated_at = now()
+    where registration_id = old.id;
+  elsif requester is not null and not requester_is_admin then
+    update public.businesses
+    set status = 'hidden', updated_at = now()
+    where registration_id = old.id;
+  end if;
 
   return new;
 end;

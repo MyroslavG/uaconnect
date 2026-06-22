@@ -8,7 +8,10 @@ import { headers } from "next/headers";
 import { getCurrentUser, isCurrentUserAdmin } from "@/lib/supabase/auth";
 import { uploadBusinessLogo } from "@/lib/supabase/logo-upload";
 import { createClient } from "@/lib/supabase/server";
-import type { BusinessRegistrationStatus } from "@/lib/supabase/database.types";
+import type {
+  BusinessRegistrationStatus,
+  Database,
+} from "@/lib/supabase/database.types";
 import { slugify } from "@/lib/utils";
 
 type AdminBusinessActionState = {
@@ -17,6 +20,10 @@ type AdminBusinessActionState = {
   claimUrl?: string;
   ownerEmail?: string;
 };
+
+type RegistrationRow =
+  Database["public"]["Tables"]["business_registrations"]["Row"];
+type BusinessInsert = Database["public"]["Tables"]["businesses"]["Insert"];
 
 export type ReviewActionState = {
   ok: boolean;
@@ -69,6 +76,54 @@ async function getUniqueBusinessSlug(
   return `${cleanBaseSlug}-${Date.now()}`;
 }
 
+async function publishRegistrationBusiness(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  registration: RegistrationRow,
+  verifiedAt: string,
+) {
+  const { data: existingBusiness, error: existingBusinessError } = await supabase
+    .from("businesses")
+    .select("slug")
+    .eq("registration_id", registration.id)
+    .maybeSingle();
+
+  if (existingBusinessError) {
+    throw new Error(existingBusinessError.message);
+  }
+
+  const slug =
+    existingBusiness?.slug ??
+    (await getUniqueBusinessSlug(
+      supabase,
+      slugify(`${registration.business_name}-${registration.city}`),
+    ));
+  const payload: BusinessInsert = {
+    registration_id: registration.id,
+    owner_id: registration.owner_id,
+    slug,
+    name: registration.business_name,
+    category_slug: registration.category_slug,
+    city: registration.city,
+    address: registration.address ?? "",
+    phone: registration.phone,
+    website: registration.website,
+    instagram: registration.instagram,
+    logo_url: registration.logo_url,
+    description: registration.description,
+    status: "published",
+    verified_at: verifiedAt,
+  };
+  const { error: publishError } = await supabase
+    .from("businesses")
+    .upsert(payload, { onConflict: "registration_id" });
+
+  if (publishError) {
+    throw new Error(publishError.message);
+  }
+
+  return slug;
+}
+
 async function reviewRegistration(formData: FormData, status: BusinessRegistrationStatus) {
   const [user, isAdmin] = await Promise.all([
     getCurrentUser(),
@@ -113,34 +168,18 @@ async function reviewRegistration(formData: FormData, status: BusinessRegistrati
   }
 
   if (status === "approved") {
-    const baseSlug = slugify(`${registration.business_name}-${registration.city}`);
-    const { error: publishError } = await supabase.from("businesses").upsert(
-      {
-        registration_id: registration.id,
-        owner_id: registration.owner_id,
-        slug: baseSlug,
-        name: registration.business_name,
-        category_slug: registration.category_slug,
-        city: registration.city,
-        address: registration.address ?? "",
-        phone: registration.phone,
-        website: registration.website,
-        instagram: registration.instagram,
-        logo_url: registration.logo_url,
-        description: registration.description,
-        status: "published",
-        verified_at: reviewedAt,
-      },
-      { onConflict: "registration_id" },
+    const slug = await publishRegistrationBusiness(
+      supabase,
+      registration,
+      reviewedAt,
     );
-
-    if (publishError) {
-      throw new Error(publishError.message);
-    }
+    revalidatePath(`/business/${slug}`);
   }
 
   revalidatePath("/admin/registrations");
   revalidatePath("/dashboard");
+  revalidatePath("/");
+  revalidatePath("/search");
 }
 
 export async function approveRegistration(formData: FormData) {

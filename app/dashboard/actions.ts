@@ -142,6 +142,38 @@ export async function updateBusinessRegistration(
     };
   }
 
+  const { data: existingRegistration, error: registrationError } = await supabase
+    .from("business_registrations")
+    .select("status")
+    .eq("id", id)
+    .eq("owner_id", user.id)
+    .single();
+
+  if (registrationError || !existingRegistration) {
+    return {
+      ok: false,
+      message: registrationError?.message ?? "Business registration not found.",
+    };
+  }
+
+  const { data: linkedBusiness, error: linkedBusinessError } = await supabase
+    .from("businesses")
+    .select("id, slug")
+    .eq("registration_id", id)
+    .limit(1)
+    .maybeSingle();
+
+  if (linkedBusinessError) {
+    return {
+      ok: false,
+      message: linkedBusinessError.message,
+    };
+  }
+
+  const isPublishedUpdate =
+    existingRegistration.status === "approved" || Boolean(linkedBusiness);
+  const shouldRefreshAdmin =
+    !isPublishedUpdate || existingRegistration.status !== "approved";
   let logoUrl: string | null = null;
 
   try {
@@ -167,11 +199,14 @@ export async function updateBusinessRegistration(
     phone: optionalText(formData.get("phone")),
     website: optionalText(formData.get("website")),
     instagram: optionalText(formData.get("instagram")),
-    status: "pending",
-    reviewer_id: null,
-    review_note: null,
-    reviewed_at: null,
+    status: isPublishedUpdate ? "approved" : "pending",
   };
+
+  if (!isPublishedUpdate) {
+    updates.reviewer_id = null;
+    updates.review_note = null;
+    updates.reviewed_at = null;
+  }
 
   if (logoUrl) {
     updates.logo_url = logoUrl;
@@ -191,10 +226,21 @@ export async function updateBusinessRegistration(
   }
 
   revalidatePath("/dashboard");
-  revalidatePath("/admin/registrations");
+  revalidatePath("/");
+  revalidatePath("/search");
+
+  if (linkedBusiness?.slug) {
+    revalidatePath(`/business/${linkedBusiness.slug}`);
+  }
+
+  if (shouldRefreshAdmin) {
+    revalidatePath("/admin/registrations");
+  }
 
   return {
     ok: true,
-    message: "Business details saved.",
+    message: isPublishedUpdate
+      ? "Business profile updated."
+      : "Business details saved for review.",
   };
 }
