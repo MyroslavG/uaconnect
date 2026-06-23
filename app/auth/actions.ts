@@ -12,16 +12,26 @@ function getNextPath(formData?: FormData) {
   return next.startsWith("/") ? next : "/";
 }
 
+function getAuthOrigin(requestOrigin: string | null) {
+  const configuredOrigin = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(
+    /\/$/,
+    "",
+  );
+
+  if (process.env.NODE_ENV === "production" && configuredOrigin) {
+    return configuredOrigin;
+  }
+
+  return requestOrigin ?? configuredOrigin ?? "http://localhost:3000";
+}
+
 export async function signInWithGoogle(formData?: FormData) {
   if (!isSupabaseConfigured()) {
     redirect("/auth/error?message=supabase-not-configured");
   }
 
   const requestHeaders = await headers();
-  const origin =
-    requestHeaders.get("origin") ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    "http://localhost:3000";
+  const origin = getAuthOrigin(requestHeaders.get("origin"));
   const next = getNextPath(formData);
   const supabase = await createClient();
 
