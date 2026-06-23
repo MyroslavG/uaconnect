@@ -341,6 +341,11 @@ const categoryUk: Record<string, Pick<Category, "name" | "description">> = {
     name: "Краса",
     description: "Волосся, нігті, догляд за шкірою, брови та макіяж.",
   },
+  "wellness-care": {
+    name: "Здоров'я та турбота",
+    description:
+      "Тренери, йога, медитація, відновлення після травм, самодогляд і підтримка ментального здоров'я.",
+  },
   construction: {
     name: "Будівництво",
     description: "Ремонти, відновлення, добудови та професійні майстри.",

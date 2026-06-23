@@ -4,7 +4,7 @@ const sensitiveKeyPattern = /password|secret|token|key|cookie|authorization/i;
 const maxStringLength = 500;
 
 export function logServerEvent(event: string, context: DiagnosticContext = {}) {
-  console.info(`[uaconnect:${event}]`, sanitizeContext(context));
+  console.log(formatLog("info", event, sanitizeContext(context)));
 }
 
 export function logServerError(
@@ -12,9 +12,25 @@ export function logServerError(
   error: unknown,
   context: DiagnosticContext = {},
 ) {
-  console.error(`[uaconnect:${event}]`, {
-    ...sanitizeContext(context),
-    error: serializeError(error),
+  console.error(
+    formatLog("error", event, {
+      ...sanitizeContext(context),
+      error: serializeError(error),
+    }),
+  );
+}
+
+function formatLog(
+  level: "error" | "info",
+  event: string,
+  context: DiagnosticContext,
+) {
+  return JSON.stringify({
+    context,
+    event,
+    level,
+    marker: "UA_CONNECT_LOG",
+    timestamp: new Date().toISOString(),
   });
 }
 

@@ -35,6 +35,11 @@
     "description": "Hair, nails, skin care, brows, and makeup studios."
   },
   {
+    "name": "Wellness & Care",
+    "slug": "wellness-care",
+    "description": "Personal trainers, yoga, meditation, self-care, injury recovery, and mental health support."
+  },
+  {
     "name": "Construction",
     "slug": "construction",
     "description": "Renovations, repairs, custom builds, and skilled trades."
