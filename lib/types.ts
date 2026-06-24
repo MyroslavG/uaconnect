@@ -26,6 +26,7 @@ export type Business = {
   city: string;
   citySlug: string;
   neighborhood: string;
+  servesAllCanada?: boolean;
   description: string;
   longDescription: string;
   phone: string;

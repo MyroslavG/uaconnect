@@ -40,7 +40,8 @@ export async function getDirectoryBusinessesByCityAndCategory(
 
   return directoryBusinesses.filter(
     (business) =>
-      business.citySlug === citySlug && business.categorySlug === categorySlug,
+      (business.citySlug === citySlug || business.servesAllCanada) &&
+      business.categorySlug === categorySlug,
   );
 }
 
@@ -55,6 +56,7 @@ export async function getRelatedDirectoryBusinesses(
       (candidate) =>
         candidate.slug !== business.slug &&
         (candidate.citySlug === business.citySlug ||
+          candidate.servesAllCanada ||
           candidate.categorySlug === business.categorySlug),
     )
     .slice(0, limit);
@@ -70,7 +72,7 @@ export async function searchDirectoryBusinesses({
   const directoryBusinesses = await getDirectoryBusinesses();
   const filteredBusinesses = directoryBusinesses
     .map((business) => {
-      if (!coordinates) {
+      if (!coordinates || business.servesAllCanada) {
         return business;
       }
 
@@ -92,14 +94,17 @@ export async function searchDirectoryBusinesses({
     })
     .filter((business) => {
       const matchesCity =
-        citySlug && !coordinates ? business.citySlug === citySlug : true;
+        citySlug && !coordinates
+          ? business.citySlug === citySlug || business.servesAllCanada
+          : true;
       const matchesCategory = categorySlug
         ? business.categorySlug === categorySlug
         : true;
       const matchesDistance =
-        coordinates && typeof business.distanceInKm === "number"
-          ? business.distanceInKm <= radiusInKm
-          : true;
+        business.servesAllCanada ||
+        !coordinates ||
+        typeof business.distanceInKm !== "number" ||
+        business.distanceInKm <= radiusInKm;
 
       return matchesCity && matchesCategory && matchesDistance;
     })
@@ -186,6 +191,7 @@ function mapPublishedBusiness(
     city: rawLocation || cityResolution?.city.name || "",
     citySlug: cityResolution?.city.slug ?? "",
     neighborhood: cityResolution?.kind === "nearby" ? rawLocation : "",
+    servesAllCanada: row.serves_all_canada,
     description: row.description,
     longDescription: row.description,
     phone: row.phone ?? "",

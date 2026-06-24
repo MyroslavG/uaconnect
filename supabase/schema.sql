@@ -45,6 +45,7 @@ create table if not exists public.business_registrations (
   website text,
   instagram text,
   logo_url text,
+  serves_all_canada boolean not null default false,
   description text not null,
   status public.business_registration_status not null default 'pending',
   reviewer_id uuid references auth.users(id) on delete set null,
@@ -64,6 +65,9 @@ alter table public.business_registrations
 alter table public.business_registrations
   add column if not exists logo_url text;
 
+alter table public.business_registrations
+  add column if not exists serves_all_canada boolean not null default false;
+
 create table if not exists public.businesses (
   id uuid primary key default gen_random_uuid(),
   registration_id uuid unique references public.business_registrations(id) on delete set null,
@@ -77,6 +81,7 @@ create table if not exists public.businesses (
   website text,
   instagram text,
   logo_url text,
+  serves_all_canada boolean not null default false,
   description text not null,
   status text not null default 'published' check (status in ('published', 'hidden')),
   verified_at timestamptz,
@@ -86,6 +91,9 @@ create table if not exists public.businesses (
 
 alter table public.businesses
   add column if not exists logo_url text;
+
+alter table public.businesses
+  add column if not exists serves_all_canada boolean not null default false;
 
 create table if not exists public.business_claim_invites (
   id uuid primary key default gen_random_uuid(),
@@ -296,6 +304,7 @@ begin
       website = new.website,
       instagram = new.instagram,
       logo_url = new.logo_url,
+      serves_all_canada = new.serves_all_canada,
       description = new.description,
       status = 'published',
       updated_at = now()
@@ -412,6 +421,7 @@ begin
     website,
     instagram,
     logo_url,
+    serves_all_canada,
     description,
     status,
     reviewer_id,
@@ -427,6 +437,7 @@ begin
     business_row.website,
     business_row.instagram,
     business_row.logo_url,
+    business_row.serves_all_canada,
     business_row.description,
     'approved',
     invite_row.created_by,
@@ -488,6 +499,7 @@ begin
     website = registration_row.website,
     instagram = registration_row.instagram,
     logo_url = registration_row.logo_url,
+    serves_all_canada = registration_row.serves_all_canada,
     description = registration_row.description,
     status = 'published',
     updated_at = now()
@@ -645,6 +657,8 @@ grant execute on function public.get_business_claim_invite(text) to anon, authen
 grant execute on function public.claim_business_with_token(text) to authenticated;
 grant execute on function public.sync_owned_business_from_registration(uuid) to authenticated;
 grant execute on function public.get_public_business_owners(uuid[]) to anon, authenticated;
+
+notify pgrst, 'reload schema';
 
 -- After your first Google sign-in, promote yourself:
 -- update public.profiles set role = 'admin' where email = 'you@example.com';

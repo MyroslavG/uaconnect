@@ -65,6 +65,9 @@ const text = {
     editTitle: "Редагувати профіль бізнесу",
     logoFile: "Логотип",
     logoHint: "Завантажте новий файл, щоб замінити поточний логотип. PNG, JPG, WebP, GIF або SVG до 2 MB.",
+    servesAllCanada: "Онлайн · по всій Канаді",
+    servesAllCanadaHint:
+      "Показувати цей бізнес у пошуку для будь-якого міста або локації в Канаді.",
     viewProfile: "Переглянути профіль",
     phone: "Телефон",
     website: "Сайт",
@@ -93,6 +96,9 @@ const text = {
     editTitle: "Edit business profile",
     logoFile: "Logo",
     logoHint: "Upload a new file to replace the current logo. PNG, JPG, WebP, GIF, or SVG up to 2 MB.",
+    servesAllCanada: "Online · Canada-wide",
+    servesAllCanadaHint:
+      "Show this business in search for any city or location in Canada.",
     viewProfile: "View profile",
     phone: "Phone",
     website: "Website",
@@ -162,6 +168,9 @@ export function DashboardBusinessEditor({
                 <Badge variant="accent">
                   {category?.name ?? registration.category_slug}
                 </Badge>
+                {registration.serves_all_canada ? (
+                  <Badge variant="green">{labels.servesAllCanada}</Badge>
+                ) : null}
                 <StatusBadge status={registration.status} labels={labels} />
               </div>
               <h2 className="mt-4 text-3xl font-black leading-tight tracking-normal">
@@ -325,6 +334,23 @@ export function DashboardBusinessEditor({
                       </p>
                     </div>
                   </div>
+
+                  <label className="flex items-start gap-3 rounded-lg border bg-muted/40 p-4">
+                    <input
+                      name="servesAllCanada"
+                      type="checkbox"
+                      defaultChecked={registration.serves_all_canada}
+                      className="mt-1 h-4 w-4 rounded border-input accent-primary"
+                    />
+                    <span>
+                      <span className="block text-sm font-bold">
+                        {labels.servesAllCanada}
+                      </span>
+                      <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                        {labels.servesAllCanadaHint}
+                      </span>
+                    </span>
+                  </label>
 
                   <div className="grid gap-2">
                     <FieldLabel

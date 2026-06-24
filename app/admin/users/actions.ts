@@ -352,6 +352,7 @@ export async function connectPublicBusinessToOwner(
     website: business.website,
     instagram: business.instagram,
     logo_url: business.logo_url,
+    serves_all_canada: business.serves_all_canada,
     description: business.description,
     status: "approved",
     reviewer_id: adminUser.id,
@@ -432,6 +433,7 @@ export async function updateAdminBusinessDetails(
   const categorySlug = String(formData.get("categorySlug") ?? "").trim();
   const city = String(formData.get("city") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
+  const servesAllCanada = formData.get("servesAllCanada") === "on";
 
   if (
     !registrationId ||
@@ -494,6 +496,7 @@ export async function updateAdminBusinessDetails(
     category_slug: categorySlug,
     city,
     address: optionalText(formData.get("address")),
+    serves_all_canada: servesAllCanada,
     description,
     phone: optionalText(formData.get("phone")),
     website: optionalText(formData.get("website")),
@@ -522,6 +525,7 @@ export async function updateAdminBusinessDetails(
       category_slug: categorySlug,
       city,
       address: optionalText(formData.get("address")) ?? "",
+      serves_all_canada: servesAllCanada,
       description,
       phone: optionalText(formData.get("phone")),
       website: optionalText(formData.get("website")),

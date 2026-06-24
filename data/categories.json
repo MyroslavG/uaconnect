@@ -85,6 +85,11 @@
     "description": "Event planning, decor, photography, music, catering support, and celebrations."
   },
   {
+    "name": "Travel & Tours",
+    "slug": "travel-tours",
+    "description": "Travel agencies, vacation planning, tours, tickets, retreats, and trip support."
+  },
+  {
     "name": "Photo & Video",
     "slug": "photographers",
     "description": "Photography, videography, portraits, events, brand shoots, reels, and content sessions."

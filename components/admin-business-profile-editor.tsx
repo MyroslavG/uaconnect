@@ -43,6 +43,7 @@ export type AdminEditableBusiness = {
   phone: string;
   publicOwnerLabel: string;
   registrationId: string;
+  servesAllCanada: boolean;
   slug: string;
   status: string;
   website: string;
@@ -72,6 +73,9 @@ const text = {
     address: "Адреса",
     description: "Опис",
     phone: "Телефон",
+    servesAllCanada: "Онлайн · по всій Канаді",
+    servesAllCanadaHint:
+      "Показувати цей бізнес у пошуку для будь-якого міста або локації в Канаді.",
     website: "Сайт",
     instagram: "Instagram",
     logo: "Логотип",
@@ -97,6 +101,9 @@ const text = {
     address: "Address",
     description: "Description",
     phone: "Phone",
+    servesAllCanada: "Online · Canada-wide",
+    servesAllCanadaHint:
+      "Show this business in search for any city or location in Canada.",
     website: "Website",
     instagram: "Instagram",
     logo: "Logo",
@@ -193,6 +200,9 @@ function BusinessEditRow({
             {categories.find((item) => item.slug === business.categorySlug)
               ?.name ?? business.categorySlug}
           </Badge>
+          {business.servesAllCanada ? (
+            <Badge variant="green">{labels.servesAllCanada}</Badge>
+          ) : null}
         </div>
         <p className="mt-2 flex min-w-0 items-center gap-2 truncate text-sm text-muted-foreground">
           <MapPin className="h-4 w-4 shrink-0 text-primary" />
@@ -308,6 +318,23 @@ function BusinessEditRow({
                   />
                 </div>
               </div>
+
+              <label className="flex items-start gap-3 rounded-lg border bg-muted/40 p-4">
+                <input
+                  name="servesAllCanada"
+                  type="checkbox"
+                  defaultChecked={business.servesAllCanada}
+                  className="mt-1 h-4 w-4 rounded border-input accent-primary"
+                />
+                <span>
+                  <span className="block text-sm font-bold">
+                    {labels.servesAllCanada}
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                    {labels.servesAllCanadaHint}
+                  </span>
+                </span>
+              </label>
 
               <div className="grid gap-2">
                 <Label htmlFor={`admin-business-description-${business.registrationId}`}>

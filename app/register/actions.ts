@@ -55,6 +55,7 @@ export async function submitBusinessRegistration(
   const categorySlug = String(formData.get("categorySlug") ?? "").trim();
   const city = String(formData.get("city") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
+  const servesAllCanada = formData.get("servesAllCanada") === "on";
 
   if (!businessName || !categorySlug || !city || !description) {
     logServerEvent("business_registration.validation_failed", {
@@ -103,6 +104,7 @@ export async function submitBusinessRegistration(
     category_slug: categorySlug,
     city,
     address: optionalText(formData.get("address")),
+    serves_all_canada: servesAllCanada,
     description,
     phone: optionalText(formData.get("phone")),
     website: optionalText(formData.get("website")),
@@ -115,6 +117,7 @@ export async function submitBusinessRegistration(
     logServerError("business_registration.insert_failed", error, {
       categorySlug,
       city,
+      servesAllCanada,
       registrationId,
       userId: user.id,
     });
@@ -131,6 +134,7 @@ export async function submitBusinessRegistration(
   logServerEvent("business_registration.submitted", {
     categorySlug,
     city,
+    servesAllCanada,
     registrationId,
     userId: user.id,
   });

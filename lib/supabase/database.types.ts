@@ -58,6 +58,7 @@ export type Database = {
           website: string | null;
           instagram: string | null;
           logo_url: string | null;
+          serves_all_canada: boolean;
           description: string;
           status: BusinessRegistrationStatus;
           reviewer_id: string | null;
@@ -77,6 +78,7 @@ export type Database = {
           website?: string | null;
           instagram?: string | null;
           logo_url?: string | null;
+          serves_all_canada?: boolean;
           description: string;
           status?: BusinessRegistrationStatus;
           reviewer_id?: string | null;
@@ -96,6 +98,7 @@ export type Database = {
           website?: string | null;
           instagram?: string | null;
           logo_url?: string | null;
+          serves_all_canada?: boolean;
           description?: string;
           status?: BusinessRegistrationStatus;
           reviewer_id?: string | null;
@@ -120,6 +123,7 @@ export type Database = {
           website: string | null;
           instagram: string | null;
           logo_url: string | null;
+          serves_all_canada: boolean;
           description: string;
           status: BusinessStatus;
           verified_at: string | null;
@@ -139,6 +143,7 @@ export type Database = {
           website?: string | null;
           instagram?: string | null;
           logo_url?: string | null;
+          serves_all_canada?: boolean;
           description: string;
           status?: BusinessStatus;
           verified_at?: string | null;
@@ -158,6 +163,7 @@ export type Database = {
           website?: string | null;
           instagram?: string | null;
           logo_url?: string | null;
+          serves_all_canada?: boolean;
           description?: string;
           status?: BusinessStatus;
           verified_at?: string | null;

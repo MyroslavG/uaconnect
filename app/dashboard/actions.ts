@@ -166,6 +166,7 @@ export async function updateBusinessRegistration(
   const categorySlug = String(formData.get("categorySlug") ?? "").trim();
   const city = String(formData.get("city") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
+  const servesAllCanada = formData.get("servesAllCanada") === "on";
 
   if (!id || !businessName || !categorySlug || !city || !description) {
     logServerEvent("business_update.validation_failed", {
@@ -254,6 +255,7 @@ export async function updateBusinessRegistration(
     category_slug: categorySlug,
     city,
     address: optionalText(formData.get("address")),
+    serves_all_canada: servesAllCanada,
     description,
     phone: optionalText(formData.get("phone")),
     website: optionalText(formData.get("website")),
@@ -283,6 +285,7 @@ export async function updateBusinessRegistration(
     logServerError("business_update.registration_update_failed", error, {
       categorySlug,
       city,
+      servesAllCanada,
       isPublishedUpdate,
       registrationId: id,
       userId: user.id,
@@ -305,6 +308,7 @@ export async function updateBusinessRegistration(
       category_slug: categorySlug,
       city,
       address: optionalText(formData.get("address")) ?? "",
+      serves_all_canada: servesAllCanada,
       description,
       phone: optionalText(formData.get("phone")),
       website: optionalText(formData.get("website")),
@@ -328,6 +332,7 @@ export async function updateBusinessRegistration(
       logServerError("business_update.public_sync_failed", syncError, {
         categorySlug,
         city,
+        servesAllCanada,
         registrationId: id,
         userId: user.id,
       });
@@ -358,6 +363,7 @@ export async function updateBusinessRegistration(
   logServerEvent("business_update.updated", {
     categorySlug,
     city,
+    servesAllCanada,
     isPublishedUpdate,
     publicBusinessSlug,
     registrationId: id,

@@ -36,6 +36,9 @@ const text = {
     instagram: "Instagram",
     logoFile: "Логотип",
     logoHint: "PNG, JPG, WebP, GIF або SVG до 2 MB.",
+    servesAllCanada: "Онлайн · по всій Канаді",
+    servesAllCanadaHint:
+      "Оберіть, якщо ваш бізнес може працювати з клієнтами з будь-якого міста Канади.",
     description: "Опис бізнесу",
     submit: "Надіслати на перевірку",
     pending: "Надсилаємо...",
@@ -58,6 +61,9 @@ const text = {
     instagram: "Instagram",
     logoFile: "Logo",
     logoHint: "PNG, JPG, WebP, GIF, or SVG up to 2 MB.",
+    servesAllCanada: "Online · Canada-wide",
+    servesAllCanadaHint:
+      "Choose this if your business can serve clients from any city in Canada.",
     description: "Business description",
     submit: "Submit for review",
     pending: "Submitting...",
@@ -139,6 +145,22 @@ export function BusinessRegistrationForm({
             </datalist>
           </div>
         </div>
+
+        <label className="flex items-start gap-3 rounded-lg border bg-muted/40 p-4">
+          <input
+            name="servesAllCanada"
+            type="checkbox"
+            className="mt-1 h-4 w-4 rounded border-input accent-primary"
+          />
+          <span>
+            <span className="block text-sm font-bold">
+              {labels.servesAllCanada}
+            </span>
+            <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+              {labels.servesAllCanadaHint}
+            </span>
+          </span>
+        </label>
 
         <div className="grid gap-2">
           <FieldLabel htmlFor="description" badge={labels.required}>

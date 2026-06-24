@@ -70,6 +70,8 @@ const text = {
     noWebsite: "Сайт не вказано",
     noInstagram: "Instagram не вказано",
     noAddress: "Адресу не вказано",
+    servesAllCanada: "Онлайн · по всій Канаді",
+    localOnly: "Локальний бізнес",
     users: "Користувачі",
   },
   en: {
@@ -100,6 +102,8 @@ const text = {
     noWebsite: "No website",
     noInstagram: "No Instagram",
     noAddress: "No address",
+    servesAllCanada: "Online · Canada-wide",
+    localOnly: "Local business",
     users: "Users",
   },
 } satisfies Record<Locale, Record<string, string>>;
@@ -261,6 +265,9 @@ function RegistrationReviewCard({
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-2xl font-black">{registration.business_name}</h2>
             <StatusBadge status={registration.status} labels={labels} />
+            {registration.serves_all_canada ? (
+              <Badge variant="green">{labels.servesAllCanada}</Badge>
+            ) : null}
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
             {[registration.city, registration.address || labels.noAddress].join(
@@ -411,6 +418,17 @@ function getBusinessChanges(
       after: registration.city,
     },
     {
+      label: reviewLabels.fieldServiceArea,
+      before: existingBusiness.serves_all_canada
+        ? labels.servesAllCanada
+        : labels.localOnly,
+      after: registration.serves_all_canada
+        ? labels.servesAllCanada
+        : labels.localOnly,
+      compareBefore: String(existingBusiness.serves_all_canada),
+      compareAfter: String(registration.serves_all_canada),
+    },
+    {
       label: reviewLabels.fieldAddress,
       before: existingBusiness.address || labels.noAddress,
       after: registration.address || labels.noAddress,
@@ -477,6 +495,7 @@ function getReviewLabels(locale: Locale) {
       fieldName: "Назва",
       fieldCategory: "Категорія",
       fieldCity: "Локація",
+      fieldServiceArea: "Зона обслуговування",
       fieldAddress: "Адреса",
       fieldPhone: "Телефон",
       fieldWebsite: "Сайт",
@@ -500,6 +519,7 @@ function getReviewLabels(locale: Locale) {
     fieldName: "Name",
     fieldCategory: "Category",
     fieldCity: "Location",
+    fieldServiceArea: "Service area",
     fieldAddress: "Address",
     fieldPhone: "Phone",
     fieldWebsite: "Website",

@@ -48,6 +48,7 @@ type RegistrationRow = Pick<
   | "instagram"
   | "owner_id"
   | "phone"
+  | "serves_all_canada"
   | "status"
   | "website"
 >;
@@ -113,7 +114,7 @@ export default async function AdminUsersPage() {
         supabase
           .from("business_registrations")
           .select(
-            "id, business_name, category_slug, city, address, phone, website, instagram, description, owner_id, status",
+            "id, business_name, category_slug, city, address, phone, website, instagram, description, serves_all_canada, owner_id, status",
           )
           .order("business_name", { ascending: true }),
       ]);
@@ -194,6 +195,7 @@ export default async function AdminUsersPage() {
         ? getProfileLabel(profileById.get(publicOwnerId) ?? null)
         : "None",
       registrationId: registration.id,
+      servesAllCanada: registration.serves_all_canada,
       slug: publicBusiness?.slug ?? "",
       status: publicBusiness?.status ?? registration.status,
       website: registration.website ?? "",

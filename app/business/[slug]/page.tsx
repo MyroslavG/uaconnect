@@ -5,6 +5,7 @@ import {
   Clock,
   ExternalLink,
   Globe,
+  Globe2,
   Instagram,
   Languages,
   MapPin,
@@ -100,6 +101,8 @@ export default async function BusinessProfilePage({
     business.neighborhood,
     business.city,
   );
+  const servesAllCanadaLabel =
+    locale === "uk" ? "Онлайн · по всій Канаді" : "Online · Canada-wide";
   const categoryHref = rawBusiness.citySlug
     ? `/${rawBusiness.citySlug}/${rawBusiness.categorySlug}`
     : `/search?category=${rawBusiness.categorySlug}&near=${encodeURIComponent(
@@ -137,6 +140,12 @@ export default async function BusinessProfilePage({
               <Badge className="border-accent/30 bg-accent/15 text-accent">
                 {business.category}
               </Badge>
+              {business.servesAllCanada ? (
+                <Badge variant="green">
+                  <Globe2 className="mr-1.5 h-3.5 w-3.5" />
+                  {servesAllCanadaLabel}
+                </Badge>
+              ) : null}
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-3">
               <h1 className="text-balance text-4xl font-black tracking-normal md:text-6xl">

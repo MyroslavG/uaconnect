@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ExternalLink, MapPin, Phone } from "lucide-react";
+import { ExternalLink, Globe2, MapPin, Phone } from "lucide-react";
 
 import { BusinessLogo } from "@/components/business-logo";
 import { BusinessOwnerChip } from "@/components/business-owner-chip";
@@ -17,6 +17,7 @@ type BusinessCardProps = {
 
 export function BusinessCard({
   business,
+  locale,
 }: BusinessCardProps) {
   const hasContactPreview = Boolean(business.phone || business.website);
   const distanceLabel =
@@ -27,6 +28,8 @@ export function BusinessCard({
     business.neighborhood,
     business.city,
   );
+  const servesAllCanadaLabel =
+    locale === "uk" ? "Онлайн · по всій Канаді" : "Online · Canada-wide";
 
   return (
     <Card className="group overflow-hidden border-white/70 bg-card/95 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-1 hover:border-hover-blue-border hover:shadow-lift dark:border-white/10">
@@ -56,6 +59,12 @@ export function BusinessCard({
               ) : null}
             </div>
             <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+              {business.servesAllCanada ? (
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 font-semibold text-primary">
+                  <Globe2 className="h-3.5 w-3.5" />
+                  {servesAllCanadaLabel}
+                </span>
+              ) : null}
               {locationLabel ? (
                 <span className="inline-flex items-center gap-1.5">
                   <MapPin className="h-3.5 w-3.5" />

@@ -53,6 +53,9 @@ const text = {
     instagram: "Instagram",
     logoFile: "Логотип",
     logoHint: "PNG, JPG, WebP, GIF або SVG до 2 MB.",
+    servesAllCanada: "Онлайн · по всій Канаді",
+    servesAllCanadaHint:
+      "Показувати цей бізнес у пошуку для будь-якого міста або локації в Канаді.",
     required: "Обов'язково",
     optional: "Необов'язково",
     create: "Опублікувати бізнес",
@@ -82,6 +85,9 @@ const text = {
     instagram: "Instagram",
     logoFile: "Logo",
     logoHint: "PNG, JPG, WebP, GIF, or SVG up to 2 MB.",
+    servesAllCanada: "Online · Canada-wide",
+    servesAllCanadaHint:
+      "Show this business in search for any city or location in Canada.",
     required: "Required",
     optional: "Optional",
     create: "Publish business",
@@ -193,6 +199,22 @@ export function AdminBusinessTools({
             <Field label={labels.description} badge={labels.required}>
               <Textarea name="description" required rows={4} />
             </Field>
+
+            <label className="flex items-start gap-3 rounded-lg border bg-muted/40 p-4">
+              <input
+                name="servesAllCanada"
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-input accent-primary"
+              />
+              <span>
+                <span className="block text-sm font-bold">
+                  {labels.servesAllCanada}
+                </span>
+                <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                  {labels.servesAllCanadaHint}
+                </span>
+              </span>
+            </label>
 
             <div className="grid gap-4 md:grid-cols-3">
               <Field label={labels.phone} badge={labels.optional}>

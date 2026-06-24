@@ -109,6 +109,7 @@ async function publishRegistrationBusiness(
     website: registration.website,
     instagram: registration.instagram,
     logo_url: registration.logo_url,
+    serves_all_canada: registration.serves_all_canada,
     description: registration.description,
     status: "published",
     verified_at: verifiedAt,
@@ -235,6 +236,7 @@ export async function createAdminBusiness(
     const categorySlug = String(formData.get("categorySlug") ?? "").trim();
     const city = String(formData.get("city") ?? "").trim();
     const description = String(formData.get("description") ?? "").trim();
+    const servesAllCanada = formData.get("servesAllCanada") === "on";
 
     if (!businessName || !categorySlug || !city || !description) {
       return {
@@ -268,6 +270,7 @@ export async function createAdminBusiness(
       website: optionalText(formData.get("website")),
       instagram: optionalText(formData.get("instagram")),
       logo_url: logoUrl,
+      serves_all_canada: servesAllCanada,
       description,
       status: "published",
       verified_at: new Date().toISOString(),

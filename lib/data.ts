@@ -22,7 +22,8 @@ export function getBusiness(slug: string) {
 export function getBusinessesByCityAndCategory(citySlug: string, categorySlug: string) {
   return businesses.filter(
     (business) =>
-      business.citySlug === citySlug && business.categorySlug === categorySlug,
+      (business.citySlug === citySlug || business.servesAllCanada) &&
+      business.categorySlug === categorySlug,
   );
 }
 
@@ -39,6 +40,7 @@ export function getRelatedBusinesses(business: Business, limit = 3) {
       (candidate) =>
         candidate.slug !== business.slug &&
         (candidate.citySlug === business.citySlug ||
+          candidate.servesAllCanada ||
           candidate.categorySlug === business.categorySlug),
     )
     .slice(0, limit);
