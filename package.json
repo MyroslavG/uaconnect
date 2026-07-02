@@ -3,39 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint . --max-warnings=0",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@radix-ui/react-dialog": "^1.1.6",
-    "@radix-ui/react-label": "^2.1.2",
-    "@radix-ui/react-select": "^2.1.6",
-    "@radix-ui/react-slot": "^1.1.2",
-    "@supabase/ssr": "^0.12.0",
-    "@supabase/supabase-js": "^2.108.2",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "lucide-react": "^0.468.0",
-    "next": "^15.0.0",
-    "next-themes": "^0.4.4",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "tailwind-merge": "^2.6.0"
-  },
-  "devDependencies": {
-    "@eslint/eslintrc": "^3.2.0",
-    "@types/node": "^22.10.2",
-    "@types/react": "^19.0.2",
-    "@types/react-dom": "^19.0.2",
-    "autoprefixer": "^10.4.20",
-    "eslint": "^9.17.0",
-    "eslint-config-next": "^15.0.0",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.17",
-    "tailwindcss-animate": "^1.0.7",
-    "typescript": "^5.7.2"
+    "dev": "pnpm --filter uaconnect-web dev",
+    "build": "pnpm --filter uaconnect-web build",
+    "lint": "pnpm --filter uaconnect-web lint",
+    "typecheck": "pnpm --filter uaconnect-web typecheck",
+    "web:dev": "pnpm --filter uaconnect-web dev",
+    "web:build": "pnpm --filter uaconnect-web build",
+    "web:lint": "pnpm --filter uaconnect-web lint",
+    "web:typecheck": "pnpm --filter uaconnect-web typecheck",
+    "mobile:dev": "pnpm --filter kolo-mobile start",
+    "mobile:start": "pnpm --filter kolo-mobile start",
+    "mobile:android": "pnpm --filter kolo-mobile android",
+    "mobile:ios": "pnpm --filter kolo-mobile ios",
+    "mobile:web": "pnpm --filter kolo-mobile web",
+    "mobile:typecheck": "pnpm --filter kolo-mobile typecheck"
   }
 }

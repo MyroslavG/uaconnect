@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "Kolo",
+    "slug": "kolo",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "kolo",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.kolo.mobile",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "app.kolo.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#0e2f2a"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a0d51185-a0b8-4839-82bf-b70fef0b64db"
+      }
+    },
+    "owner": "myroslavv"
+  }
+}

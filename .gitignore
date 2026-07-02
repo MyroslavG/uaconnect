@@ -2,8 +2,13 @@ node_modules
 .next
 out
 dist
+.expo
+web-build
+android
+ios
 .env*
 !.env.example
+!**/.env.example
 *.tsbuildinfo
 npm-debug.log*
 yarn-debug.log*
