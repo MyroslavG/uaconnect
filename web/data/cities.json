@@ -90,6 +90,16 @@
     }
   },
   {
+    "name": "St. John's",
+    "slug": "st-johns",
+    "province": "NL",
+    "summary": "",
+    "coordinates": {
+      "latitude": 47.5615,
+      "longitude": -52.7126
+    }
+  },
+  {
     "name": "Quebec City",
     "slug": "quebec-city",
     "province": "QC",

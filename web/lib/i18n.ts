@@ -337,6 +337,11 @@ const categoryUk: Record<string, Pick<Category, "name" | "description">> = {
     description:
       "Підбір страхування, порівняння полісів, допомога із заявками та покриттям для людей і бізнесів.",
   },
+  bookkeepers: {
+    name: "Бухгалтери",
+    description:
+      "Бухгалтерський облік, зарплата, рахунки, звітність і фінансове адміністрування для малого бізнесу.",
+  },
   beauty: {
     name: "Краса",
     description: "Волосся, нігті, догляд за шкірою, брови та макіяж.",
@@ -441,6 +446,10 @@ const cityUk: Record<string, Pick<City, "name" | "summary">> = {
   },
   halifax: {
     name: "Галіфакс",
+    summary: "",
+  },
+  "st-johns": {
+    name: "Сент-Джонс",
     summary: "",
   },
   "quebec-city": {

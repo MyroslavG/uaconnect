@@ -2,8 +2,9 @@
   "expo": {
     "name": "Kolo",
     "slug": "kolo",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "orientation": "portrait",
+    "icon": "./assets/kolo-logo.png",
     "userInterfaceStyle": "automatic",
     "scheme": "kolo",
     "ios": {
@@ -16,14 +17,27 @@
     "android": {
       "package": "app.kolo.mobile",
       "adaptiveIcon": {
-        "backgroundColor": "#0e2f2a"
+        "foregroundImage": "./assets/kolo-logo.png",
+        "backgroundColor": "#291C0E"
       }
     },
+    "splash": {
+      "image": "./assets/kolo-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#E1D4C2"
+    },
     "web": {
+      "favicon": "./assets/kolo-logo.png",
       "bundler": "metro"
     },
     "plugins": [
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Choose a business logo for your Kolo profile."
+        }
+      ]
     ],
     "extra": {
       "eas": {

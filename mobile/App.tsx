@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
+import Constants, { AppOwnership } from "expo-constants";
 import * as Linking from "expo-linking";
+import * as ImagePicker from "expo-image-picker";
 import {
+  Alert,
   Dimensions,
   Image,
   KeyboardAvoidingView,
@@ -22,14 +28,18 @@ import {
   LayoutDashboard,
   MapPin,
   Moon,
+  Pencil,
   Phone,
   Plus,
   Search,
   Sun,
+  Trash2,
   type LucideIcon,
+  Upload,
   UserRound,
   X,
 } from "lucide-react-native";
+import Svg, { Path } from "react-native-svg";
 import type { Session } from "@supabase/supabase-js";
 
 import {
@@ -39,20 +49,35 @@ import {
 } from "./src/data";
 import {
   completeAuthFromUrl,
+  signInWithEmailPassword,
   signInWithGoogle,
   signOut,
 } from "./src/auth";
 import {
+  createBusinessContentItem,
   createBusinessRegistration,
+  deleteBusinessContentItem,
+  fetchOwnedBusinessContent,
   fetchOwnedBusiness,
   fetchPublishedBusinesses,
+  updateBusinessContentItem,
   updateOwnedBusiness,
+  type BusinessLogoInput,
   type BusinessRegistrationInput,
 } from "./src/directory";
 import { isSupabaseConfigured, supabase } from "./src/supabase";
-import type { Business, Locale } from "./src/types";
+import type {
+  Business,
+  BusinessContentImageInput,
+  BusinessContentInput,
+  BusinessContentItem,
+  BusinessContentType,
+  BusinessContentUpdateInput,
+  Locale,
+} from "./src/types";
 
 type Tab = "home" | "search" | "register" | "dashboard" | "profile";
+type DashboardPanel = "profile" | "services" | "events";
 
 const BUSINESS_SHEET_HEIGHT = Math.round(Dimensions.get("window").height * 0.76);
 const CATEGORY_PICKER_SHEET_HEIGHT = Math.round(
@@ -61,111 +86,223 @@ const CATEGORY_PICKER_SHEET_HEIGHT = Math.round(
 const LOCATION_PICKER_SHEET_HEIGHT = Math.round(
   Dimensions.get("window").height * 0.58,
 );
+const isExpoGo = Constants.appOwnership === AppOwnership.Expo;
 
 const copy = {
   uk: {
     addBusiness: "Додати",
+    addContent: "Додати",
+    addEvent: "Додати подію",
+    addService: "Додати послугу",
     address: "Адреса",
     all: "Усі",
     allCanada: "Уся Канада",
+    about: "Про бізнес",
     businesses: "бізнесів",
     canadaWide: "Онлайн · вся Канада",
     category: "Категорія",
     chooseCategory: "Виберіть категорію",
     chooseLocation: "Виберіть локацію",
     city: "Місто або локація",
+    cancel: "Скасувати",
     close: "Закрити",
     contactEmail: "Робочий email",
     contacts: "Контакти",
+    contentDescription: "Опис",
+    contentItems: "записів",
+    contentLink: "Посилання",
+    contentPhoto: "Фото",
+    contentPhotoHint: "PNG, JPG, WebP або GIF до 5 MB.",
+    contentPhotoPermission:
+      "Дозвольте доступ до фото, щоб вибрати зображення.",
+    contentPhotoSelected: "Фото вибрано",
+    contentPhotoUpload: "Додати фото",
+    contentDeleted: "Видалено",
+    contentSaved: "Додано",
+    contentUpdated: "Оновлено",
     dashboard: "Кабінет",
+    day: "День",
+    delete: "Видалити",
+    deleteContentMessage: "Цей запис буде видалено з профілю бізнесу.",
+    deleteContentTitle: "Видалити запис?",
     description: "Опис",
+    done: "Готово",
+    edit: "Редагувати",
     editProfile: "Редагувати профіль",
+    email: "Email",
+    emailPasswordRequired: "Введіть email і пароль.",
+    eventDate: "Дата і час",
+    eventDatePlaceholder: "2026-07-20 18:00",
+    eventLocation: "Місце або онлайн",
+    eventTitle: "Назва події",
+    events: "Події",
     find: "Знайти",
+    free: "Безкоштовно",
+    hour: "Година",
     home: "Головна",
     homeIntro:
       "Знаходьте українські бізнеси, сервіси та спеціалістів у Канаді.",
     homeTitle: "Українські бізнеси поруч",
+    latestUpdates: "Нові послуги та події",
     location: "Локація",
     manageProfile: "Керувати профілем",
     myLocation: "Моя локація",
     name: "Назва бізнесу",
+    noContentItems: "Поки що нічого не додано.",
     noResults: "Нічого не знайдено",
     owner: "Власник",
     phone: "Телефон",
+    password: "Пароль",
     profile: "Профіль",
+    profilePreview: "Так профіль бачать люди",
     profileIntro: "Особистий профіль, контактні дані та налаштування додатку.",
     popularCategories: "Популярні категорії",
+    price: "Ціна",
+    pricePlaceholder: "$100",
     quickCities: "Міста поруч",
     recommended: "Рекомендації",
+    featuredBusinesses: "Бізнеси для вас",
     instagram: "Instagram",
+    logo: "Логотип",
+    logoHint: "PNG, JPG, WebP або GIF до 2 MB.",
+    logoPermission: "Дозвольте доступ до фото, щоб вибрати логотип.",
+    logoSelected: "Логотип вибрано",
+    logoUpload: "Завантажити логотип",
+    missingBusinessFields:
+      "Заповніть назву бізнесу, місто або локацію та опис.",
+    missingContentFields: "Заповніть назву та опис.",
+    online: "Онлайн",
     registerIntro: "Подайте бізнес на перевірку або підготуйте профіль.",
     save: "Зберегти",
+    saveChanges: "Зберегти зміни",
     saved: "Зміни збережено",
     settings: "Налаштування",
     seeAll: "Усі",
     search: "Пошук",
     searchPlaceholder: "Назва, послуга або категорія",
     selected: "Вибрано",
+    serviceTitle: "Назва послуги",
+    services: "Послуги",
+    signInEmail: "Увійти з email",
     signedInAs: "Ви увійшли як",
     submit: "Надіслати",
     submitted: "Заявку надіслано на перевірку.",
     theme: "Тема",
     themeDark: "Темна",
     themeLight: "Світла",
+    time: "Час",
+    minute: "Хвилина",
+    month: "Місяць",
     userProfile: "Ваш профіль",
     website: "Сайт",
+    year: "Рік",
   },
   en: {
     addBusiness: "Add",
+    addContent: "Add",
+    addEvent: "Add event",
+    addService: "Add service",
     address: "Address",
     all: "All",
     allCanada: "All Canada",
+    about: "About",
     businesses: "businesses",
     canadaWide: "Online · Canada-wide",
     category: "Category",
     chooseCategory: "Choose category",
     chooseLocation: "Choose location",
     city: "City or location",
+    cancel: "Cancel",
     close: "Close",
     contactEmail: "Work email",
     contacts: "Contacts",
+    contentDescription: "Description",
+    contentItems: "items",
+    contentLink: "Link",
+    contentPhoto: "Photo",
+    contentPhotoHint: "PNG, JPG, WebP, or GIF up to 5 MB.",
+    contentPhotoPermission: "Allow photo access to choose an image.",
+    contentPhotoSelected: "Photo selected",
+    contentPhotoUpload: "Add photo",
+    contentDeleted: "Deleted",
+    contentSaved: "Added",
+    contentUpdated: "Updated",
     dashboard: "Dashboard",
+    day: "Day",
+    delete: "Delete",
+    deleteContentMessage: "This item will be removed from the business profile.",
+    deleteContentTitle: "Delete item?",
     description: "Description",
+    done: "Done",
+    edit: "Edit",
     editProfile: "Edit profile",
+    email: "Email",
+    emailPasswordRequired: "Enter email and password.",
+    eventDate: "Date and time",
+    eventDatePlaceholder: "2026-07-20 18:00",
+    eventLocation: "Place or online",
+    eventTitle: "Event title",
+    events: "Events",
     find: "Search",
+    free: "Free",
+    hour: "Hour",
     home: "Home",
     homeIntro:
       "Find Ukrainian-owned businesses, services, and specialists in Canada.",
     homeTitle: "Ukrainian businesses nearby",
+    latestUpdates: "New services & events",
     location: "Location",
     manageProfile: "Manage profile",
     myLocation: "My location",
     name: "Business name",
+    noContentItems: "Nothing added yet.",
     noResults: "No results found",
     owner: "Owner",
     phone: "Phone",
+    password: "Password",
     profile: "Profile",
+    profilePreview: "This is how people see the profile",
     profileIntro: "Personal profile, contact details, and app settings.",
     popularCategories: "Popular categories",
+    price: "Price",
+    pricePlaceholder: "from $100 or free",
     quickCities: "Nearby cities",
     recommended: "Recommended",
+    featuredBusinesses: "Businesses for you",
     instagram: "Instagram",
+    logo: "Logo",
+    logoHint: "PNG, JPG, WebP, or GIF up to 2 MB.",
+    logoPermission: "Allow photo access to choose a logo.",
+    logoSelected: "Logo selected",
+    logoUpload: "Upload logo",
+    missingBusinessFields:
+      "Fill in the business name, city or location, and description.",
+    missingContentFields: "Fill in the title and description.",
+    online: "Online",
     registerIntro: "Submit a business for review or prepare a profile.",
     save: "Save",
+    saveChanges: "Save changes",
     saved: "Changes saved",
     settings: "Settings",
     seeAll: "All",
     search: "Search",
     searchPlaceholder: "Name, service, or category",
     selected: "Selected",
+    serviceTitle: "Service title",
+    services: "Services",
+    signInEmail: "Sign in with email",
     signedInAs: "Signed in as",
     submit: "Submit",
     submitted: "Submitted for review.",
     theme: "Theme",
     themeDark: "Dark",
     themeLight: "Light",
+    time: "Time",
+    minute: "Minute",
+    month: "Month",
     userProfile: "Your profile",
     website: "Website",
+    year: "Year",
   },
 } satisfies Record<Locale, Record<string, string>>;
 
@@ -214,6 +351,17 @@ const locationAliases: Record<string, string[]> = {
     "міссіссага",
   ],
   montreal: ["montreal", "montréal", "монреаль"],
+  "st-johns": [
+    "st. john's",
+    "st johns",
+    "st. johns",
+    "saint johns",
+    "newfoundland",
+    "newfoundland and labrador",
+    "nl",
+    "сент джонс",
+    "ньюфаундленд",
+  ],
   nepean: ["nepean", "непін"],
   "north york": ["north york", "north-york", "норт йорк", "норт-йорк"],
   ottawa: ["ottawa", "оттава", "отава"],
@@ -243,6 +391,9 @@ export default function App() {
   const [ownedBusiness, setOwnedBusiness] = useState<Business | null>(
     isSupabaseConfigured ? null : defaultOwnedBusiness,
   );
+  const [ownedContentItems, setOwnedContentItems] = useState<
+    BusinessContentItem[]
+  >([]);
   const [session, setSession] = useState<Session | null>(null);
   const [authMessage, setAuthMessage] = useState("");
   const [dataMessage, setDataMessage] = useState("");
@@ -332,6 +483,12 @@ export default function App() {
         );
 
         if (isMounted) {
+          if (__DEV__) {
+            console.log("[kolo:mobile-directory]", {
+              publicRows: publishedBusinesses.length,
+            });
+          }
+
           setDirectoryBusinesses(publishedBusinesses);
         }
       } catch (error) {
@@ -353,11 +510,13 @@ export default function App() {
   useEffect(() => {
     if (!isSupabaseConfigured) {
       setOwnedBusiness(defaultOwnedBusiness);
+      setOwnedContentItems([]);
       return;
     }
 
     if (!session?.user.id) {
       setOwnedBusiness(null);
+      setOwnedContentItems([]);
       return;
     }
 
@@ -378,6 +537,10 @@ export default function App() {
                 }
               : null,
           );
+
+          if (!owned) {
+            setOwnedContentItems([]);
+          }
         }
       } catch (error) {
         console.error("[kolo:mobile-owned-business]", error);
@@ -395,26 +558,79 @@ export default function App() {
     };
   }, [session]);
 
+  useEffect(() => {
+    if (!isSupabaseConfigured || !session?.user.id || !ownedBusiness) {
+      setOwnedContentItems([]);
+      return;
+    }
+
+    let isMounted = true;
+    const ownerId = session.user.id;
+    const registrationId = ownedBusiness.registrationId ?? ownedBusiness.id;
+
+    async function loadOwnedContent() {
+      try {
+        const contentItems = await fetchOwnedBusinessContent(
+          ownerId,
+          registrationId,
+        );
+
+        if (isMounted) {
+          setOwnedContentItems(contentItems);
+        }
+      } catch (error) {
+        console.error("[kolo:mobile-owned-content]", error);
+
+        if (isMounted) {
+          setAuthMessage(getErrorMessage(error));
+        }
+      }
+    }
+
+    void loadOwnedContent();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [ownedBusiness?.id, ownedBusiness?.registrationId, session?.user.id]);
+
   const businesses = useMemo(
     () =>
-      directoryBusinesses.map((business) =>
-        ownedBusiness && business.id === ownedBusiness.id
-          ? ownedBusiness
-          : business,
+      getUniqueBusinessesById(
+        directoryBusinesses.map((business) =>
+          ownedBusiness && isOwnedBusinessMatch(business, ownedBusiness)
+            ? {
+                ...business,
+                ...ownedBusiness,
+                id: business.id,
+                registrationId: business.registrationId ?? ownedBusiness.id,
+                contentItems: ownedContentItems,
+              }
+            : business,
+        ),
       ),
-    [directoryBusinesses, ownedBusiness],
+    [directoryBusinesses, ownedBusiness, ownedContentItems],
+  );
+  const totalBusinessesCount = useMemo(
+    () => businesses.length,
+    [businesses],
   );
 
   const results = useMemo(
     () =>
       businesses.filter((business) => {
+        const searchQuery = getEffectiveSearchQuery(query);
         const category = getCategoryName(business.categorySlug, locale);
         const aliases = getSearchAliases(business.categorySlug);
         const locationAliases = getLocationAliases(business.city);
+        const contentText = (business.contentItems ?? [])
+          .map((item) => `${item.title} ${item.description} ${item.location ?? ""}`)
+          .join(" ");
         const haystack = normalize(
-          `${business.name} ${business.description} ${business.city} ${locationAliases} ${category} ${aliases}`,
+          `${business.name} ${business.description} ${business.city} ${locationAliases} ${category} ${aliases} ${contentText}`,
         );
-        const matchesQuery = !query.trim() || haystack.includes(normalize(query));
+        const matchesQuery =
+          !searchQuery || haystack.includes(normalize(searchQuery));
         const matchesCategory =
           selectedCategory === "all" || business.categorySlug === selectedCategory;
         const matchesLocation =
@@ -456,6 +672,33 @@ export default function App() {
     }
   }
 
+  async function handleEmailSignIn(email: string, password: string) {
+    if (!isExpoGo) {
+      return;
+    }
+
+    if (!email.trim() || !password.trim()) {
+      setAuthMessage(labels.emailPasswordRequired);
+      return;
+    }
+
+    try {
+      setAuthMessage("");
+      setIsAuthBusy(true);
+      const nextSession = await signInWithEmailPassword(email, password);
+      setSession(nextSession);
+
+      if (!nextSession) {
+        setAuthMessage("Signed in, but no mobile session was saved. Please try again.");
+      }
+    } catch (error) {
+      console.error("[kolo:mobile-email-auth]", error);
+      setAuthMessage(getErrorMessage(error));
+    } finally {
+      setIsAuthBusy(false);
+    }
+  }
+
   async function handleSignOut() {
     try {
       setAuthMessage("");
@@ -463,6 +706,7 @@ export default function App() {
       await signOut();
       setSession(null);
       setOwnedBusiness(null);
+      setOwnedContentItems([]);
     } catch (error) {
       console.error("[kolo:mobile-signout]", error);
       setAuthMessage(getErrorMessage(error));
@@ -522,6 +766,60 @@ export default function App() {
     );
   }
 
+  async function handleBusinessContentCreate(input: BusinessContentInput) {
+    if (!isSupabaseConfigured || !session?.user.id) {
+      const localContentItem: BusinessContentItem = {
+        ...input,
+        createdAt: new Date().toISOString(),
+        id: `local-${Date.now()}`,
+        imageUrl: input.image?.uri,
+        ownerId: "local",
+        status: "published",
+      };
+      setOwnedContentItems((currentItems) => [localContentItem, ...currentItems]);
+      return;
+    }
+
+    const createdItem = await createBusinessContentItem(input, session.user.id);
+    setOwnedContentItems((currentItems) => [createdItem, ...currentItems]);
+  }
+
+  async function handleBusinessContentUpdate(input: BusinessContentUpdateInput) {
+    if (!isSupabaseConfigured || !session?.user.id) {
+      setOwnedContentItems((currentItems) =>
+        currentItems.map((item) =>
+          item.id === input.id
+            ? {
+                ...item,
+                ...input,
+                imageUrl: input.image?.uri ?? item.imageUrl,
+              }
+            : item,
+        ),
+      );
+      return;
+    }
+
+    const updatedItem = await updateBusinessContentItem(input, session.user.id);
+    setOwnedContentItems((currentItems) =>
+      currentItems.map((item) => (item.id === updatedItem.id ? updatedItem : item)),
+    );
+  }
+
+  async function handleBusinessContentDelete(contentItemId: string) {
+    if (!isSupabaseConfigured || !session?.user.id) {
+      setOwnedContentItems((currentItems) =>
+        currentItems.filter((item) => item.id !== contentItemId),
+      );
+      return;
+    }
+
+    await deleteBusinessContentItem(contentItemId, session.user.id);
+    setOwnedContentItems((currentItems) =>
+      currentItems.filter((item) => item.id !== contentItemId),
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.safeArea, isDarkMode ? styles.darkSafeArea : null]}>
       <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
@@ -555,6 +853,11 @@ export default function App() {
               labels={labels}
               locale={locale}
               location={location}
+              onClearFilters={() => {
+                setQuery("");
+                setLocation("");
+                setSelectedCategory("all");
+              }}
               query={query}
               results={results}
               selectedCategory={selectedCategory}
@@ -562,6 +865,7 @@ export default function App() {
               setQuery={setQuery}
               setSelectedBusiness={setSelectedBusiness}
               setSelectedCategory={setSelectedCategory}
+              totalCount={totalBusinessesCount}
             />
           ) : null}
 
@@ -581,7 +885,11 @@ export default function App() {
               isDarkMode={isDarkMode}
               labels={labels}
               locale={locale}
+              contentItems={ownedContentItems}
+              onCreateContent={handleBusinessContentCreate}
+              onDeleteContent={handleBusinessContentDelete}
               onSave={handleBusinessSave}
+              onUpdateContent={handleBusinessContentUpdate}
               profileEmail={profileEmail}
               profileName={profileName}
             />
@@ -594,12 +902,12 @@ export default function App() {
               isAuthBusy={isAuthBusy}
               isSupabaseConfigured={isSupabaseConfigured}
               labels={labels}
+              onEmailSignIn={handleEmailSignIn}
               onSignIn={handleGoogleSignIn}
               onSignOut={handleSignOut}
-              profileEmail={profileEmail}
-              profileName={profileName}
               session={session}
               setIsDarkMode={setIsDarkMode}
+              showEmailPasswordSignIn={isExpoGo}
             />
           ) : null}
         </View>
@@ -658,12 +966,37 @@ export default function App() {
   );
 }
 
+function KeyboardAwareScreen({ children }: { children: React.ReactNode }) {
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+      style={styles.flex}
+    >
+      <ScrollView
+        automaticallyAdjustKeyboardInsets
+        contentContainerStyle={[
+          styles.screenContent,
+          styles.keyboardAwareContent,
+        ]}
+        keyboardDismissMode="interactive"
+        keyboardShouldPersistTaps="handled"
+        style={styles.screen}
+        showsVerticalScrollIndicator={false}
+      >
+        {children}
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
 function SearchScreen({
   dataMessage,
   isDarkMode,
   labels,
   locale,
   location,
+  onClearFilters,
   query,
   results,
   selectedCategory,
@@ -671,12 +1004,14 @@ function SearchScreen({
   setQuery,
   setSelectedBusiness,
   setSelectedCategory,
+  totalCount,
 }: {
   dataMessage: string;
   isDarkMode: boolean;
   labels: Record<string, string>;
   locale: Locale;
   location: string;
+  onClearFilters: () => void;
   query: string;
   results: Business[];
   selectedCategory: string;
@@ -684,21 +1019,23 @@ function SearchScreen({
   setQuery: (value: string) => void;
   setSelectedBusiness: (value: Business) => void;
   setSelectedCategory: (value: string) => void;
+  totalCount: number;
 }) {
+  const hasActiveFilters = hasSearchFilters(query, location, selectedCategory);
+  const resultCountLabel =
+    hasActiveFilters && totalCount > 0
+      ? `${results.length}/${totalCount}`
+      : `${results.length}`;
+
   return (
-    <ScrollView
-      contentContainerStyle={styles.screenContent}
-      keyboardShouldPersistTaps="handled"
-      style={styles.screen}
-      showsVerticalScrollIndicator={false}
-    >
+    <KeyboardAwareScreen>
       <View style={[styles.searchPanel, isDarkMode ? styles.darkCard : null]}>
         <Field isDarkMode={isDarkMode} label={labels.search}>
           <TextInput
             autoCapitalize="none"
             onChangeText={setQuery}
             placeholder={labels.searchPlaceholder}
-            placeholderTextColor={isDarkMode ? "#758882" : "#7b8581"}
+            placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
             style={[styles.input, isDarkMode ? styles.darkInput : null]}
             value={query}
           />
@@ -730,9 +1067,35 @@ function SearchScreen({
         <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
           {labels.find}
         </Text>
-        <Text style={[styles.resultCount, isDarkMode ? styles.darkBadge : null]}>
-          {results.length}
-        </Text>
+        <View style={styles.resultsHeaderActions}>
+          {hasActiveFilters ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={onClearFilters}
+              style={[
+                styles.clearFiltersButton,
+                isDarkMode ? styles.darkSettingRow : null,
+              ]}
+            >
+              <X
+                color={isDarkMode ? "#A78D78" : "#6E473B"}
+                size={15}
+                strokeWidth={2.7}
+              />
+              <Text
+                style={[
+                  styles.clearFiltersButtonText,
+                  isDarkMode ? styles.darkText : null,
+                ]}
+              >
+                {labels.allCanada}
+              </Text>
+            </Pressable>
+          ) : null}
+          <Text style={[styles.resultCount, isDarkMode ? styles.darkBadge : null]}>
+            {resultCountLabel}
+          </Text>
+        </View>
       </View>
 
       {dataMessage ? <Text style={styles.errorText}>{dataMessage}</Text> : null}
@@ -753,7 +1116,7 @@ function SearchScreen({
           {labels.noResults}
         </Text>
       )}
-    </ScrollView>
+    </KeyboardAwareScreen>
   );
 }
 
@@ -776,11 +1139,46 @@ function HomeScreen({
   onLocationPress: (location: string) => void;
   onSearchPress: () => void;
 }) {
-  const recommendedBusinesses = businesses.slice(0, 3);
+  const uniqueBusinesses = getUniqueBusinessesById(businesses);
+  const contentFeedItems = uniqueBusinesses
+    .flatMap((business) =>
+      (business.contentItems ?? []).map((item) => ({ business, item })),
+    )
+    .filter(
+      ({ item }, index, allItems) =>
+        allItems.findIndex(({ item: otherItem }) => otherItem.id === item.id) ===
+        index,
+    )
+    .sort(
+      (first, second) =>
+        getContentTimestamp(second.item) - getContentTimestamp(first.item),
+    )
+    .slice(0, 8);
+  const feedBusinessKeys = new Set(
+    contentFeedItems.map(({ business }) => getBusinessDedupeKey(business)),
+  );
+  const featuredBusinesses = [
+    ...uniqueBusinesses.filter(
+      (business) => business.logoUrl || (business.contentItems ?? []).length > 0,
+    ),
+    ...uniqueBusinesses,
+  ]
+    .filter(
+      (business, index, allBusinesses) => {
+        const businessKey = getBusinessDedupeKey(business);
+
+        return (
+          !feedBusinessKeys.has(businessKey) &&
+          allBusinesses.findIndex((item) => getBusinessDedupeKey(item) === businessKey) ===
+            index
+        );
+      },
+    )
+    .slice(0, 4);
   const popularCategories = categories
     .map((category) => ({
       ...category,
-      count: businesses.filter(
+      count: uniqueBusinesses.filter(
         (business) => business.categorySlug === category.slug,
       ).length,
     }))
@@ -811,7 +1209,7 @@ function HomeScreen({
             isDarkMode ? styles.darkSettingRow : null,
           ]}
         >
-          <Search color={isDarkMode ? "#d8f1f7" : "#287365"} size={20} strokeWidth={2.5} />
+          <Search color={isDarkMode ? "#A78D78" : "#6E473B"} size={20} strokeWidth={2.5} />
           <View style={styles.flex}>
             <Text style={[styles.homeSearchTitle, isDarkMode ? styles.darkText : null]}>
               {labels.search}
@@ -825,22 +1223,59 @@ function HomeScreen({
 
       <View style={styles.homeSectionHeader}>
         <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
-          {labels.recommended}
+          {labels.latestUpdates}
         </Text>
         <Text style={[styles.resultCount, isDarkMode ? styles.darkBadge : null]}>
-          {recommendedBusinesses.length}
+          {contentFeedItems.length}
         </Text>
       </View>
-      {recommendedBusinesses.map((business) => (
-        <BusinessCard
-          business={business}
-          isDarkMode={isDarkMode}
-          key={business.id}
-          labels={labels}
-          locale={locale}
-          onPress={() => onBusinessPress(business)}
-        />
-      ))}
+      {contentFeedItems.length ? (
+        contentFeedItems.map(({ business, item }) => (
+          <PublicContentCard
+            business={business}
+            isDarkMode={isDarkMode}
+            item={item}
+            key={item.id}
+            labels={labels}
+            onPress={() => onBusinessPress(business)}
+            showBusinessName
+          />
+        ))
+      ) : (
+        uniqueBusinesses.slice(0, 3).map((business) => (
+          <BusinessCard
+            business={business}
+            isDarkMode={isDarkMode}
+            key={business.id}
+            labels={labels}
+            locale={locale}
+            onPress={() => onBusinessPress(business)}
+          />
+        ))
+      )}
+
+      {featuredBusinesses.length ? (
+        <>
+          <View style={styles.homeSectionHeader}>
+            <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+              {labels.featuredBusinesses}
+            </Text>
+            <Text style={[styles.resultCount, isDarkMode ? styles.darkBadge : null]}>
+              {featuredBusinesses.length}
+            </Text>
+          </View>
+          {featuredBusinesses.map((business) => (
+            <BusinessCard
+              business={business}
+              isDarkMode={isDarkMode}
+              key={business.id}
+              labels={labels}
+              locale={locale}
+              onPress={() => onBusinessPress(business)}
+            />
+          ))}
+        </>
+      ) : null}
 
       <View style={styles.homeSectionHeader}>
         <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
@@ -881,7 +1316,7 @@ function HomeScreen({
             onPress={() => onLocationPress(city)}
             style={[styles.cityPill, isDarkMode ? styles.darkSettingRow : null]}
           >
-            <MapPin color={isDarkMode ? "#d8f1f7" : "#287365"} size={16} strokeWidth={2.5} />
+            <MapPin color={isDarkMode ? "#A78D78" : "#6E473B"} size={16} strokeWidth={2.5} />
             <Text style={[styles.cityPillText, isDarkMode ? styles.darkText : null]}>
               {city}
             </Text>
@@ -907,18 +1342,59 @@ function RegisterScreen({
 }) {
   const [name, setName] = useState("");
   const [city, setCity] = useState("Ottawa");
+  const [address, setAddress] = useState("");
   const [description, setDescription] = useState("");
   const [categorySlug, setCategorySlug] = useState("travel-tours");
+  const [instagram, setInstagram] = useState("");
+  const [logo, setLogo] = useState<BusinessLogoInput | null>(null);
+  const [phone, setPhone] = useState("");
   const [servesAllCanada, setServesAllCanada] = useState(false);
+  const [website, setWebsite] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleLogoPick() {
+    setSubmitError("");
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      setSubmitError(labels.logoPermission);
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      base64: true,
+      quality: 0.85,
+    });
+
+    if (result.canceled) {
+      return;
+    }
+
+    const asset = result.assets[0];
+
+    if (!asset?.uri) {
+      return;
+    }
+
+    setLogo({
+      base64: asset.base64,
+      fileName: asset.fileName,
+      mimeType: asset.mimeType,
+      uri: asset.uri,
+    });
+    setSubmitted(false);
+  }
 
   async function handleSubmit() {
     setSubmitError("");
     setSubmitted(false);
 
     if (!name.trim() || !city.trim() || !description.trim()) {
+      setSubmitError(labels.missingBusinessFields);
       return;
     }
 
@@ -930,11 +1406,16 @@ function RegisterScreen({
     try {
       setIsSubmitting(true);
       await onSubmit({
+        address,
         categorySlug,
         city,
         description,
+        instagram,
+        logo,
         name,
+        phone,
         servesAllCanada,
+        website,
       });
       setSubmitted(true);
     } catch (error) {
@@ -946,104 +1427,186 @@ function RegisterScreen({
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={styles.flex}
-    >
-      <ScrollView
-        contentContainerStyle={styles.screenContent}
-        keyboardShouldPersistTaps="handled"
-        style={styles.screen}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
-          <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
-            {labels.addBusiness}
-          </Text>
-          <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
-            {labels.registerIntro}
-          </Text>
-          <Field isDarkMode={isDarkMode} label={labels.name}>
-            <TextInput
-              onChangeText={setName}
-              placeholder={labels.name}
-              placeholderTextColor={isDarkMode ? "#758882" : "#7b8581"}
-              style={[styles.input, isDarkMode ? styles.darkInput : null]}
-              value={name}
-            />
-          </Field>
-          <Field isDarkMode={isDarkMode} label={labels.category}>
-            <CategoryPicker
-              isDarkMode={isDarkMode}
-              labels={labels}
-              locale={locale}
-              onSelect={setCategorySlug}
-              selectedSlug={categorySlug}
-            />
-          </Field>
-          <Field isDarkMode={isDarkMode} label={labels.city}>
-            <LocationPicker
-              isDarkMode={isDarkMode}
-              labels={labels}
-              onChange={setCity}
-              placeholder={labels.city}
-              value={city}
-            />
-          </Field>
-          <View style={[styles.switchRow, isDarkMode ? styles.darkSettingRow : null]}>
-            <Text style={[styles.switchLabel, isDarkMode ? styles.darkText : null]}>
-              {labels.canadaWide}
-            </Text>
-            <Switch
-              onValueChange={setServesAllCanada}
-              thumbColor={servesAllCanada ? "#ffffff" : "#153f38"}
-              trackColor={{ false: "#b7cbc5", true: "#287365" }}
-              value={servesAllCanada}
-            />
-          </View>
-          <Field isDarkMode={isDarkMode} label={labels.description}>
-            <TextInput
-              multiline
-              onChangeText={setDescription}
-              placeholder={labels.description}
-              placeholderTextColor={isDarkMode ? "#758882" : "#7b8581"}
-              style={[
-                styles.input,
-                styles.textArea,
-                isDarkMode ? styles.darkInput : null,
-              ]}
-              value={description}
-            />
-          </Field>
-          <PrimaryButton
-            label={labels.submit}
-            disabled={isSubmitting}
-            onPress={() => {
-              void handleSubmit();
+    <KeyboardAwareScreen>
+      <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
+        <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+          {labels.addBusiness}
+        </Text>
+        <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+          {labels.registerIntro}
+        </Text>
+        <Field isDarkMode={isDarkMode} label={labels.name}>
+          <TextInput
+            onChangeText={(value) => {
+              setName(value);
+              setSubmitError("");
             }}
+            placeholder={labels.name}
+            placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+            style={[styles.input, isDarkMode ? styles.darkInput : null]}
+            value={name}
           />
-          {submitError ? <Text style={styles.errorText}>{submitError}</Text> : null}
-          {submitted ? <Text style={styles.successText}>{labels.submitted}</Text> : null}
+        </Field>
+        <Field isDarkMode={isDarkMode} label={labels.category}>
+          <CategoryPicker
+            isDarkMode={isDarkMode}
+            labels={labels}
+            locale={locale}
+            onSelect={setCategorySlug}
+            selectedSlug={categorySlug}
+          />
+        </Field>
+        <Field isDarkMode={isDarkMode} label={labels.city}>
+          <LocationPicker
+            isDarkMode={isDarkMode}
+            labels={labels}
+            onChange={(value) => {
+              setCity(value);
+              setSubmitError("");
+            }}
+            placeholder={labels.city}
+            value={city}
+          />
+        </Field>
+        <View style={[styles.switchRow, isDarkMode ? styles.darkSettingRow : null]}>
+          <Text style={[styles.switchLabel, isDarkMode ? styles.darkText : null]}>
+            {labels.canadaWide}
+          </Text>
+          <Switch
+            onValueChange={setServesAllCanada}
+            thumbColor={servesAllCanada ? "#E1D4C2" : "#291C0E"}
+            trackColor={{ false: "#A78D78", true: "#6E473B" }}
+            value={servesAllCanada}
+          />
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        <Field isDarkMode={isDarkMode} label={labels.description}>
+          <TextInput
+            multiline
+            onChangeText={(value) => {
+              setDescription(value);
+              setSubmitError("");
+            }}
+            placeholder={labels.description}
+            placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+            style={[
+              styles.input,
+              styles.textArea,
+              isDarkMode ? styles.darkInput : null,
+            ]}
+            value={description}
+          />
+        </Field>
+        <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+          {labels.contacts}
+        </Text>
+        <Field isDarkMode={isDarkMode} label={labels.phone}>
+          <TextInput
+            keyboardType="phone-pad"
+            onChangeText={setPhone}
+            placeholder={labels.phone}
+            placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+            style={[styles.input, isDarkMode ? styles.darkInput : null]}
+            value={phone}
+          />
+        </Field>
+        <Field isDarkMode={isDarkMode} label={labels.website}>
+          <TextInput
+            autoCapitalize="none"
+            keyboardType="url"
+            onChangeText={setWebsite}
+            placeholder={labels.website}
+            placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+            style={[styles.input, isDarkMode ? styles.darkInput : null]}
+            value={website}
+          />
+        </Field>
+        <Field isDarkMode={isDarkMode} label={labels.instagram}>
+          <TextInput
+            autoCapitalize="none"
+            onChangeText={setInstagram}
+            placeholder={labels.instagram}
+            placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+            style={[styles.input, isDarkMode ? styles.darkInput : null]}
+            value={instagram}
+          />
+        </Field>
+        <Field isDarkMode={isDarkMode} label={labels.address}>
+          <TextInput
+            onChangeText={setAddress}
+            placeholder={labels.address}
+            placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+            style={[styles.input, isDarkMode ? styles.darkInput : null]}
+            value={address}
+          />
+        </Field>
+        <Field isDarkMode={isDarkMode} label={labels.logo}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              void handleLogoPick();
+            }}
+            style={[
+              styles.logoUploadButton,
+              isDarkMode ? styles.darkSettingRow : null,
+            ]}
+          >
+            <View style={[styles.logoUploadPreview, isDarkMode ? styles.darkIconBox : null]}>
+              {logo ? (
+                <Image source={{ uri: logo.uri }} style={styles.logoPreviewImage} />
+              ) : (
+                <Upload
+                  color={isDarkMode ? "#A78D78" : "#6E473B"}
+                  size={24}
+                  strokeWidth={2.5}
+                />
+              )}
+            </View>
+            <View style={styles.flex}>
+              <Text style={[styles.logoUploadTitle, isDarkMode ? styles.darkText : null]}>
+                {logo ? labels.logoSelected : labels.logoUpload}
+              </Text>
+              <Text style={[styles.logoUploadHint, isDarkMode ? styles.darkMutedText : null]}>
+                {logo?.fileName ?? labels.logoHint}
+              </Text>
+            </View>
+          </Pressable>
+        </Field>
+        <PrimaryButton
+          label={labels.submit}
+          disabled={isSubmitting}
+          onPress={() => {
+            void handleSubmit();
+          }}
+        />
+        {submitError ? <Text style={styles.errorText}>{submitError}</Text> : null}
+        {submitted ? <Text style={styles.successText}>{labels.submitted}</Text> : null}
+      </View>
+    </KeyboardAwareScreen>
   );
 }
 
 function DashboardScreen({
   business,
+  contentItems,
   isDarkMode,
   labels,
   locale,
+  onCreateContent,
+  onDeleteContent,
   onSave,
+  onUpdateContent,
   profileEmail,
   profileName,
 }: {
   business: Business | null;
+  contentItems: BusinessContentItem[];
   isDarkMode: boolean;
   labels: Record<string, string>;
   locale: Locale;
+  onCreateContent: (input: BusinessContentInput) => Promise<void> | void;
+  onDeleteContent: (contentItemId: string) => Promise<void> | void;
   onSave: (business: Business) => Promise<void> | void;
+  onUpdateContent: (input: BusinessContentUpdateInput) => Promise<void> | void;
   profileEmail: string;
   profileName: string;
 }) {
@@ -1051,10 +1614,13 @@ function DashboardScreen({
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [activePanel, setActivePanel] = useState<DashboardPanel>("profile");
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   useEffect(() => {
     if (business) {
       setDraft(business);
+      setIsEditingProfile(false);
     }
   }, [business]);
 
@@ -1065,6 +1631,7 @@ function DashboardScreen({
       setIsSaving(true);
       await onSave(draft);
       setSaved(true);
+      setIsEditingProfile(false);
     } catch (error) {
       console.error("[kolo:mobile-dashboard-save]", error);
       setSaveError(getErrorMessage(error));
@@ -1075,12 +1642,7 @@ function DashboardScreen({
 
   if (!business) {
     return (
-      <ScrollView
-        contentContainerStyle={styles.screenContent}
-        keyboardShouldPersistTaps="handled"
-        style={styles.screen}
-        showsVerticalScrollIndicator={false}
-      >
+      <KeyboardAwareScreen>
         <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
           <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
             {labels.dashboard}
@@ -1089,17 +1651,15 @@ function DashboardScreen({
             {labels.noOwnedBusiness}
           </Text>
         </View>
-      </ScrollView>
+      </KeyboardAwareScreen>
     );
   }
 
+  const serviceItems = contentItems.filter((item) => item.type === "service");
+  const eventItems = contentItems.filter((item) => item.type === "event");
+
   return (
-    <ScrollView
-      contentContainerStyle={styles.screenContent}
-      keyboardShouldPersistTaps="handled"
-      style={styles.screen}
-      showsVerticalScrollIndicator={false}
-    >
+    <KeyboardAwareScreen>
       <View style={[styles.profileCard, isDarkMode ? styles.darkCard : null]}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{getInitials(profileName)}</Text>
@@ -1111,88 +1671,1113 @@ function DashboardScreen({
           <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
             {profileEmail}
           </Text>
-          <Text style={styles.contactLine}>business@kolo.app</Text>
         </View>
       </View>
 
-      <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
-        <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
-          {labels.editProfile}
+      <View style={[styles.dashboardTabs, isDarkMode ? styles.darkSettingRow : null]}>
+        <DashboardPanelButton
+          active={activePanel === "profile"}
+          isDarkMode={isDarkMode}
+          label={labels.profile}
+          onPress={() => setActivePanel("profile")}
+        />
+        <DashboardPanelButton
+          active={activePanel === "services"}
+          isDarkMode={isDarkMode}
+          label={labels.services}
+          onPress={() => setActivePanel("services")}
+        />
+        <DashboardPanelButton
+          active={activePanel === "events"}
+          isDarkMode={isDarkMode}
+          label={labels.events}
+          onPress={() => setActivePanel("events")}
+        />
+      </View>
+
+      {activePanel === "profile" && !isEditingProfile ? (
+        <DashboardProfilePreview
+          business={business}
+          isDarkMode={isDarkMode}
+          labels={labels}
+          locale={locale}
+          onEdit={() => setIsEditingProfile(true)}
+        />
+      ) : null}
+
+      {activePanel === "profile" && isEditingProfile ? (
+        <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
+          <View style={styles.dashboardEditHeader}>
+            <View style={styles.flex}>
+              <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+                {labels.editProfile}
+              </Text>
+              <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+                {labels.profilePreview}
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setDraft(business);
+                setIsEditingProfile(false);
+                setSaveError("");
+                setSaved(false);
+              }}
+              style={[
+                styles.iconActionButton,
+                isDarkMode ? styles.darkIconBox : null,
+              ]}
+            >
+              <X
+                color={isDarkMode ? "#A78D78" : "#291C0E"}
+                size={19}
+                strokeWidth={2.7}
+              />
+            </Pressable>
+          </View>
+          <Field isDarkMode={isDarkMode} label={labels.name}>
+            <TextInput
+              onChangeText={(value) => {
+                setDraft({ ...draft, name: value });
+                setSaved(false);
+              }}
+              style={[styles.input, isDarkMode ? styles.darkInput : null]}
+              value={draft.name}
+            />
+          </Field>
+          <Field isDarkMode={isDarkMode} label={labels.category}>
+            <CategoryPicker
+              isDarkMode={isDarkMode}
+              labels={labels}
+              locale={locale}
+              onSelect={(categorySlug) => {
+                setDraft({ ...draft, categorySlug });
+                setSaved(false);
+              }}
+              selectedSlug={draft.categorySlug}
+            />
+          </Field>
+          <Field isDarkMode={isDarkMode} label={labels.city}>
+            <LocationPicker
+              isDarkMode={isDarkMode}
+              labels={labels}
+              onChange={(value) => {
+                setDraft({ ...draft, city: value });
+                setSaved(false);
+              }}
+              placeholder={labels.city}
+              value={draft.city}
+            />
+          </Field>
+          <View style={[styles.switchRow, isDarkMode ? styles.darkSettingRow : null]}>
+            <Text style={[styles.switchLabel, isDarkMode ? styles.darkText : null]}>
+              {labels.canadaWide}
+            </Text>
+            <Switch
+              onValueChange={(value) => {
+                setDraft({ ...draft, servesAllCanada: value });
+                setSaved(false);
+              }}
+              thumbColor={draft.servesAllCanada ? "#E1D4C2" : "#291C0E"}
+              trackColor={{ false: "#A78D78", true: "#6E473B" }}
+              value={draft.servesAllCanada}
+            />
+          </View>
+          <Field isDarkMode={isDarkMode} label={labels.description}>
+            <TextInput
+              multiline
+              onChangeText={(value) => {
+                setDraft({ ...draft, description: value });
+                setSaved(false);
+              }}
+              style={[
+                styles.input,
+                styles.textArea,
+                isDarkMode ? styles.darkInput : null,
+              ]}
+              value={draft.description}
+            />
+          </Field>
+          <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+            {labels.contacts}
+          </Text>
+          <Field isDarkMode={isDarkMode} label={labels.phone}>
+            <TextInput
+              keyboardType="phone-pad"
+              onChangeText={(value) => {
+                setDraft({ ...draft, phone: value });
+                setSaved(false);
+              }}
+              placeholder={labels.phone}
+              placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+              style={[styles.input, isDarkMode ? styles.darkInput : null]}
+              value={draft.phone}
+            />
+          </Field>
+          <Field isDarkMode={isDarkMode} label={labels.website}>
+            <TextInput
+              autoCapitalize="none"
+              keyboardType="url"
+              onChangeText={(value) => {
+                setDraft({ ...draft, website: value });
+                setSaved(false);
+              }}
+              placeholder={labels.website}
+              placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+              style={[styles.input, isDarkMode ? styles.darkInput : null]}
+              value={draft.website}
+            />
+          </Field>
+          <Field isDarkMode={isDarkMode} label={labels.instagram}>
+            <TextInput
+              autoCapitalize="none"
+              onChangeText={(value) => {
+                setDraft({ ...draft, instagram: value });
+                setSaved(false);
+              }}
+              placeholder={labels.instagram}
+              placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+              style={[styles.input, isDarkMode ? styles.darkInput : null]}
+              value={draft.instagram ?? ""}
+            />
+          </Field>
+          <Field isDarkMode={isDarkMode} label={labels.address}>
+            <TextInput
+              onChangeText={(value) => {
+                setDraft({ ...draft, address: value });
+                setSaved(false);
+              }}
+              placeholder={labels.address}
+              placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+              style={[styles.input, isDarkMode ? styles.darkInput : null]}
+              value={draft.address ?? ""}
+            />
+          </Field>
+          <PrimaryButton
+            disabled={isSaving}
+            label={labels.save}
+            onPress={() => {
+              void handleSave();
+            }}
+          />
+          {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
+          {saved ? <Text style={styles.successText}>{labels.saved}</Text> : null}
+        </View>
+      ) : null}
+
+      {activePanel === "services" ? (
+        <BusinessContentSection
+          business={business}
+          contentType="service"
+          isDarkMode={isDarkMode}
+          items={serviceItems}
+          labels={labels}
+          onCreate={onCreateContent}
+          onDelete={onDeleteContent}
+          onUpdate={onUpdateContent}
+        />
+      ) : null}
+
+      {activePanel === "events" ? (
+        <BusinessContentSection
+          business={business}
+          contentType="event"
+          isDarkMode={isDarkMode}
+          items={eventItems}
+          labels={labels}
+          onCreate={onCreateContent}
+          onDelete={onDeleteContent}
+          onUpdate={onUpdateContent}
+        />
+      ) : null}
+    </KeyboardAwareScreen>
+  );
+}
+
+function DashboardPanelButton({
+  active,
+  isDarkMode,
+  label,
+  onPress,
+}: {
+  active: boolean;
+  isDarkMode: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={[
+        styles.dashboardTabButton,
+        active ? styles.activeDashboardTabButton : null,
+        isDarkMode && !active ? styles.darkIconBox : null,
+      ]}
+    >
+      <Text
+        numberOfLines={1}
+        style={[
+          styles.dashboardTabButtonText,
+          active ? styles.activeDashboardTabButtonText : null,
+          isDarkMode && !active ? styles.darkText : null,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function DashboardProfilePreview({
+  business,
+  isDarkMode,
+  labels,
+  locale,
+  onEdit,
+}: {
+  business: Business;
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  locale: Locale;
+  onEdit: () => void;
+}) {
+  const contacts = getBusinessContacts(business, labels);
+
+  return (
+    <View style={[styles.publicProfileCard, isDarkMode ? styles.darkCard : null]}>
+      <View style={styles.dashboardPreviewHeader}>
+        <View style={styles.flex}>
+          <Text style={[styles.fieldLabel, isDarkMode ? styles.darkMutedText : null]}>
+            {labels.profilePreview}
+          </Text>
+          <Text style={[styles.modalTitle, isDarkMode ? styles.darkText : null]}>
+            {business.name}
+          </Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onEdit}
+          style={[
+            styles.iconActionButton,
+            isDarkMode ? styles.darkIconBox : null,
+          ]}
+        >
+          <Pencil
+            color={isDarkMode ? "#A78D78" : "#291C0E"}
+            size={19}
+            strokeWidth={2.7}
+          />
+        </Pressable>
+      </View>
+
+      <View style={styles.dashboardPreviewHero}>
+        <View style={[styles.dashboardPreviewLogo, isDarkMode ? styles.darkIconBox : null]}>
+          {business.logoUrl ? (
+            <Image source={{ uri: business.logoUrl }} style={styles.logoPreviewImage} />
+          ) : (
+            <Text style={styles.avatarText}>{getInitials(business.name)}</Text>
+          )}
+        </View>
+        <View style={[styles.flex, styles.dashboardPreviewMeta]}>
+          <Text style={[styles.categoryBadge, isDarkMode ? styles.darkBadge : null]}>
+            {getCategoryName(business.categorySlug, locale)}
+          </Text>
+          <View style={styles.metaRow}>
+            {business.servesAllCanada ? (
+              <Text style={[styles.onlineBadge, isDarkMode ? styles.darkOnlineBadge : null]}>
+                {labels.canadaWide}
+              </Text>
+            ) : null}
+            <Text style={[styles.cityText, isDarkMode ? styles.darkMutedText : null]}>
+              {business.city}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      <Text style={[styles.modalBody, isDarkMode ? styles.darkMutedText : null]}>
+        {business.description}
+      </Text>
+
+      {contacts.length ? (
+        <View style={[styles.contactCard, isDarkMode ? styles.darkSettingRow : null]}>
+          <Text style={[styles.contactSectionTitle, isDarkMode ? styles.darkText : null]}>
+            {labels.contacts}
+          </Text>
+          {contacts.map((contact) => (
+            <ContactRow
+              contact={contact}
+              isDarkMode={isDarkMode}
+              key={contact.key}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function SelectableChip({
+  isDarkMode,
+  label,
+  onPress,
+  selected,
+}: {
+  isDarkMode: boolean;
+  label: string;
+  onPress: () => void;
+  selected: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={[
+        styles.selectableChip,
+        isDarkMode ? styles.darkIconBox : null,
+        selected ? styles.selectedChip : null,
+      ]}
+    >
+      <Text
+        style={[
+          styles.selectableChipText,
+          isDarkMode ? styles.darkText : null,
+          selected ? styles.selectedChipText : null,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function ContentDateTimePicker({
+  isDarkMode,
+  labels,
+  onChange,
+  value,
+}: {
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [pickerMode, setPickerMode] = useState<"date" | "time" | "datetime">(
+    Platform.OS === "ios" ? "datetime" : "date",
+  );
+  const [selectedDate, setSelectedDate] = useState(() => getPickerDate(value));
+
+  function handleOpen() {
+    setSelectedDate(getPickerDate(value));
+    setPickerMode(Platform.OS === "ios" ? "datetime" : "date");
+    setIsOpen(true);
+  }
+
+  function handleApply() {
+    onChange(selectedDate.toISOString());
+    setIsOpen(false);
+  }
+
+  function handleNativeChange(event: DateTimePickerEvent, nextDate?: Date) {
+    if (event.type === "dismissed") {
+      setIsOpen(false);
+      return;
+    }
+
+    if (!nextDate) {
+      return;
+    }
+
+    if (Platform.OS === "android" && pickerMode === "date") {
+      const dateWithCurrentTime = new Date(nextDate);
+      dateWithCurrentTime.setHours(
+        selectedDate.getHours(),
+        selectedDate.getMinutes(),
+        0,
+        0,
+      );
+      setSelectedDate(dateWithCurrentTime);
+      setIsOpen(false);
+      setPickerMode("time");
+      setTimeout(() => setIsOpen(true), 0);
+      return;
+    }
+
+    if (Platform.OS === "android" && pickerMode === "time") {
+      const dateWithSelectedTime = new Date(selectedDate);
+      dateWithSelectedTime.setHours(nextDate.getHours(), nextDate.getMinutes(), 0, 0);
+      setSelectedDate(dateWithSelectedTime);
+      onChange(dateWithSelectedTime.toISOString());
+      setIsOpen(false);
+      return;
+    }
+
+    setSelectedDate(nextDate);
+  }
+
+  return (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        onPress={handleOpen}
+        style={[
+          styles.dateTimeTrigger,
+          isDarkMode ? styles.darkInput : null,
+        ]}
+      >
+        <Text
+          style={[
+            styles.dateTimeTriggerText,
+            isDarkMode ? styles.darkText : null,
+            !value ? styles.dateTimePlaceholder : null,
+          ]}
+        >
+          {value ? formatContentDate(value) : labels.eventDate}
         </Text>
-        <Field isDarkMode={isDarkMode} label={labels.name}>
+      </Pressable>
+
+      {Platform.OS === "ios" ? (
+        <Modal
+          animationType="slide"
+          onRequestClose={() => setIsOpen(false)}
+          presentationStyle="overFullScreen"
+          statusBarTranslucent
+          transparent
+          visible={isOpen}
+        >
+          <View style={styles.pickerBackdrop}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setIsOpen(false)}
+              style={styles.modalDismissLayer}
+            />
+            <View
+              style={[
+                styles.nativeDateTimeSheet,
+                isDarkMode ? styles.darkPickerSheet : null,
+              ]}
+            >
+              <View style={[styles.pickerHeader, isDarkMode ? styles.darkPickerHeader : null]}>
+                <Text style={[styles.pickerTitle, isDarkMode ? styles.darkText : null]}>
+                  {labels.eventDate}
+                </Text>
+                <Pressable
+                  accessibilityLabel={labels.close}
+                  accessibilityRole="button"
+                  onPress={() => setIsOpen(false)}
+                  style={[
+                    styles.modalCloseButton,
+                    isDarkMode ? styles.darkSettingRow : null,
+                  ]}
+                >
+                  <X
+                    color={isDarkMode ? "#A78D78" : "#291C0E"}
+                    size={19}
+                    strokeWidth={2.7}
+                  />
+                </Pressable>
+              </View>
+              <View style={styles.nativeDateTimeContent}>
+                <DateTimePicker
+                  display="spinner"
+                  mode="datetime"
+                  onChange={handleNativeChange}
+                  textColor={isDarkMode ? "#E1D4C2" : "#291C0E"}
+                  value={selectedDate}
+                />
+                <PrimaryButton label={labels.done} onPress={handleApply} />
+              </View>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
+
+      {Platform.OS !== "ios" && isOpen ? (
+        <DateTimePicker
+          display="default"
+          mode={pickerMode === "time" ? "time" : "date"}
+          onChange={handleNativeChange}
+          value={selectedDate}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function BusinessContentSection({
+  business,
+  contentType,
+  isDarkMode,
+  items,
+  labels,
+  onCreate,
+  onDelete,
+  onUpdate,
+}: {
+  business: Business;
+  contentType: BusinessContentType;
+  isDarkMode: boolean;
+  items: BusinessContentItem[];
+  labels: Record<string, string>;
+  onCreate: (input: BusinessContentInput) => Promise<void> | void;
+  onDelete: (contentItemId: string) => Promise<void> | void;
+  onUpdate: (input: BusinessContentUpdateInput) => Promise<void> | void;
+}) {
+  const isEvent = contentType === "event";
+  const [description, setDescription] = useState("");
+  const [editingItem, setEditingItem] = useState<BusinessContentItem | null>(null);
+  const [image, setImage] = useState<BusinessContentImageInput | null>(null);
+  const [isComposerOpen, setIsComposerOpen] = useState(false);
+  const [isFree, setIsFree] = useState(false);
+  const [isOnline, setIsOnline] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [location, setLocation] = useState("");
+  const [price, setPrice] = useState("");
+  const [startsAt, setStartsAt] = useState("");
+  const [title, setTitle] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+
+  async function handleImagePick() {
+    setErrorMessage("");
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      setErrorMessage(labels.contentPhotoPermission);
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      base64: true,
+      quality: 0.85,
+    });
+
+    if (result.canceled) {
+      return;
+    }
+
+    const asset = result.assets[0];
+
+    if (!asset?.uri) {
+      return;
+    }
+
+    setImage({
+      base64: asset.base64,
+      fileName: asset.fileName,
+      mimeType: asset.mimeType,
+      uri: asset.uri,
+    });
+    setSuccessMessage("");
+  }
+
+  function resetComposer() {
+    setDescription("");
+    setEditingItem(null);
+    setImage(null);
+    setIsFree(false);
+    setIsOnline(false);
+    setLinkUrl("");
+    setLocation("");
+    setPrice("");
+    setStartsAt("");
+    setTitle("");
+  }
+
+  function handleEdit(item: BusinessContentItem) {
+    setDescription(item.description);
+    setEditingItem(item);
+    setErrorMessage("");
+    setImage(null);
+    setIsFree(item.isFree);
+    setIsOnline(item.isOnline);
+    setLinkUrl(item.linkUrl ?? "");
+    setLocation(item.location ?? "");
+    setPrice(item.price ?? "");
+    setStartsAt(item.startsAt ?? "");
+    setSuccessMessage("");
+    setTitle(item.title);
+    setIsComposerOpen(true);
+  }
+
+  function handleAddPress() {
+    resetComposer();
+    setErrorMessage("");
+    setSuccessMessage("");
+    setIsComposerOpen(true);
+  }
+
+  async function handleSubmit() {
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    if (!title.trim() || !description.trim()) {
+      setErrorMessage(labels.missingContentFields);
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const input: BusinessContentInput = {
+        description,
+        image,
+        isFree,
+        isOnline: isEvent && isOnline,
+        linkUrl: isEvent ? linkUrl : undefined,
+        location: isEvent ? location : undefined,
+        price: isFree ? "" : price,
+        registrationId: business.registrationId ?? business.id,
+        startsAt: isEvent ? startsAt : undefined,
+        title,
+        type: contentType,
+      };
+
+      if (editingItem) {
+        await onUpdate({ ...input, id: editingItem.id });
+        setSuccessMessage(labels.contentUpdated);
+      } else {
+        await onCreate(input);
+        setSuccessMessage(labels.contentSaved);
+      }
+
+      resetComposer();
+      setIsComposerOpen(false);
+    } catch (error) {
+      console.error("[kolo:mobile-content-save]", error);
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function handleDelete(item: BusinessContentItem) {
+    Alert.alert(labels.deleteContentTitle, labels.deleteContentMessage, [
+      {
+        style: "cancel",
+        text: labels.cancel,
+      },
+      {
+        onPress: () => {
+          void deleteItem(item);
+        },
+        style: "destructive",
+        text: labels.delete,
+      },
+    ]);
+  }
+
+  async function deleteItem(item: BusinessContentItem) {
+    try {
+      setErrorMessage("");
+      setSuccessMessage("");
+      setIsSaving(true);
+      await onDelete(item.id);
+      if (editingItem?.id === item.id) {
+        resetComposer();
+      }
+      setSuccessMessage(labels.contentDeleted);
+    } catch (error) {
+      console.error("[kolo:mobile-content-delete]", error);
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const imagePreviewUri = image?.uri ?? editingItem?.imageUrl;
+
+  return (
+    <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
+      <View style={styles.contentSectionHeader}>
+        <View>
+          <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+            {isEvent ? labels.events : labels.services}
+          </Text>
+          <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+            {items.length} {labels.contentItems}
+          </Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          onPress={handleAddPress}
+          style={[
+            styles.contentAddButton,
+            isDarkMode ? styles.darkIconBox : null,
+          ]}
+        >
+          <Plus
+            color={isDarkMode ? "#A78D78" : "#6E473B"}
+            size={18}
+            strokeWidth={2.7}
+          />
+          <Text style={[styles.contentAddButtonText, isDarkMode ? styles.darkText : null]}>
+            {labels.addContent}
+          </Text>
+        </Pressable>
+      </View>
+
+      {successMessage ? <Text style={styles.successText}>{successMessage}</Text> : null}
+      {errorMessage && !isComposerOpen ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+
+      <View style={styles.contentList}>
+        {items.length ? (
+          items.map((item) => (
+            <BusinessContentCard
+              isDarkMode={isDarkMode}
+              item={item}
+              key={item.id}
+              labels={labels}
+              onDelete={handleDelete}
+              onEdit={handleEdit}
+            />
+          ))
+        ) : (
+          <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
+            {labels.noContentItems}
+          </Text>
+        )}
+      </View>
+
+      <Modal
+        animationType="slide"
+        onRequestClose={() => setIsComposerOpen(false)}
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        transparent
+        visible={isComposerOpen}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 18 : 0}
+          style={styles.modalBackdrop}
+        >
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setIsComposerOpen(false)}
+            style={styles.modalDismissLayer}
+          />
+          <View
+            style={[
+              styles.contentComposerSheet,
+              isDarkMode ? styles.darkModalSheet : null,
+            ]}
+          >
+            <ScrollView
+              contentContainerStyle={styles.modalContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator
+            >
+              <View style={[styles.contentComposer, isDarkMode ? styles.darkSettingRow : null]}>
+                <View style={styles.dashboardEditHeader}>
+                  <View style={styles.flex}>
+                    <Text style={[styles.contentItemTitle, isDarkMode ? styles.darkText : null]}>
+                      {editingItem ? labels.edit : labels.addContent}
+                    </Text>
+                    {editingItem ? (
+                      <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+                        {editingItem.title}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      resetComposer();
+                      setErrorMessage("");
+                      setSuccessMessage("");
+                      setIsComposerOpen(false);
+                    }}
+                    style={[
+                      styles.iconActionButton,
+                      isDarkMode ? styles.darkIconBox : null,
+                    ]}
+                  >
+                    <X
+                      color={isDarkMode ? "#A78D78" : "#291C0E"}
+                      size={19}
+                      strokeWidth={2.7}
+                    />
+                  </Pressable>
+                </View>
+
+        <Field
+          isDarkMode={isDarkMode}
+          label={isEvent ? labels.eventTitle : labels.serviceTitle}
+        >
           <TextInput
             onChangeText={(value) => {
-              setDraft({ ...draft, name: value });
-              setSaved(false);
+              setTitle(value);
+              setErrorMessage("");
+              setSuccessMessage("");
             }}
+            placeholder={isEvent ? labels.eventTitle : labels.serviceTitle}
+            placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
             style={[styles.input, isDarkMode ? styles.darkInput : null]}
-            value={draft.name}
+            value={title}
           />
         </Field>
-        <Field isDarkMode={isDarkMode} label={labels.category}>
-          <CategoryPicker
-            isDarkMode={isDarkMode}
-            labels={labels}
-            locale={locale}
-            onSelect={(categorySlug) => {
-              setDraft({ ...draft, categorySlug });
-              setSaved(false);
-            }}
-            selectedSlug={draft.categorySlug}
-          />
-        </Field>
-        <Field isDarkMode={isDarkMode} label={labels.city}>
-          <LocationPicker
-            isDarkMode={isDarkMode}
-            labels={labels}
-            onChange={(value) => {
-              setDraft({ ...draft, city: value });
-              setSaved(false);
-            }}
-            placeholder={labels.city}
-            value={draft.city}
-          />
-        </Field>
-        <View style={[styles.switchRow, isDarkMode ? styles.darkSettingRow : null]}>
-          <Text style={[styles.switchLabel, isDarkMode ? styles.darkText : null]}>
-            {labels.canadaWide}
-          </Text>
-          <Switch
-            onValueChange={(value) => {
-              setDraft({ ...draft, servesAllCanada: value });
-              setSaved(false);
-            }}
-            thumbColor={draft.servesAllCanada ? "#ffffff" : "#153f38"}
-            trackColor={{ false: "#b7cbc5", true: "#287365" }}
-            value={draft.servesAllCanada}
-          />
-        </View>
-        <Field isDarkMode={isDarkMode} label={labels.description}>
+
+        <Field isDarkMode={isDarkMode} label={labels.contentDescription}>
           <TextInput
             multiline
             onChangeText={(value) => {
-              setDraft({ ...draft, description: value });
-              setSaved(false);
+              setDescription(value);
+              setErrorMessage("");
+              setSuccessMessage("");
             }}
+            placeholder={labels.contentDescription}
+            placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
             style={[
               styles.input,
               styles.textArea,
               isDarkMode ? styles.darkInput : null,
             ]}
-            value={draft.description}
+            value={description}
           />
         </Field>
+
+        <Field isDarkMode={isDarkMode} label={labels.price}>
+          <View style={styles.inlinePickerRow}>
+            <TextInput
+              editable={!isFree}
+              onChangeText={(value) => {
+                setPrice(value);
+                setSuccessMessage("");
+              }}
+              placeholder={isFree ? labels.free : labels.pricePlaceholder}
+              placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+              style={[
+                styles.input,
+                styles.inlinePickerInput,
+                isFree ? styles.disabledInput : null,
+                isDarkMode ? styles.darkInput : null,
+              ]}
+              value={isFree ? "" : price}
+            />
+            <SelectableChip
+              isDarkMode={isDarkMode}
+              label={labels.free}
+              onPress={() => {
+                setIsFree((value) => !value);
+                setPrice("");
+                setSuccessMessage("");
+              }}
+              selected={isFree}
+            />
+          </View>
+        </Field>
+
+        <Field isDarkMode={isDarkMode} label={labels.contentPhoto}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              void handleImagePick();
+            }}
+            style={[
+              styles.logoUploadButton,
+              isDarkMode ? styles.darkSettingRow : null,
+            ]}
+          >
+            <View style={[styles.logoUploadPreview, isDarkMode ? styles.darkIconBox : null]}>
+              {imagePreviewUri ? (
+                <Image source={{ uri: imagePreviewUri }} style={styles.logoPreviewImage} />
+              ) : (
+                <Upload
+                  color={isDarkMode ? "#A78D78" : "#6E473B"}
+                  size={24}
+                  strokeWidth={2.5}
+                />
+              )}
+            </View>
+            <View style={styles.flex}>
+              <Text style={[styles.logoUploadTitle, isDarkMode ? styles.darkText : null]}>
+                {imagePreviewUri ? labels.contentPhotoSelected : labels.contentPhotoUpload}
+              </Text>
+              <Text style={[styles.logoUploadHint, isDarkMode ? styles.darkMutedText : null]}>
+                {image?.fileName ??
+                  (editingItem?.imageUrl
+                    ? labels.contentPhotoSelected
+                    : labels.contentPhotoHint)}
+              </Text>
+            </View>
+          </Pressable>
+        </Field>
+
+        {isEvent ? (
+          <>
+            <Field isDarkMode={isDarkMode} label={labels.eventDate}>
+              <ContentDateTimePicker
+                isDarkMode={isDarkMode}
+                labels={labels}
+                onChange={(value) => {
+                  setStartsAt(value);
+                  setSuccessMessage("");
+                }}
+                value={startsAt}
+              />
+            </Field>
+            <Field isDarkMode={isDarkMode} label={labels.eventLocation}>
+              <View style={styles.inlinePickerRow}>
+                <TextInput
+                  onChangeText={(value) => {
+                    setLocation(value);
+                    setSuccessMessage("");
+                  }}
+                  placeholder={labels.eventLocation}
+                  placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+                  style={[
+                    styles.input,
+                    styles.inlinePickerInput,
+                    isDarkMode ? styles.darkInput : null,
+                  ]}
+                  value={location}
+                />
+                <SelectableChip
+                  isDarkMode={isDarkMode}
+                  label={labels.online}
+                  onPress={() => {
+                    setIsOnline((value) => !value);
+                    setSuccessMessage("");
+                  }}
+                  selected={isOnline}
+                />
+              </View>
+            </Field>
+            <Field isDarkMode={isDarkMode} label={labels.contentLink}>
+              <TextInput
+                autoCapitalize="none"
+                keyboardType="url"
+                onChangeText={(value) => {
+                  setLinkUrl(value);
+                  setSuccessMessage("");
+                }}
+                placeholder="https://"
+                placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+                style={[styles.input, isDarkMode ? styles.darkInput : null]}
+                value={linkUrl}
+              />
+            </Field>
+          </>
+        ) : null}
+
         <PrimaryButton
           disabled={isSaving}
-          label={labels.save}
+          label={
+            editingItem
+              ? labels.saveChanges
+              : isEvent
+                ? labels.addEvent
+                : labels.addService
+          }
           onPress={() => {
-            void handleSave();
+            void handleSubmit();
           }}
         />
-        {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
-        {saved ? <Text style={styles.successText}>{labels.saved}</Text> : null}
+                {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
+  );
+}
+
+function BusinessContentCard({
+  isDarkMode,
+  item,
+  labels,
+  onDelete,
+  onEdit,
+}: {
+  isDarkMode: boolean;
+  item: BusinessContentItem;
+  labels: Record<string, string>;
+  onDelete: (item: BusinessContentItem) => void;
+  onEdit: (item: BusinessContentItem) => void;
+}) {
+  const metaItems = [
+    item.isFree ? labels.free : item.price,
+    item.isOnline ? labels.online : undefined,
+    item.startsAt ? formatContentDate(item.startsAt) : undefined,
+    item.location,
+  ].filter((value): value is string => Boolean(value));
+  const contentLinkUrl = item.linkUrl ? getWebsiteUrl(item.linkUrl) : null;
+
+  return (
+    <View style={[styles.contentItemCard, isDarkMode ? styles.darkSettingRow : null]}>
+      {item.imageUrl ? (
+        <Image
+          resizeMode="cover"
+          source={{ uri: item.imageUrl }}
+          style={styles.contentItemImage}
+        />
+      ) : null}
+      <View style={styles.contentItemHeader}>
+        <Text style={[styles.contentItemTitle, isDarkMode ? styles.darkText : null]}>
+          {item.title}
+        </Text>
+        <View style={styles.contentItemActions}>
+          <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
+            {item.type === "event" ? labels.events : labels.services}
+          </Text>
+          <Pressable
+            accessibilityLabel={labels.edit}
+            accessibilityRole="button"
+            onPress={() => onEdit(item)}
+            style={[
+              styles.contentItemActionButton,
+              isDarkMode ? styles.darkIconBox : null,
+            ]}
+          >
+            <Pencil
+              color={isDarkMode ? "#A78D78" : "#6E473B"}
+              size={16}
+              strokeWidth={2.6}
+            />
+          </Pressable>
+          <Pressable
+            accessibilityLabel={labels.delete}
+            accessibilityRole="button"
+            onPress={() => onDelete(item)}
+            style={[
+              styles.contentItemActionButton,
+              isDarkMode ? styles.darkIconBox : null,
+            ]}
+          >
+            <Trash2
+              color={isDarkMode ? "#E1D4C2" : "#6E473B"}
+              size={16}
+              strokeWidth={2.6}
+            />
+          </Pressable>
+        </View>
       </View>
-    </ScrollView>
+      <Text style={[styles.descriptionText, isDarkMode ? styles.darkMutedText : null]}>
+        {item.description}
+      </Text>
+      {metaItems.length ? (
+        <Text style={[styles.contentItemMeta, isDarkMode ? styles.darkMutedText : null]}>
+          {metaItems.join(" | ")}
+        </Text>
+      ) : null}
+      {item.linkUrl && contentLinkUrl ? (
+        <Pressable
+          accessibilityRole="link"
+          onPress={() => {
+            void openContactUrl(contentLinkUrl);
+          }}
+        >
+          <Text style={styles.contactLine}>{item.linkUrl}</Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -1202,37 +2787,52 @@ function ProfileScreen({
   isAuthBusy,
   isSupabaseConfigured,
   labels,
+  onEmailSignIn,
   onSignIn,
   onSignOut,
-  profileEmail,
-  profileName,
   session,
   setIsDarkMode,
+  showEmailPasswordSignIn,
 }: {
   authMessage: string;
   isDarkMode: boolean;
   isAuthBusy: boolean;
   isSupabaseConfigured: boolean;
   labels: Record<string, string>;
+  onEmailSignIn: (email: string, password: string) => Promise<void>;
   onSignIn: () => Promise<void>;
   onSignOut: () => Promise<void>;
-  profileEmail: string;
-  profileName: string;
   session: Session | null;
   setIsDarkMode: (value: boolean) => void;
+  showEmailPasswordSignIn: boolean;
 }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const profileName = getSessionName(session);
+  const profileEmail = session?.user.email ?? "";
+  const profileAvatarUrl = getSessionAvatarUrl(session);
+
+  async function handleEmailSubmit() {
+    await onEmailSignIn(email, password);
+    setPassword("");
+  }
+
   return (
-    <ScrollView
-      contentContainerStyle={styles.screenContent}
-      keyboardShouldPersistTaps="handled"
-      style={styles.screen}
-      showsVerticalScrollIndicator={false}
-    >
+    <KeyboardAwareScreen>
       {session ? (
         <View style={[styles.profileHero, isDarkMode ? styles.darkCard : null]}>
-          <View style={styles.avatarLarge}>
-            <Text style={styles.avatarText}>{getInitials(profileName)}</Text>
-          </View>
+          {profileAvatarUrl ? (
+            <Image
+              source={{ uri: profileAvatarUrl }}
+              style={styles.profileAvatarImage}
+            />
+          ) : (
+            <View style={[styles.avatarLarge, isDarkMode ? styles.darkIconBox : null]}>
+              <Text style={[styles.avatarText, isDarkMode ? styles.darkText : null]}>
+                {getInitials(profileName) || "U"}
+              </Text>
+            </View>
+          )}
           <View style={styles.flex}>
             <Text style={[styles.profileName, isDarkMode ? styles.darkText : null]}>
               {profileName}
@@ -1240,54 +2840,78 @@ function ProfileScreen({
             <Text
               style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}
             >
-              {labels.signedInAs}
+              {profileEmail}
             </Text>
-            <Text style={styles.contactLine}>{profileEmail}</Text>
           </View>
         </View>
       ) : null}
 
       <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
-        <PrimaryButton
-          disabled={isAuthBusy || !isSupabaseConfigured}
-          label={session ? labels.signOut : labels.signInGoogle}
-          onPress={() => {
-            void (session ? onSignOut() : onSignIn());
-          }}
-        />
+        {session ? (
+          <PrimaryButton
+            disabled={isAuthBusy || !isSupabaseConfigured}
+            label={labels.signOut}
+            onPress={() => {
+              void onSignOut();
+            }}
+          />
+        ) : (
+          <>
+            <PrimaryButton
+              disabled={isAuthBusy || !isSupabaseConfigured}
+              label={labels.signInGoogle}
+              onPress={() => {
+                void onSignIn();
+              }}
+            />
+
+            {showEmailPasswordSignIn ? (
+              <View
+                style={[
+                  styles.contentComposer,
+                  isDarkMode ? styles.darkSettingRow : null,
+                ]}
+              >
+                <Field isDarkMode={isDarkMode} label={labels.email}>
+                  <TextInput
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    keyboardType="email-address"
+                    onChangeText={setEmail}
+                    placeholder="email@example.com"
+                    placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+                    style={[styles.input, isDarkMode ? styles.darkInput : null]}
+                    textContentType="emailAddress"
+                    value={email}
+                  />
+                </Field>
+                <Field isDarkMode={isDarkMode} label={labels.password}>
+                  <TextInput
+                    autoCapitalize="none"
+                    onChangeText={setPassword}
+                    placeholder={labels.password}
+                    placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+                    secureTextEntry
+                    style={[styles.input, isDarkMode ? styles.darkInput : null]}
+                    textContentType="password"
+                    value={password}
+                  />
+                </Field>
+                <PrimaryButton
+                  disabled={isAuthBusy || !isSupabaseConfigured}
+                  label={labels.signInEmail}
+                  onPress={() => {
+                    void handleEmailSubmit();
+                  }}
+                />
+              </View>
+            ) : null}
+          </>
+        )}
         {!isSupabaseConfigured ? (
           <Text style={styles.errorText}>{labels.notConfigured}</Text>
         ) : null}
         {authMessage ? <Text style={styles.errorText}>{authMessage}</Text> : null}
-
-        {session ? (
-          <>
-            <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
-              {labels.userProfile}
-            </Text>
-            <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
-              {labels.profileIntro}
-            </Text>
-
-            <View style={styles.profileInfoGrid}>
-              <ProfileInfo
-                isDarkMode={isDarkMode}
-                label={labels.name}
-                value={profileName}
-              />
-              <ProfileInfo
-                isDarkMode={isDarkMode}
-                label={labels.contactEmail}
-                value={profileEmail}
-              />
-              <ProfileInfo
-                isDarkMode={isDarkMode}
-                label="Google"
-                value={session.user.email ?? ""}
-              />
-            </View>
-          </>
-        ) : null}
       </View>
 
       <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
@@ -1298,9 +2922,9 @@ function ProfileScreen({
         <View style={[styles.settingsRow, isDarkMode ? styles.darkSettingRow : null]}>
           <View style={styles.settingLabelRow}>
             {isDarkMode ? (
-              <Moon color="#d8f1f7" size={20} strokeWidth={2.4} />
+              <Moon color="#A78D78" size={20} strokeWidth={2.4} />
             ) : (
-              <Sun color="#287365" size={20} strokeWidth={2.4} />
+              <Sun color="#6E473B" size={20} strokeWidth={2.4} />
             )}
             <View>
               <Text
@@ -1323,35 +2947,14 @@ function ProfileScreen({
           </View>
           <Switch
             onValueChange={setIsDarkMode}
-            thumbColor={isDarkMode ? "#ffffff" : "#153f38"}
-            trackColor={{ false: "#b7cbc5", true: "#287365" }}
+            thumbColor={isDarkMode ? "#E1D4C2" : "#291C0E"}
+            trackColor={{ false: "#A78D78", true: "#6E473B" }}
             value={isDarkMode}
           />
         </View>
 
       </View>
-    </ScrollView>
-  );
-}
-
-function ProfileInfo({
-  isDarkMode,
-  label,
-  value,
-}: {
-  isDarkMode: boolean;
-  label: string;
-  value: string;
-}) {
-  return (
-    <View style={[styles.profileInfoItem, isDarkMode ? styles.darkSettingRow : null]}>
-      <Text style={[styles.fieldLabel, isDarkMode ? styles.darkMutedText : null]}>
-        {label}
-      </Text>
-      <Text style={[styles.profileInfoValue, isDarkMode ? styles.darkText : null]}>
-        {value}
-      </Text>
-    </View>
+    </KeyboardAwareScreen>
   );
 }
 
@@ -1378,7 +2981,7 @@ function BusinessCard({
         <Text style={[styles.categoryBadge, isDarkMode ? styles.darkBadge : null]}>
           {getCategoryName(business.categorySlug, locale)}
         </Text>
-        {business.ownerAvatarUrl ? (
+        {hasBusinessOwnerInfo(business) && business.ownerAvatarUrl ? (
           <Image
             source={{ uri: business.ownerAvatarUrl }}
             style={styles.cardOwnerAvatar}
@@ -1405,6 +3008,108 @@ function BusinessCard({
   );
 }
 
+function BusinessOwnerRow({
+  business,
+  isDarkMode,
+  labels,
+}: {
+  business: Business;
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+}) {
+  const ownerName = business.ownerName.trim();
+
+  return (
+    <View style={[styles.businessOwnerRow, isDarkMode ? styles.darkSettingRow : null]}>
+      {business.ownerAvatarUrl ? (
+        <Image
+          source={{ uri: business.ownerAvatarUrl }}
+          style={styles.businessOwnerAvatar}
+        />
+      ) : (
+        <View style={[styles.businessOwnerFallback, isDarkMode ? styles.darkIconBox : null]}>
+          <UserRound
+            color={isDarkMode ? "#A78D78" : "#6E473B"}
+            size={17}
+            strokeWidth={2.5}
+          />
+        </View>
+      )}
+      <View style={styles.flex}>
+        <Text style={[styles.businessOwnerLabel, isDarkMode ? styles.darkMutedText : null]}>
+          {labels.owner}
+        </Text>
+        <Text style={[styles.businessOwnerName, isDarkMode ? styles.darkText : null]}>
+          {ownerName}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function PublicContentCard({
+  business,
+  isDarkMode,
+  item,
+  labels,
+  onPress,
+  showBusinessName,
+}: {
+  business: Business;
+  isDarkMode: boolean;
+  item: BusinessContentItem;
+  labels: Record<string, string>;
+  onPress?: () => void;
+  showBusinessName?: boolean;
+}) {
+  const metaItems = [
+    item.isFree ? labels.free : item.price,
+    item.isOnline ? labels.online : undefined,
+    item.startsAt ? formatContentDate(item.startsAt) : undefined,
+    item.location,
+  ].filter((value): value is string => Boolean(value));
+
+  return (
+    <Pressable
+      accessibilityRole={onPress ? "button" : undefined}
+      disabled={!onPress}
+      onPress={onPress}
+      style={[styles.contentItemCard, isDarkMode ? styles.darkSettingRow : null]}
+    >
+      {item.imageUrl ? (
+        <Image
+          resizeMode="cover"
+          source={{ uri: item.imageUrl }}
+          style={styles.contentItemImage}
+        />
+      ) : null}
+      <View style={styles.contentItemHeader}>
+        <View style={styles.flex}>
+          {showBusinessName ? (
+            <Text style={[styles.contentBusinessName, isDarkMode ? styles.darkMutedText : null]}>
+              {business.name}
+            </Text>
+          ) : null}
+          <Text style={[styles.contentItemTitle, isDarkMode ? styles.darkText : null]}>
+            {item.title}
+          </Text>
+        </View>
+        <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
+          {item.type === "event" ? labels.events : labels.services}
+        </Text>
+      </View>
+      <Text style={[styles.descriptionText, isDarkMode ? styles.darkMutedText : null]}>
+        {item.description}
+      </Text>
+      {metaItems.length ? (
+        <Text style={[styles.contentItemMeta, isDarkMode ? styles.darkMutedText : null]}>
+          {metaItems.join(" | ")}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
 function BusinessModal({
   business,
   isDarkMode,
@@ -1421,6 +3126,16 @@ function BusinessModal({
   onManage: () => void;
 }) {
   const contacts = business ? getBusinessContacts(business, labels) : [];
+  const [activeModalTab, setActiveModalTab] = useState<"about" | "services" | "events">(
+    "about",
+  );
+  const contentItems = business?.contentItems ?? [];
+  const serviceItems = contentItems.filter((item) => item.type === "service");
+  const eventItems = contentItems.filter((item) => item.type === "event");
+
+  useEffect(() => {
+    setActiveModalTab("about");
+  }, [business?.id]);
 
   return (
     <Modal
@@ -1461,7 +3176,7 @@ function BusinessModal({
                   ]}
                 >
                   <X
-                    color={isDarkMode ? "#d8f1f7" : "#153f38"}
+                    color={isDarkMode ? "#A78D78" : "#291C0E"}
                     size={19}
                     strokeWidth={2.7}
                   />
@@ -1473,33 +3188,96 @@ function BusinessModal({
               <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
                 {business.servesAllCanada ? labels.canadaWide : business.city}
               </Text>
-              <OwnerChip
-                business={business}
-                isDarkMode={isDarkMode}
-                labels={labels}
-                prominent
-              />
-              <Text style={[styles.modalBody, isDarkMode ? styles.darkMutedText : null]}>
-                {business.description}
-              </Text>
-              {contacts.length ? (
-                <View style={[styles.contactCard, isDarkMode ? styles.darkSettingRow : null]}>
-                  <Text
-                    style={[
-                      styles.contactSectionTitle,
-                      isDarkMode ? styles.darkText : null,
-                    ]}
-                  >
-                    {labels.contacts}
+              {hasBusinessOwnerInfo(business) ? (
+                <BusinessOwnerRow
+                  business={business}
+                  isDarkMode={isDarkMode}
+                  labels={labels}
+                />
+              ) : null}
+
+              <View style={[styles.dashboardTabs, isDarkMode ? styles.darkSettingRow : null]}>
+                <DashboardPanelButton
+                  active={activeModalTab === "about"}
+                  isDarkMode={isDarkMode}
+                  label={labels.about}
+                  onPress={() => setActiveModalTab("about")}
+                />
+                <DashboardPanelButton
+                  active={activeModalTab === "services"}
+                  isDarkMode={isDarkMode}
+                  label={labels.services}
+                  onPress={() => setActiveModalTab("services")}
+                />
+                <DashboardPanelButton
+                  active={activeModalTab === "events"}
+                  isDarkMode={isDarkMode}
+                  label={labels.events}
+                  onPress={() => setActiveModalTab("events")}
+                />
+              </View>
+
+              {activeModalTab === "about" ? (
+                <>
+                  <Text style={[styles.modalBody, isDarkMode ? styles.darkMutedText : null]}>
+                    {business.description}
                   </Text>
-                  {contacts.map((contact) => (
-                    <ContactRow
-                      contact={contact}
+                  {contacts.length ? (
+                    <View style={[styles.contactCard, isDarkMode ? styles.darkSettingRow : null]}>
+                      <Text
+                        style={[
+                          styles.contactSectionTitle,
+                          isDarkMode ? styles.darkText : null,
+                        ]}
+                      >
+                        {labels.contacts}
+                      </Text>
+                      {contacts.map((contact) => (
+                        <ContactRow
+                          contact={contact}
+                          isDarkMode={isDarkMode}
+                          key={contact.key}
+                        />
+                      ))}
+                    </View>
+                  ) : null}
+                </>
+              ) : null}
+
+              {activeModalTab === "services" ? (
+                serviceItems.length ? (
+                  serviceItems.map((item) => (
+                    <PublicContentCard
+                      business={business}
                       isDarkMode={isDarkMode}
-                      key={contact.key}
+                      item={item}
+                      key={item.id}
+                      labels={labels}
                     />
-                  ))}
-                </View>
+                  ))
+                ) : (
+                  <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
+                    {labels.noContentItems}
+                  </Text>
+                )
+              ) : null}
+
+              {activeModalTab === "events" ? (
+                eventItems.length ? (
+                  eventItems.map((item) => (
+                    <PublicContentCard
+                      business={business}
+                      isDarkMode={isDarkMode}
+                      item={item}
+                      key={item.id}
+                      labels={labels}
+                    />
+                  ))
+                ) : (
+                  <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
+                    {labels.noContentItems}
+                  </Text>
+                )
               ) : null}
               {business.ownedByCurrentUser ? (
                 <PrimaryButton label={labels.manageProfile} onPress={onManage} />
@@ -1538,7 +3316,7 @@ function ContactRow({
       style={[styles.contactRow, isDarkMode ? styles.darkSettingRow : null]}
     >
       <View style={[styles.contactIcon, isDarkMode ? styles.darkIconBox : null]}>
-        <Icon color={isDarkMode ? "#d8f1f7" : "#287365"} size={18} strokeWidth={2.5} />
+        <Icon color={isDarkMode ? "#A78D78" : "#6E473B"} size={18} strokeWidth={2.5} />
       </View>
       <View style={styles.flex}>
         <Text style={[styles.contactLabel, isDarkMode ? styles.darkMutedText : null]}>
@@ -1552,57 +3330,26 @@ function ContactRow({
   );
 }
 
-function OwnerChip({
-  business,
-  isDarkMode,
-  labels,
-  prominent,
-}: {
-  business: Business;
-  isDarkMode: boolean;
-  labels: Record<string, string>;
-  prominent?: boolean;
-}) {
-  const ownerName = getBusinessOwnerName(business);
-
-  if (!ownerName) {
-    return null;
-  }
-
+function GoogleLogo({ size }: { size: number }) {
   return (
-    <View
-      style={[
-        styles.ownerChip,
-        prominent ? styles.ownerChipProminent : null,
-        isDarkMode ? styles.darkSettingRow : null,
-      ]}
-    >
-      {business.ownerAvatarUrl ? (
-        <Image
-          source={{ uri: business.ownerAvatarUrl }}
-          style={styles.ownerAvatar}
-        />
-      ) : (
-        <View style={[styles.ownerAvatarFallback, isDarkMode ? styles.darkIconBox : null]}>
-          <UserRound
-            color={isDarkMode ? "#d8f1f7" : "#287365"}
-            size={17}
-            strokeWidth={2.5}
-          />
-        </View>
-      )}
-      <View style={styles.flex}>
-        <Text style={[styles.ownerChipLabel, isDarkMode ? styles.darkMutedText : null]}>
-          {labels.owner}
-        </Text>
-        <Text
-          numberOfLines={prominent ? 2 : 1}
-          style={[styles.ownerChipName, isDarkMode ? styles.darkText : null]}
-        >
-          {ownerName}
-        </Text>
-      </View>
-    </View>
+    <Svg height={size} viewBox="0 0 48 48" width={size}>
+      <Path
+        d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c10 0 19-7.3 19-20 0-1.3-.1-2.3-.4-3.5z"
+        fill="#4285F4"
+      />
+      <Path
+        d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.6 8.3 6.3 14.7z"
+        fill="#EA4335"
+      />
+      <Path
+        d="M24 44c5.2 0 9.9-2 13.4-5.3l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.8l-6.5 5C9.5 39.6 16.2 44 24 44z"
+        fill="#34A853"
+      />
+      <Path
+        d="M12.7 28.2c-.4-1.3-.7-2.7-.7-4.2s.2-2.9.7-4.2l-6.5-5C4.8 17.6 4 20.7 4 24s.8 6.4 2.2 9.2l6.5-5z"
+        fill="#FBBC05"
+      />
+    </Svg>
   );
 }
 
@@ -1627,7 +3374,7 @@ function TabButton({
       style={[styles.tabButton, active ? styles.activeTabButton : null]}
     >
       <Icon
-        color={active ? "#ffffff" : isDarkMode ? "#d8e1de" : "#5d6a66"}
+        color={active ? "#E1D4C2" : isDarkMode ? "#A78D78" : "#6E473B"}
         size={21}
         strokeWidth={2.6}
       />
@@ -1719,7 +3466,7 @@ function CategoryPicker({
                 ]}
               >
                 <X
-                  color={isDarkMode ? "#d8f1f7" : "#153f38"}
+                  color={isDarkMode ? "#A78D78" : "#291C0E"}
                   size={19}
                   strokeWidth={2.7}
                 />
@@ -1811,7 +3558,7 @@ function LocationPicker({
           autoCapitalize="words"
           onChangeText={onChange}
           placeholder={allowAll ? labels.allCanada : placeholder}
-          placeholderTextColor={isDarkMode ? "#758882" : "#7b8581"}
+          placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
           style={[
             styles.input,
             styles.locationPickerInput,
@@ -1828,7 +3575,7 @@ function LocationPicker({
             isDarkMode ? styles.darkIconBox : null,
           ]}
         >
-          <MapPin color={isDarkMode ? "#d8f1f7" : "#287365"} size={20} strokeWidth={2.5} />
+          <MapPin color={isDarkMode ? "#A78D78" : "#6E473B"} size={20} strokeWidth={2.5} />
         </Pressable>
       </View>
 
@@ -1866,7 +3613,7 @@ function LocationPicker({
                 ]}
               >
                 <X
-                  color={isDarkMode ? "#d8f1f7" : "#153f38"}
+                  color={isDarkMode ? "#A78D78" : "#291C0E"}
                   size={19}
                   strokeWidth={2.7}
                 />
@@ -1905,7 +3652,7 @@ function LocationPicker({
                       ]}
                     >
                       <MapPin
-                        color={isDarkMode ? "#d8f1f7" : "#287365"}
+                        color={isDarkMode ? "#A78D78" : "#6E473B"}
                         size={17}
                         strokeWidth={2.5}
                       />
@@ -1978,6 +3725,13 @@ function PrimaryButton({
 
 function getCategoryName(slug: string, locale: Locale) {
   return categories.find((category) => category.slug === slug)?.name[locale] ?? slug;
+}
+
+function hasBusinessOwnerInfo(business: Business) {
+  return Boolean(
+    business.ownerId &&
+      (business.ownerName.trim() || business.ownerAvatarUrl?.trim()),
+  );
 }
 
 function getBusinessContacts(
@@ -2101,6 +3855,107 @@ function getAddressUrl(address?: string, city?: string) {
   )}`;
 }
 
+function formatContentDate(value: string) {
+  const parsedDate = new Date(value.replace(" ", "T"));
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return parsedDate.toLocaleDateString(undefined, {
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+  });
+}
+
+function getContentTimestamp(item: BusinessContentItem) {
+  const value = item.startsAt ?? item.createdAt ?? "";
+  const parsedDate = new Date(value);
+
+  return Number.isNaN(parsedDate.getTime()) ? 0 : parsedDate.getTime();
+}
+
+function getUniqueBusinesses(businesses: Business[]) {
+  return businesses.filter(
+    (business, index, allBusinesses) =>
+      allBusinesses.findIndex(
+        (item) => getBusinessDedupeKey(item) === getBusinessDedupeKey(business),
+      ) === index,
+  );
+}
+
+function getUniqueBusinessesById(businesses: Business[]) {
+  const seenIds = new Set<string>();
+
+  return businesses.filter((business) => {
+    if (seenIds.has(business.id)) {
+      return false;
+    }
+
+    seenIds.add(business.id);
+    return true;
+  });
+}
+
+function isOwnedBusinessMatch(publicBusiness: Business, ownedBusiness: Business) {
+  if (publicBusiness.id === ownedBusiness.id) {
+    return true;
+  }
+
+  const ownedRegistrationId = ownedBusiness.registrationId ?? ownedBusiness.id;
+
+  return Boolean(
+    publicBusiness.registrationId &&
+      publicBusiness.registrationId === ownedRegistrationId,
+  );
+}
+
+function getBusinessDedupeKey(business: Business) {
+  if (business.registrationId) {
+    return `registration:${business.registrationId}`;
+  }
+
+  if (business.slug) {
+    return `slug:${business.slug}`;
+  }
+
+  return [
+    "business",
+    business.ownerId ?? "",
+    normalize(business.name),
+    normalize(business.city),
+    business.categorySlug,
+  ].join(":");
+}
+
+function getEffectiveSearchQuery(query: string) {
+  const trimmedQuery = query.trim();
+  const normalizedQuery = normalize(trimmedQuery);
+  const allQueries = new Set(["all", "all businesses", "усі", "всі", "усе", "все"]);
+
+  return allQueries.has(normalizedQuery) ? "" : trimmedQuery;
+}
+
+function hasSearchFilters(query: string, location: string, selectedCategory: string) {
+  return Boolean(
+    getEffectiveSearchQuery(query) ||
+      location.trim() ||
+      selectedCategory !== "all",
+  );
+}
+
+function getPickerDate(value: string) {
+  const parsedDate = value ? new Date(value) : null;
+
+  if (parsedDate && !Number.isNaN(parsedDate.getTime())) {
+    return parsedDate;
+  }
+
+  return new Date();
+}
+
 function getSessionName(session: Session | null) {
   const metadata = session?.user.user_metadata as
     | Record<string, unknown>
@@ -2128,10 +3983,6 @@ function getSessionAvatarUrl(session: Session | null) {
   return typeof avatarUrl === "string" && avatarUrl.trim()
     ? avatarUrl.trim()
     : undefined;
-}
-
-function getBusinessOwnerName(business: Business) {
-  return business.ownerName?.trim() ?? "";
 }
 
 function getInitials(name: string) {
@@ -2216,6 +4067,8 @@ function getSearchAliases(categorySlug: string) {
       "auto car repair detailing mechanic авто автосервіс ремонт детайлінг механік",
     beauty:
       "beauty hair nails makeup brows salon краса волосся нігті макіяж брови салон",
+    bookkeepers:
+      "bookkeeper bookkeeping accountant accounting payroll invoices reporting tax finance бухгалтер бухгалтерія облік зарплата рахунки звітність фінанси",
     cleaning:
       "cleaning cleaner housekeeping move out прибирання клінінг чистка",
     construction:
@@ -2261,21 +4114,28 @@ function normalize(value: string) {
 
 const styles = StyleSheet.create({
   activeCategoryOption: {
-    backgroundColor: "#eef8f6",
-    borderColor: "#9ccdc2",
+    backgroundColor: "#A78D78",
+    borderColor: "#6E473B",
   },
   activeCategoryOptionText: {
-    color: "#153f38",
+    color: "#291C0E",
   },
   activeLocationOption: {
-    backgroundColor: "#eef8f6",
-    borderColor: "#9ccdc2",
+    backgroundColor: "#A78D78",
+    borderColor: "#6E473B",
   },
   activeLocationOptionText: {
-    color: "#153f38",
+    color: "#291C0E",
+  },
+  activeDashboardTabButton: {
+    backgroundColor: "#291C0E",
+    borderColor: "#291C0E",
+  },
+  activeDashboardTabButtonText: {
+    color: "#E1D4C2",
   },
   activeTabButton: {
-    backgroundColor: "#153f38",
+    backgroundColor: "#291C0E",
   },
   appShell: {
     flex: 1,
@@ -2284,7 +4144,7 @@ const styles = StyleSheet.create({
   },
   avatar: {
     alignItems: "center",
-    backgroundColor: "#d8f1f7",
+    backgroundColor: "#A78D78",
     borderRadius: 18,
     height: 54,
     justifyContent: "center",
@@ -2292,42 +4152,96 @@ const styles = StyleSheet.create({
   },
   avatarLarge: {
     alignItems: "center",
-    backgroundColor: "#d8f1f7",
+    backgroundColor: "#A78D78",
     borderRadius: 22,
     height: 68,
     justifyContent: "center",
     width: 68,
   },
   avatarText: {
-    color: "#153f38",
+    color: "#291C0E",
     fontSize: 17,
     fontWeight: "900",
   },
   businessCard: {
-    backgroundColor: "#ffffff",
-    borderColor: "#e4ebe8",
+    backgroundColor: "#A78D78",
+    borderColor: "#6E473B",
     borderRadius: 22,
     borderWidth: 1,
     gap: 12,
     padding: 18,
-    shadowColor: "#0e2f2a",
+    shadowColor: "#291C0E",
     shadowOffset: { height: 10, width: 0 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.1,
     shadowRadius: 18,
   },
   businessName: {
-    color: "#101817",
+    color: "#291C0E",
     fontSize: 24,
     fontWeight: "900",
     lineHeight: 28,
   },
+  businessOwnerAvatar: {
+    borderRadius: 18,
+    height: 36,
+    width: 36,
+  },
+  businessOwnerFallback: {
+    alignItems: "center",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
+    borderRadius: 18,
+    borderWidth: 1,
+    height: 36,
+    justifyContent: "center",
+    width: 36,
+  },
+  businessOwnerLabel: {
+    color: "#6E473B",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+  },
+  businessOwnerName: {
+    color: "#291C0E",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  businessOwnerRow: {
+    alignItems: "center",
+    alignSelf: "stretch",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    padding: 10,
+  },
   card: {
-    backgroundColor: "#ffffff",
-    borderColor: "#e4ebe8",
+    backgroundColor: "#A78D78",
+    borderColor: "#6E473B",
     borderRadius: 24,
     borderWidth: 1,
     gap: 16,
     padding: 18,
+  },
+  clearFiltersButton: {
+    alignItems: "center",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 5,
+    minHeight: 32,
+    paddingHorizontal: 10,
+  },
+  clearFiltersButtonText: {
+    color: "#6E473B",
+    fontSize: 12,
+    fontWeight: "900",
   },
   cardHeader: {
     alignItems: "center",
@@ -2336,11 +4250,11 @@ const styles = StyleSheet.create({
   },
   categoryBadge: {
     alignSelf: "flex-start",
-    backgroundColor: "#d8f1f7",
-    borderColor: "#a9dff0",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#6E473B",
     borderRadius: 8,
     borderWidth: 1,
-    color: "#26728a",
+    color: "#291C0E",
     fontSize: 12,
     fontWeight: "800",
     overflow: "hidden",
@@ -2349,8 +4263,8 @@ const styles = StyleSheet.create({
   },
   categoryOption: {
     alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderColor: "#e0e8e5",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
     borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
@@ -2361,9 +4275,9 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   categoryOptionCheck: {
-    backgroundColor: "#d8f1f7",
+    backgroundColor: "#A78D78",
     borderRadius: 999,
-    color: "#26728a",
+    color: "#291C0E",
     fontSize: 12,
     fontWeight: "900",
     overflow: "hidden",
@@ -2371,15 +4285,15 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   categoryOptionText: {
-    color: "#101817",
+    color: "#291C0E",
     flex: 1,
     fontSize: 16,
     fontWeight: "800",
   },
   categoryPickerButton: {
     alignItems: "center",
-    backgroundColor: "#fbfcfa",
-    borderColor: "#d7e0dd",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
     borderRadius: 14,
     borderWidth: 1,
     flexDirection: "row",
@@ -2388,7 +4302,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   categoryPickerChevron: {
-    color: "#287365",
+    color: "#6E473B",
     fontSize: 15,
     fontWeight: "900",
   },
@@ -2398,8 +4312,8 @@ const styles = StyleSheet.create({
     paddingBottom: 34,
   },
   categoryPickerSheet: {
-    backgroundColor: "#fbfcfa",
-    borderColor: "#d8e7e2",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
     borderRadius: 30,
     borderWidth: 1,
     elevation: 16,
@@ -2407,32 +4321,32 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginHorizontal: 10,
     overflow: "hidden",
-    shadowColor: "#0e2f2a",
+    shadowColor: "#291C0E",
     shadowOffset: { height: -8, width: 0 },
     shadowOpacity: 0.18,
     shadowRadius: 28,
   },
   categoryPickerText: {
-    color: "#101817",
+    color: "#291C0E",
     flex: 1,
     fontSize: 16,
     fontWeight: "800",
   },
   cityText: {
-    color: "#5d6a66",
+    color: "#6E473B",
     fontSize: 14,
     fontWeight: "700",
   },
   contactCard: {
-    backgroundColor: "#f4f8f6",
+    backgroundColor: "#A78D78",
     borderRadius: 14,
     gap: 10,
     padding: 14,
   },
   contactIcon: {
     alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderColor: "#d8e1de",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
     borderRadius: 12,
     borderWidth: 1,
     height: 38,
@@ -2440,22 +4354,22 @@ const styles = StyleSheet.create({
     width: 38,
   },
   contactLabel: {
-    color: "#5d6a66",
+    color: "#6E473B",
     fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.3,
     textTransform: "uppercase",
   },
   contactLine: {
-    color: "#287365",
+    color: "#6E473B",
     fontSize: 14,
     fontWeight: "700",
     lineHeight: 20,
   },
   contactRow: {
     alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderColor: "#e0e8e5",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
     borderRadius: 14,
     borderWidth: 1,
     flexDirection: "row",
@@ -2463,7 +4377,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   contactSectionTitle: {
-    color: "#153f38",
+    color: "#291C0E",
     fontSize: 15,
     fontWeight: "900",
   },
@@ -2471,105 +4385,283 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
   },
+  contentAddButton: {
+    alignItems: "center",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    minHeight: 40,
+    paddingHorizontal: 12,
+  },
+  contentAddButtonText: {
+    color: "#291C0E",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  contentBusinessName: {
+    color: "#6E473B",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.3,
+    marginBottom: 3,
+    textTransform: "uppercase",
+  },
+  contentComposer: {
+    backgroundColor: "#A78D78",
+    borderColor: "#6E473B",
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 12,
+    padding: 14,
+  },
+  contentComposerSheet: {
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    borderWidth: 1,
+    elevation: 16,
+    maxHeight: Math.round(Dimensions.get("window").height * 0.84),
+    overflow: "hidden",
+    shadowColor: "#291C0E",
+    shadowOffset: { height: -8, width: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 28,
+  },
+  contentItemCard: {
+    backgroundColor: "#A78D78",
+    borderColor: "#6E473B",
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 10,
+    padding: 14,
+  },
+  contentItemActionButton: {
+    alignItems: "center",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
+    borderRadius: 10,
+    borderWidth: 1,
+    height: 34,
+    justifyContent: "center",
+    width: 34,
+  },
+  contentItemActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexShrink: 0,
+    gap: 6,
+  },
+  contentItemHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+  },
+  contentItemImage: {
+    aspectRatio: 1.8,
+    borderRadius: 14,
+    width: "100%",
+  },
+  contentItemMeta: {
+    color: "#6E473B",
+    fontSize: 13,
+    fontWeight: "800",
+    lineHeight: 18,
+  },
+  contentItemTitle: {
+    color: "#291C0E",
+    flex: 1,
+    fontSize: 17,
+    fontWeight: "900",
+    lineHeight: 22,
+  },
+  contentList: {
+    gap: 10,
+  },
+  contentSectionHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  dateTimePlaceholder: {
+    color: "#6E473B",
+  },
+  dateTimeTrigger: {
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
+    borderRadius: 14,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 52,
+    paddingHorizontal: 14,
+  },
+  dateTimeTriggerText: {
+    color: "#291C0E",
+    fontSize: 16,
+    fontWeight: "800",
+  },
   descriptionText: {
-    color: "#5d6a66",
+    color: "#6E473B",
     fontSize: 15,
     lineHeight: 22,
   },
   disabledButton: {
     opacity: 0.58,
   },
+  disabledInput: {
+    opacity: 0.72,
+  },
   darkCard: {
-    backgroundColor: "#172421",
-    borderColor: "#2a3f3a",
+    backgroundColor: "#6E473B",
+    borderColor: "#A78D78",
   },
   darkAccentText: {
-    color: "#d8f1f7",
+    color: "#A78D78",
   },
   darkActiveOption: {
-    backgroundColor: "#12352f",
-    borderColor: "#4fb8aa",
+    backgroundColor: "#6E473B",
+    borderColor: "#A78D78",
   },
   darkActiveOptionText: {
-    color: "#d8f1f7",
+    color: "#A78D78",
   },
   darkBadge: {
-    backgroundColor: "#153f38",
-    borderColor: "#4fb8aa",
-    color: "#d8f1f7",
+    backgroundColor: "#291C0E",
+    borderColor: "#A78D78",
+    color: "#A78D78",
   },
   darkBusinessCard: {
-    backgroundColor: "#172421",
-    borderColor: "#2a3f3a",
+    backgroundColor: "#6E473B",
+    borderColor: "#A78D78",
     shadowColor: "#000000",
     shadowOpacity: 0.18,
   },
   darkEmptyState: {
-    backgroundColor: "#172421",
-    color: "#9fb0ab",
+    backgroundColor: "#291C0E",
+    color: "#BEB5A9",
   },
   darkIconBox: {
-    backgroundColor: "#101b18",
-    borderColor: "#2a3f3a",
+    backgroundColor: "#291C0E",
+    borderColor: "#6E473B",
   },
   darkInput: {
-    backgroundColor: "#101b18",
-    borderColor: "#2a3f3a",
-    color: "#f5faf8",
+    backgroundColor: "#291C0E",
+    borderColor: "#6E473B",
+    color: "#E1D4C2",
   },
   darkModalSheet: {
-    backgroundColor: "#101b18",
-    borderColor: "#2a3f3a",
+    backgroundColor: "#291C0E",
+    borderColor: "#6E473B",
     shadowColor: "#000000",
   },
   darkMutedText: {
-    color: "#9fb0ab",
+    color: "#BEB5A9",
   },
   darkOnlineBadge: {
-    backgroundColor: "#12352f",
-    color: "#d8f1f7",
+    backgroundColor: "#6E473B",
+    color: "#A78D78",
   },
   darkPickerHeader: {
-    borderBottomColor: "#2a3f3a",
+    borderBottomColor: "#6E473B",
   },
   darkPickerOption: {
-    backgroundColor: "#172421",
-    borderColor: "#2a3f3a",
+    backgroundColor: "#291C0E",
+    borderColor: "#6E473B",
   },
   darkPickerSheet: {
-    backgroundColor: "#101b18",
-    borderColor: "#2a3f3a",
+    backgroundColor: "#291C0E",
+    borderColor: "#6E473B",
     shadowColor: "#000000",
   },
   darkSafeArea: {
-    backgroundColor: "#0f1816",
+    backgroundColor: "#291C0E",
   },
   darkSettingRow: {
-    backgroundColor: "#0f1816",
-    borderColor: "#2a3f3a",
+    backgroundColor: "#6E473B",
+    borderColor: "#A78D78",
   },
   darkTabBar: {
-    backgroundColor: "#172421",
-    borderColor: "#2a3f3a",
+    backgroundColor: "#6E473B",
+    borderColor: "#A78D78",
   },
   darkText: {
-    color: "#f5faf8",
+    color: "#E1D4C2",
+  },
+  dashboardEditHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between",
+  },
+  dashboardPreviewHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between",
+  },
+  dashboardPreviewHero: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 14,
+  },
+  dashboardPreviewMeta: {
+    gap: 10,
+  },
+  dashboardPreviewLogo: {
+    alignItems: "center",
+    backgroundColor: "#A78D78",
+    borderColor: "#6E473B",
+    borderRadius: 20,
+    borderWidth: 1,
+    height: 68,
+    justifyContent: "center",
+    overflow: "hidden",
+    width: 68,
+  },
+  dashboardTabButton: {
+    alignItems: "center",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
+    borderRadius: 14,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 8,
+  },
+  dashboardTabButtonText: {
+    color: "#291C0E",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  dashboardTabs: {
+    backgroundColor: "#A78D78",
+    borderColor: "#6E473B",
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    padding: 6,
   },
   emptyState: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#A78D78",
     borderRadius: 16,
-    color: "#5d6a66",
+    color: "#6E473B",
     fontSize: 16,
     fontWeight: "700",
     padding: 18,
     textAlign: "center",
   },
   errorText: {
-    backgroundColor: "#fff1f0",
-    borderColor: "#ffd3cf",
+    backgroundColor: "#A78D78",
+    borderColor: "#A78D78",
     borderRadius: 12,
     borderWidth: 1,
-    color: "#b42318",
+    color: "#6E473B",
     fontSize: 14,
     fontWeight: "800",
     lineHeight: 20,
@@ -2579,7 +4671,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   fieldLabel: {
-    color: "#153f38",
+    color: "#291C0E",
     fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.4,
@@ -2588,9 +4680,19 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
+  googleLogoLarge: {
+    alignItems: "center",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
+    borderRadius: 22,
+    borderWidth: 1,
+    height: 68,
+    justifyContent: "center",
+    width: 68,
+  },
   categoryPreviewCard: {
-    backgroundColor: "#ffffff",
-    borderColor: "#e0e8e5",
+    backgroundColor: "#A78D78",
+    borderColor: "#6E473B",
     borderRadius: 18,
     borderWidth: 1,
     flexBasis: "48%",
@@ -2598,9 +4700,9 @@ const styles = StyleSheet.create({
     gap: 8,
     minHeight: 94,
     padding: 14,
-    shadowColor: "#0e2f2a",
+    shadowColor: "#291C0E",
     shadowOffset: { height: 8, width: 0 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.08,
     shadowRadius: 14,
   },
   categoryPreviewGrid: {
@@ -2609,20 +4711,20 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   categoryPreviewMeta: {
-    color: "#65736f",
+    color: "#6E473B",
     fontSize: 13,
     fontWeight: "700",
   },
   categoryPreviewName: {
-    color: "#101817",
+    color: "#291C0E",
     fontSize: 16,
     fontWeight: "900",
     lineHeight: 21,
   },
   cityPill: {
     alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderColor: "#d8e7e2",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
     borderRadius: 999,
     borderWidth: 1,
     flexDirection: "row",
@@ -2636,34 +4738,34 @@ const styles = StyleSheet.create({
     gap: 9,
   },
   cityPillText: {
-    color: "#153f38",
+    color: "#291C0E",
     fontSize: 14,
     fontWeight: "900",
   },
   homeHero: {
-    backgroundColor: "#ffffff",
-    borderColor: "#e4ebe8",
+    backgroundColor: "#A78D78",
+    borderColor: "#6E473B",
     borderRadius: 28,
     borderWidth: 1,
     gap: 13,
     padding: 20,
-    shadowColor: "#0e2f2a",
+    shadowColor: "#291C0E",
     shadowOffset: { height: 14, width: 0 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.1,
     shadowRadius: 24,
   },
   homeIntro: {
-    color: "#65736f",
+    color: "#6E473B",
     fontSize: 16,
     lineHeight: 23,
   },
   homeKicker: {
     alignSelf: "flex-start",
-    backgroundColor: "#d8f1f7",
-    borderColor: "#a9dff0",
+    backgroundColor: "#291C0E",
+    borderColor: "#6E473B",
     borderRadius: 8,
     borderWidth: 1,
-    color: "#26728a",
+    color: "#E1D4C2",
     fontSize: 12,
     fontWeight: "900",
     overflow: "hidden",
@@ -2672,8 +4774,8 @@ const styles = StyleSheet.create({
   },
   homeSearchButton: {
     alignItems: "center",
-    backgroundColor: "#f4f8f6",
-    borderColor: "#d8e7e2",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
     borderRadius: 18,
     borderWidth: 1,
     flexDirection: "row",
@@ -2682,12 +4784,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   homeSearchText: {
-    color: "#65736f",
+    color: "#6E473B",
     fontSize: 14,
     fontWeight: "700",
   },
   homeSearchTitle: {
-    color: "#153f38",
+    color: "#291C0E",
     fontSize: 15,
     fontWeight: "900",
   },
@@ -2698,25 +4800,46 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   homeTitle: {
-    color: "#101817",
+    color: "#291C0E",
     fontSize: 31,
     fontWeight: "900",
     lineHeight: 36,
   },
   input: {
-    backgroundColor: "#fbfcfa",
-    borderColor: "#d7e0dd",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
     borderRadius: 14,
     borderWidth: 1,
-    color: "#101817",
+    color: "#291C0E",
     fontSize: 16,
     minHeight: 52,
     paddingHorizontal: 14,
   },
+  inlinePickerInput: {
+    flex: 1,
+  },
+  inlinePickerRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  iconActionButton: {
+    alignItems: "center",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
+    borderRadius: 14,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: "center",
+    width: 42,
+  },
+  keyboardAwareContent: {
+    paddingBottom: 128,
+  },
   locationOption: {
     alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderColor: "#e0e8e5",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
     borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
@@ -2727,22 +4850,22 @@ const styles = StyleSheet.create({
   },
   locationOptionIcon: {
     alignItems: "center",
-    backgroundColor: "#eef5f2",
+    backgroundColor: "#E1D4C2",
     borderRadius: 12,
     height: 34,
     justifyContent: "center",
     width: 34,
   },
   locationOptionText: {
-    color: "#101817",
+    color: "#291C0E",
     flex: 1,
     fontSize: 16,
     fontWeight: "800",
   },
   locationPickerButton: {
     alignItems: "center",
-    backgroundColor: "#eef5f2",
-    borderColor: "#d7e0dd",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
     borderRadius: 14,
     borderWidth: 1,
     height: 52,
@@ -2763,8 +4886,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   locationPickerSheet: {
-    backgroundColor: "#fbfcfa",
-    borderColor: "#d8e7e2",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
     borderRadius: 30,
     borderWidth: 1,
     elevation: 16,
@@ -2772,13 +4895,51 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginHorizontal: 10,
     overflow: "hidden",
-    shadowColor: "#0e2f2a",
+    shadowColor: "#291C0E",
     shadowOffset: { height: -8, width: 0 },
     shadowOpacity: 0.18,
     shadowRadius: 28,
   },
+  logoPreviewImage: {
+    borderRadius: 13,
+    height: "100%",
+    width: "100%",
+  },
+  logoUploadButton: {
+    alignItems: "center",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    minHeight: 82,
+    padding: 12,
+  },
+  logoUploadHint: {
+    color: "#6E473B",
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+  logoUploadPreview: {
+    alignItems: "center",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
+    borderRadius: 15,
+    borderWidth: 1,
+    height: 54,
+    justifyContent: "center",
+    overflow: "hidden",
+    width: 54,
+  },
+  logoUploadTitle: {
+    color: "#291C0E",
+    fontSize: 15,
+    fontWeight: "900",
+  },
   cardOwnerAvatar: {
-    borderColor: "#d8e7e2",
+    borderColor: "#A78D78",
     borderRadius: 14,
     borderWidth: 1,
     height: 44,
@@ -2796,14 +4957,14 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalBody: {
-    color: "#42504c",
+    color: "#6E473B",
     fontSize: 16,
     lineHeight: 24,
   },
   modalCloseButton: {
     alignItems: "center",
-    backgroundColor: "#eef5f2",
-    borderColor: "#d8e7e2",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
     borderRadius: 14,
     borderWidth: 1,
     height: 38,
@@ -2819,15 +4980,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   modalSheet: {
-    backgroundColor: "#fbfcfa",
-    borderColor: "#d8e7e2",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     borderWidth: 1,
     elevation: 16,
     height: BUSINESS_SHEET_HEIGHT,
     overflow: "hidden",
-    shadowColor: "#0e2f2a",
+    shadowColor: "#291C0E",
     shadowOffset: { height: -8, width: 0 },
     shadowOpacity: 0.18,
     shadowRadius: 28,
@@ -2842,81 +5003,69 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalTitle: {
-    color: "#101817",
+    color: "#291C0E",
     fontSize: 30,
     fontWeight: "900",
     lineHeight: 34,
   },
   mutedText: {
-    color: "#65736f",
+    color: "#6E473B",
     fontSize: 15,
     lineHeight: 22,
   },
+  nativeDateTimeContent: {
+    gap: 12,
+    padding: 18,
+    paddingBottom: 28,
+  },
+  nativeDateTimeSheet: {
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
+    borderRadius: 30,
+    borderWidth: 1,
+    elevation: 16,
+    marginBottom: 10,
+    marginHorizontal: 10,
+    overflow: "hidden",
+    shadowColor: "#291C0E",
+    shadowOffset: { height: -8, width: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 28,
+  },
   onlineBadge: {
-    backgroundColor: "#e4f4ef",
+    backgroundColor: "#E1D4C2",
     borderRadius: 8,
-    color: "#287365",
+    color: "#6E473B",
     fontSize: 12,
     fontWeight: "900",
     overflow: "hidden",
     paddingHorizontal: 8,
     paddingVertical: 5,
   },
-  ownerAvatar: {
-    borderRadius: 15,
-    height: 30,
-    width: 30,
-  },
-  ownerAvatarFallback: {
-    alignItems: "center",
-    backgroundColor: "#d8f1f7",
-    borderRadius: 15,
-    height: 30,
-    justifyContent: "center",
-    width: 30,
-  },
-  ownerChip: {
-    alignItems: "center",
-    alignSelf: "flex-start",
-    backgroundColor: "#f4f8f6",
-    borderColor: "#d8e7e2",
-    borderRadius: 14,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 9,
-    maxWidth: "100%",
-    paddingHorizontal: 9,
-    paddingVertical: 7,
-  },
-  ownerChipLabel: {
-    color: "#5d6a66",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0.3,
-    textTransform: "uppercase",
-  },
-  ownerChipName: {
-    color: "#153f38",
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  ownerChipProminent: {
-    alignSelf: "stretch",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
   primaryButton: {
     alignItems: "center",
-    backgroundColor: "#287365",
+    backgroundColor: "#6E473B",
     borderRadius: 14,
     minHeight: 52,
     justifyContent: "center",
     paddingHorizontal: 18,
   },
   primaryButtonText: {
-    color: "#ffffff",
+    color: "#E1D4C2",
     fontSize: 16,
     fontWeight: "900",
+  },
+  publicProfileCard: {
+    backgroundColor: "#A78D78",
+    borderColor: "#6E473B",
+    borderRadius: 24,
+    borderWidth: 1,
+    gap: 16,
+    padding: 18,
+    shadowColor: "#291C0E",
+    shadowOffset: { height: 14, width: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
   },
   pickerBackdrop: {
     backgroundColor: "transparent",
@@ -2925,7 +5074,7 @@ const styles = StyleSheet.create({
   },
   pickerHeader: {
     alignItems: "center",
-    borderBottomColor: "#e1ebe7",
+    borderBottomColor: "#A78D78",
     borderBottomWidth: 1,
     flexDirection: "row",
     justifyContent: "space-between",
@@ -2933,14 +5082,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   pickerTitle: {
-    color: "#101817",
+    color: "#291C0E",
     fontSize: 18,
     fontWeight: "900",
   },
   profileCard: {
     alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderColor: "#d8e1de",
+    backgroundColor: "#A78D78",
+    borderColor: "#6E473B",
     borderRadius: 22,
     borderWidth: 1,
     flexDirection: "row",
@@ -2949,39 +5098,28 @@ const styles = StyleSheet.create({
   },
   profileHero: {
     alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderColor: "#e4ebe8",
+    backgroundColor: "#A78D78",
+    borderColor: "#6E473B",
     borderRadius: 24,
     borderWidth: 1,
     flexDirection: "row",
     gap: 16,
     padding: 18,
   },
-  profileInfoGrid: {
-    gap: 10,
-  },
-  profileInfoItem: {
-    backgroundColor: "#f4f8f6",
-    borderColor: "#e0e8e5",
-    borderRadius: 14,
-    borderWidth: 1,
-    gap: 5,
-    padding: 13,
-  },
-  profileInfoValue: {
-    color: "#101817",
-    fontSize: 15,
-    fontWeight: "800",
-  },
   profileName: {
-    color: "#101817",
+    color: "#291C0E",
     fontSize: 19,
     fontWeight: "900",
   },
+  profileAvatarImage: {
+    borderRadius: 22,
+    height: 68,
+    width: 68,
+  },
   resultCount: {
-    backgroundColor: "#d8f1f7",
+    backgroundColor: "#6E473B",
     borderRadius: 8,
-    color: "#26728a",
+    color: "#E1D4C2",
     fontSize: 14,
     fontWeight: "900",
     overflow: "hidden",
@@ -2991,10 +5129,17 @@ const styles = StyleSheet.create({
   resultsHeader: {
     alignItems: "center",
     flexDirection: "row",
+    gap: 10,
     justifyContent: "space-between",
   },
+  resultsHeaderActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexShrink: 0,
+    gap: 8,
+  },
   safeArea: {
-    backgroundColor: "#f7f7f3",
+    backgroundColor: "#E1D4C2",
     flex: 1,
   },
   screen: {
@@ -3006,8 +5151,8 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   searchPanel: {
-    backgroundColor: "#ffffff",
-    borderColor: "#e4ebe8",
+    backgroundColor: "#A78D78",
+    borderColor: "#6E473B",
     borderRadius: 24,
     borderWidth: 1,
     gap: 14,
@@ -3015,19 +5160,41 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     alignItems: "center",
-    borderColor: "#cbd8d4",
+    borderColor: "#A78D78",
     borderRadius: 14,
     borderWidth: 1,
     minHeight: 50,
     justifyContent: "center",
   },
   secondaryButtonText: {
-    color: "#153f38",
+    color: "#291C0E",
     fontSize: 16,
     fontWeight: "900",
   },
+  selectableChip: {
+    alignItems: "center",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
+    borderRadius: 999,
+    borderWidth: 1,
+    minHeight: 42,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  selectableChipText: {
+    color: "#291C0E",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  selectedChip: {
+    backgroundColor: "#291C0E",
+    borderColor: "#291C0E",
+  },
+  selectedChipText: {
+    color: "#E1D4C2",
+  },
   sectionTitle: {
-    color: "#101817",
+    color: "#291C0E",
     fontSize: 24,
     fontWeight: "900",
   },
@@ -3037,15 +5204,15 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   settingMeta: {
-    color: "#65736f",
+    color: "#6E473B",
     fontSize: 13,
     fontWeight: "700",
     marginTop: 2,
   },
   settingsRow: {
     alignItems: "center",
-    backgroundColor: "#f4f8f6",
-    borderColor: "#e0e8e5",
+    backgroundColor: "#A78D78",
+    borderColor: "#6E473B",
     borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
@@ -3055,22 +5222,35 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   successText: {
-    backgroundColor: "#e4f4ef",
+    backgroundColor: "#E1D4C2",
     borderRadius: 12,
-    color: "#287365",
+    color: "#6E473B",
     fontSize: 14,
     fontWeight: "900",
     padding: 12,
   },
+  statusPill: {
+    backgroundColor: "#E1D4C2",
+    borderColor: "#6E473B",
+    borderRadius: 999,
+    borderWidth: 1,
+    color: "#291C0E",
+    flexShrink: 1,
+    fontSize: 11,
+    fontWeight: "900",
+    overflow: "hidden",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
   switchLabel: {
-    color: "#153f38",
+    color: "#291C0E",
     flex: 1,
     fontSize: 15,
     fontWeight: "900",
   },
   switchRow: {
     alignItems: "center",
-    backgroundColor: "#f4f8f6",
+    backgroundColor: "#A78D78",
     borderRadius: 14,
     flexDirection: "row",
     gap: 12,
@@ -3078,8 +5258,8 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   tabBar: {
-    backgroundColor: "#ffffff",
-    borderColor: "#e4ebe8",
+    backgroundColor: "#A78D78",
+    borderColor: "#6E473B",
     borderRadius: 24,
     borderWidth: 1,
     flexDirection: "row",
@@ -3087,9 +5267,9 @@ const styles = StyleSheet.create({
     marginBottom: -14,
     marginTop: 8,
     padding: 5,
-    shadowColor: "#0e2f2a",
+    shadowColor: "#291C0E",
     shadowOffset: { height: 7, width: 0 },
-    shadowOpacity: 0.07,
+    shadowOpacity: 0.12,
     shadowRadius: 16,
     width: "100%",
   },

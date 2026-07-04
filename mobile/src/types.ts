@@ -23,4 +23,50 @@ export type Business = {
   logoUrl?: string;
   servesAllCanada: boolean;
   ownedByCurrentUser?: boolean;
+  contentItems?: BusinessContentItem[];
+};
+
+export type BusinessContentType = "service" | "event";
+
+export type BusinessContentItem = {
+  id: string;
+  registrationId: string;
+  ownerId: string;
+  type: BusinessContentType;
+  title: string;
+  description: string;
+  imageUrl?: string;
+  isFree: boolean;
+  isOnline: boolean;
+  price?: string;
+  startsAt?: string;
+  location?: string;
+  linkUrl?: string;
+  status: "draft" | "published";
+  createdAt?: string;
+};
+
+export type BusinessContentInput = {
+  registrationId: string;
+  type: BusinessContentType;
+  title: string;
+  description: string;
+  image?: BusinessContentImageInput | null;
+  isFree: boolean;
+  isOnline: boolean;
+  price?: string;
+  startsAt?: string;
+  location?: string;
+  linkUrl?: string;
+};
+
+export type BusinessContentUpdateInput = BusinessContentInput & {
+  id: string;
+};
+
+export type BusinessContentImageInput = {
+  base64?: string | null;
+  uri: string;
+  fileName?: string | null;
+  mimeType?: string | null;
 };

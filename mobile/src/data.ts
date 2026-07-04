@@ -7,6 +7,7 @@ export const categories: Category[] = [
   { slug: "lawyers", name: { uk: "Юридичні послуги", en: "Legal Services" } },
   { slug: "realtors", name: { uk: "Рієлтори", en: "Realtors" } },
   { slug: "insurance-brokers", name: { uk: "Страховий брокер", en: "Insurance Broker" } },
+  { slug: "bookkeepers", name: { uk: "Бухгалтери", en: "Bookkeepers" } },
   { slug: "beauty", name: { uk: "Краса", en: "Beauty" } },
   { slug: "wellness-care", name: { uk: "Здоров'я та турбота", en: "Wellness & Care" } },
   { slug: "construction", name: { uk: "Будівництво", en: "Construction" } },
@@ -35,6 +36,7 @@ export const citySuggestions = [
   "Edmonton",
   "Winnipeg",
   "Halifax",
+  "St. John's",
 ];
 
 export const businesses: Business[] = [

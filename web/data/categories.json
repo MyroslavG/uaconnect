@@ -30,6 +30,11 @@
     "description": "Insurance advice, policy comparison, claims guidance, and personal or business coverage."
   },
   {
+    "name": "Bookkeepers",
+    "slug": "bookkeepers",
+    "description": "Bookkeeping, payroll, invoicing, reporting, and small business financial admin."
+  },
+  {
     "name": "Beauty",
     "slug": "beauty",
     "description": "Hair, nails, skin care, brows, and makeup studios."

@@ -41,6 +41,17 @@ const cityNameAliases: Record<string, string[]> = {
   edmonton: ["едмонтон"],
   winnipeg: ["вінніпег", "виннипег"],
   halifax: ["галіфакс", "галифакс"],
+  "st-johns": [
+    "st johns",
+    "st john s",
+    "st. johns",
+    "saint johns",
+    "newfoundland",
+    "newfoundland and labrador",
+    "nl",
+    "сент джонс",
+    "ньюфаундленд",
+  ],
   "quebec-city": ["квебек", "квебек сіті", "квебек сити"],
 };
 
@@ -145,6 +156,19 @@ const knownLocations: KnownLocation[] = [
     names: ["dartmouth", "halifax"],
     coordinates: { latitude: 44.6488, longitude: -63.5752 },
   },
+  {
+    label: "St. John's",
+    names: [
+      "st johns",
+      "st john s",
+      "st. johns",
+      "saint johns",
+      "newfoundland",
+      "newfoundland and labrador",
+      "nl",
+    ],
+    coordinates: { latitude: 47.5615, longitude: -52.7126 },
+  },
 ];
 
 export const manualLocationSuggestions = [
@@ -167,6 +191,8 @@ export const manualLocationSuggestions = [
   "Saskatoon",
   "Regina",
   "Dartmouth",
+  "St. John's",
+  "Newfoundland",
   "Quebec City",
   "Winnipeg",
   "Calgary",

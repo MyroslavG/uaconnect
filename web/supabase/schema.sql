@@ -15,6 +15,13 @@ exception
   when duplicate_object then null;
 end $$;
 
+do $$
+begin
+  create type public.business_content_type as enum ('service', 'event');
+exception
+  when duplicate_object then null;
+end $$;
+
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
@@ -115,6 +122,39 @@ on public.business_claim_invites (business_id);
 create index if not exists business_claim_invites_token_hash_idx
 on public.business_claim_invites (token_hash);
 
+create table if not exists public.business_content_items (
+  id uuid primary key default gen_random_uuid(),
+  registration_id uuid not null references public.business_registrations(id) on delete cascade,
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  content_type public.business_content_type not null,
+  title text not null,
+  description text not null,
+  image_url text,
+  is_free boolean not null default false,
+  is_online boolean not null default false,
+  price text,
+  starts_at timestamptz,
+  location text,
+  link_url text,
+  status text not null default 'published' check (status in ('draft', 'published')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists business_content_items_registration_id_idx
+on public.business_content_items (registration_id);
+
+create index if not exists business_content_items_owner_id_idx
+on public.business_content_items (owner_id);
+
+create index if not exists business_content_items_type_status_idx
+on public.business_content_items (content_type, status, created_at desc);
+
+alter table public.business_content_items
+  add column if not exists image_url text,
+  add column if not exists is_free boolean not null default false,
+  add column if not exists is_online boolean not null default false;
+
 insert into storage.buckets (
   id,
   name,
@@ -166,6 +206,31 @@ set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
+insert into storage.buckets (
+  id,
+  name,
+  public,
+  file_size_limit,
+  allowed_mime_types
+)
+values (
+  'business-content-images',
+  'business-content-images',
+  true,
+  5242880,
+  array[
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/gif'
+  ]
+)
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -194,6 +259,11 @@ for each row execute function public.set_updated_at();
 drop trigger if exists business_claim_invites_set_updated_at on public.business_claim_invites;
 create trigger business_claim_invites_set_updated_at
 before update on public.business_claim_invites
+for each row execute function public.set_updated_at();
+
+drop trigger if exists business_content_items_set_updated_at on public.business_content_items;
+create trigger business_content_items_set_updated_at
+before update on public.business_content_items
 for each row execute function public.set_updated_at();
 
 create or replace function public.handle_new_user()
@@ -543,6 +613,7 @@ alter table public.profiles enable row level security;
 alter table public.business_registrations enable row level security;
 alter table public.businesses enable row level security;
 alter table public.business_claim_invites enable row level security;
+alter table public.business_content_items enable row level security;
 
 drop policy if exists "Profiles are visible to owner and admins" on public.profiles;
 create policy "Profiles are visible to owner and admins"
@@ -622,6 +693,58 @@ on public.business_claim_invites for all
 using (public.is_admin())
 with check (public.is_admin());
 
+drop policy if exists "Published business content is public" on public.business_content_items;
+create policy "Published business content is public"
+on public.business_content_items for select
+using (
+  (select auth.uid()) = owner_id
+  or public.is_admin()
+  or (
+    status = 'published'
+    and exists (
+      select 1
+      from public.businesses
+      where businesses.registration_id = business_content_items.registration_id
+        and businesses.status = 'published'
+    )
+  )
+);
+
+drop policy if exists "Owners can create business content" on public.business_content_items;
+create policy "Owners can create business content"
+on public.business_content_items for insert
+with check (
+  (select auth.uid()) = owner_id
+  and exists (
+    select 1
+    from public.business_registrations
+    where business_registrations.id = business_content_items.registration_id
+      and business_registrations.owner_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "Owners can update business content" on public.business_content_items;
+create policy "Owners can update business content"
+on public.business_content_items for update
+using ((select auth.uid()) = owner_id or public.is_admin())
+with check (
+  public.is_admin()
+  or (
+    (select auth.uid()) = owner_id
+    and exists (
+      select 1
+      from public.business_registrations
+      where business_registrations.id = business_content_items.registration_id
+        and business_registrations.owner_id = (select auth.uid())
+    )
+  )
+);
+
+drop policy if exists "Owners can delete business content" on public.business_content_items;
+create policy "Owners can delete business content"
+on public.business_content_items for delete
+using ((select auth.uid()) = owner_id or public.is_admin());
+
 drop policy if exists "Anyone can view business logos" on storage.objects;
 create policy "Anyone can view business logos"
 on storage.objects for select
@@ -632,6 +755,17 @@ create policy "Authenticated users can upload business logos"
 on storage.objects for insert
 to authenticated
 with check (bucket_id = 'business-logos');
+
+drop policy if exists "Anyone can view business content images" on storage.objects;
+create policy "Anyone can view business content images"
+on storage.objects for select
+using (bucket_id = 'business-content-images');
+
+drop policy if exists "Authenticated users can upload business content images" on storage.objects;
+create policy "Authenticated users can upload business content images"
+on storage.objects for insert
+to authenticated
+with check (bucket_id = 'business-content-images');
 
 drop policy if exists "Anyone can view profile avatars" on storage.objects;
 create policy "Anyone can view profile avatars"
