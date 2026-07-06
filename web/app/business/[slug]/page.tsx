@@ -16,6 +16,7 @@ import {
 import { BusinessLogo } from "@/components/business-logo";
 import { BusinessOwnerChip } from "@/components/business-owner-chip";
 import { BusinessProfileActions } from "@/components/business-profile-actions";
+import { ContactAccessCard } from "@/components/contact-access-card";
 import { MapEmbed } from "@/components/map-embed";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -87,6 +88,7 @@ export default async function BusinessProfilePage({
   const isOwner = Boolean(
     user && rawBusiness.ownerId && rawBusiness.ownerId === user.id,
   );
+  const canViewContacts = Boolean(user);
   const dashboardHref = rawBusiness.registrationId
     ? `/dashboard#business-${rawBusiness.registrationId}`
     : "/dashboard";
@@ -108,6 +110,7 @@ export default async function BusinessProfilePage({
     : `/search?category=${rawBusiness.categorySlug}&near=${encodeURIComponent(
         business.city,
       )}`;
+  const nextPath = `/business/${rawBusiness.slug}`;
 
   return (
     <article>
@@ -213,7 +216,7 @@ export default async function BusinessProfilePage({
             </div>
             <div>
               <h2 className="text-2xl font-bold">{labels.business.location}</h2>
-              {business.address ? (
+              {business.address && canViewContacts ? (
                 <>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {business.address}
@@ -226,6 +229,13 @@ export default async function BusinessProfilePage({
                     />
                   </div>
                 </>
+              ) : business.address ? (
+                <ContactAccessCard
+                  className="mt-3 max-w-xl"
+                  locale={locale}
+                  nextPath={nextPath}
+                  tone="map"
+                />
               ) : (
                 <p className="mt-2 text-sm text-muted-foreground">
                   {labels.business.noAddress}
@@ -238,49 +248,57 @@ export default async function BusinessProfilePage({
         <aside className="lg:pt-16">
           <div className="sticky top-24 rounded-lg border bg-card p-5 shadow-sm">
             <h2 className="text-lg font-bold">{labels.common.contact}</h2>
-            <div className="mt-4 grid gap-3 text-sm">
-              {business.phone ? (
-                <a
-                  href={`tel:${business.phone}`}
-                  className="flex items-center gap-3 rounded-md border bg-background p-3 transition hover:border-hover-blue-border hover:bg-hover-blue/35"
-                >
-                  <Phone className="h-4 w-4 text-primary" />
-                  {business.phone}
-                </a>
-              ) : null}
-              {business.website ? (
-                <a
-                  href={business.website}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-3 rounded-md border bg-background p-3 transition hover:border-hover-blue-border hover:bg-hover-blue/35"
-                >
-                  <Globe className="h-4 w-4 text-primary" />
-                  <span className="truncate">
-                    {formatExternalUrl(business.website)}
-                  </span>
-                  <ExternalLink className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
-                </a>
-              ) : null}
-              {business.instagram ? (
-                <a
-                  href={instagramUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-3 rounded-md border bg-background p-3 transition hover:border-hover-blue-border hover:bg-hover-blue/35"
-                >
-                  <Instagram className="h-4 w-4 text-primary" />
-                  {instagramHandle}
-                  <ExternalLink className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
-                </a>
-              ) : null}
-              {business.address ? (
-                <div className="flex items-start gap-3 rounded-md border bg-background p-3">
-                  <MapPin className="mt-0.5 h-4 w-4 text-primary" />
-                  <span>{business.address}</span>
-                </div>
-              ) : null}
-            </div>
+            {canViewContacts ? (
+              <div className="mt-4 grid gap-3 text-sm">
+                {business.phone ? (
+                  <a
+                    href={`tel:${business.phone}`}
+                    className="flex items-center gap-3 rounded-md border bg-background p-3 transition hover:border-hover-blue-border hover:bg-hover-blue/35"
+                  >
+                    <Phone className="h-4 w-4 text-primary" />
+                    {business.phone}
+                  </a>
+                ) : null}
+                {business.website ? (
+                  <a
+                    href={business.website}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-3 rounded-md border bg-background p-3 transition hover:border-hover-blue-border hover:bg-hover-blue/35"
+                  >
+                    <Globe className="h-4 w-4 text-primary" />
+                    <span className="truncate">
+                      {formatExternalUrl(business.website)}
+                    </span>
+                    <ExternalLink className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+                  </a>
+                ) : null}
+                {business.instagram ? (
+                  <a
+                    href={instagramUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-3 rounded-md border bg-background p-3 transition hover:border-hover-blue-border hover:bg-hover-blue/35"
+                  >
+                    <Instagram className="h-4 w-4 text-primary" />
+                    {instagramHandle}
+                    <ExternalLink className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+                  </a>
+                ) : null}
+                {business.address ? (
+                  <div className="flex items-start gap-3 rounded-md border bg-background p-3">
+                    <MapPin className="mt-0.5 h-4 w-4 text-primary" />
+                    <span>{business.address}</span>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <ContactAccessCard
+                className="mt-4"
+                locale={locale}
+                nextPath={nextPath}
+              />
+            )}
             {isOwner ? (
               <>
                 <Separator className="my-5" />

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { BusinessCard } from "@/components/business-card";
+import { ContactAccessCard } from "@/components/contact-access-card";
 import { ExploreFilters } from "@/components/explore-filters";
 import { ResultsMap } from "@/components/results-map";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +26,7 @@ import {
   localizeCity,
 } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/locale";
+import { getCurrentUser } from "@/lib/supabase/auth";
 
 type ExplorePageProps = {
   params: Promise<{
@@ -82,10 +84,16 @@ export default async function ExplorePage({
   const labels = copy[locale];
   const city = getCity(citySlug);
   const category = getCategory(categorySlug);
+  const user = await getCurrentUser();
+  const canViewContacts = Boolean(user);
 
   if (!city || !category) {
     notFound();
   }
+
+  const nextPath = `/${city.slug}/${category.slug}${
+    query ? `?q=${encodeURIComponent(query)}` : ""
+  }`;
 
   const localizedCity = localizeCity(city, locale);
   const localizedCategory = localizeCategory(category, locale);
@@ -149,6 +157,7 @@ export default async function ExplorePage({
                 <BusinessCard
                   key={business.slug}
                   business={business}
+                  canViewContacts={canViewContacts}
                   priority={index < 2}
                   locale={locale}
                 />
@@ -181,19 +190,30 @@ export default async function ExplorePage({
               </div>
               <Badge variant="outline">{localizedCategory.name}</Badge>
             </div>
-            <ResultsMap
-              businesses={exploreBusinesses}
-              title={labels.explore.mapTitle(
-                localizedCategory.name,
-                localizedCity.name,
-              )}
-              labels={{
-                mapPreview: labels.explore.mapPreview,
-                noAddresses: labels.explore.mapNoAddresses,
-                showing: labels.explore.mapShowing,
-                openInMaps: labels.explore.openInMaps,
-              }}
-            />
+            {canViewContacts ? (
+              <ResultsMap
+                businesses={exploreBusinesses}
+                title={labels.explore.mapTitle(
+                  localizedCategory.name,
+                  localizedCity.name,
+                )}
+                labels={{
+                  mapPreview: labels.explore.mapPreview,
+                  noAddresses: labels.explore.mapNoAddresses,
+                  showing: labels.explore.mapShowing,
+                  openInMaps: labels.explore.openInMaps,
+                }}
+              />
+            ) : (
+              <div className="grid min-h-[520px] place-items-center bg-muted/60 p-6">
+                <ContactAccessCard
+                  className="max-w-sm"
+                  locale={locale}
+                  nextPath={nextPath}
+                  tone="map"
+                />
+              </div>
+            )}
           </div>
         </aside>
       </section>

@@ -26,6 +26,7 @@ import {
   ExternalLink,
   Home,
   LayoutDashboard,
+  Lock,
   MapPin,
   Moon,
   Pencil,
@@ -108,6 +109,9 @@ const copy = {
     close: "Закрити",
     contactEmail: "Робочий email",
     contacts: "Контакти",
+    contactSignInText:
+      "Телефон, сайт, Instagram та адресу видно лише після входу.",
+    contactSignInTitle: "Увійдіть, щоб побачити контакти",
     contentDescription: "Опис",
     contentItems: "записів",
     contentLink: "Посилання",
@@ -216,6 +220,9 @@ const copy = {
     close: "Close",
     contactEmail: "Work email",
     contacts: "Contacts",
+    contactSignInText:
+      "Phone, website, Instagram, and address are visible after sign-in.",
+    contactSignInTitle: "Sign in to view contacts",
     contentDescription: "Description",
     contentItems: "items",
     contentLink: "Link",
@@ -820,6 +827,8 @@ export default function App() {
     );
   }
 
+  const canViewContacts = Boolean(session);
+
   return (
     <SafeAreaView style={[styles.safeArea, isDarkMode ? styles.darkSafeArea : null]}>
       <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
@@ -828,6 +837,7 @@ export default function App() {
           {activeTab === "home" ? (
             <HomeScreen
               businesses={businesses}
+              canViewContacts={canViewContacts}
               isDarkMode={isDarkMode}
               labels={labels}
               locale={locale}
@@ -848,6 +858,7 @@ export default function App() {
 
           {activeTab === "search" ? (
             <SearchScreen
+              canViewContacts={canViewContacts}
               dataMessage={dataMessage}
               isDarkMode={isDarkMode}
               labels={labels}
@@ -953,10 +964,15 @@ export default function App() {
 
       <BusinessModal
         business={selectedBusiness}
+        canViewContacts={canViewContacts}
         isDarkMode={isDarkMode}
         labels={labels}
         locale={locale}
         onClose={() => setSelectedBusiness(null)}
+        onRequireSignIn={() => {
+          setSelectedBusiness(null);
+          setActiveTab("profile");
+        }}
         onManage={() => {
           setSelectedBusiness(null);
           setActiveTab("dashboard");
@@ -991,6 +1007,7 @@ function KeyboardAwareScreen({ children }: { children: React.ReactNode }) {
 }
 
 function SearchScreen({
+  canViewContacts,
   dataMessage,
   isDarkMode,
   labels,
@@ -1006,6 +1023,7 @@ function SearchScreen({
   setSelectedCategory,
   totalCount,
 }: {
+  canViewContacts: boolean;
   dataMessage: string;
   isDarkMode: boolean;
   labels: Record<string, string>;
@@ -1104,6 +1122,7 @@ function SearchScreen({
         results.map((business) => (
           <BusinessCard
             business={business}
+            canViewContacts={canViewContacts}
             isDarkMode={isDarkMode}
             key={business.id}
             labels={labels}
@@ -1122,6 +1141,7 @@ function SearchScreen({
 
 function HomeScreen({
   businesses,
+  canViewContacts,
   isDarkMode,
   labels,
   locale,
@@ -1131,6 +1151,7 @@ function HomeScreen({
   onSearchPress,
 }: {
   businesses: Business[];
+  canViewContacts: boolean;
   isDarkMode: boolean;
   labels: Record<string, string>;
   locale: Locale;
@@ -1245,6 +1266,7 @@ function HomeScreen({
         uniqueBusinesses.slice(0, 3).map((business) => (
           <BusinessCard
             business={business}
+            canViewContacts={canViewContacts}
             isDarkMode={isDarkMode}
             key={business.id}
             labels={labels}
@@ -1267,6 +1289,7 @@ function HomeScreen({
           {featuredBusinesses.map((business) => (
             <BusinessCard
               business={business}
+              canViewContacts={canViewContacts}
               isDarkMode={isDarkMode}
               key={business.id}
               labels={labels}
@@ -2960,17 +2983,21 @@ function ProfileScreen({
 
 function BusinessCard({
   business,
+  canViewContacts,
   isDarkMode,
   labels,
   locale,
   onPress,
 }: {
   business: Business;
+  canViewContacts: boolean;
   isDarkMode: boolean;
   labels: Record<string, string>;
   locale: Locale;
   onPress: () => void;
 }) {
+  const hasContacts = hasBusinessContacts(business);
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -3004,6 +3031,18 @@ function BusinessCard({
       <Text style={[styles.descriptionText, isDarkMode ? styles.darkMutedText : null]}>
         {business.description}
       </Text>
+      {hasContacts && !canViewContacts ? (
+        <View style={[styles.lockedContactNote, isDarkMode ? styles.darkSettingRow : null]}>
+          <Lock
+            color={isDarkMode ? "#A78D78" : "#6E473B"}
+            size={16}
+            strokeWidth={2.6}
+          />
+          <Text style={[styles.lockedContactTitle, isDarkMode ? styles.darkText : null]}>
+            {labels.contactSignInTitle}
+          </Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -3112,18 +3151,22 @@ function PublicContentCard({
 
 function BusinessModal({
   business,
+  canViewContacts,
   isDarkMode,
   labels,
   locale,
   onClose,
   onManage,
+  onRequireSignIn,
 }: {
   business: Business | null;
+  canViewContacts: boolean;
   isDarkMode: boolean;
   labels: Record<string, string>;
   locale: Locale;
   onClose: () => void;
   onManage: () => void;
+  onRequireSignIn: () => void;
 }) {
   const contacts = business ? getBusinessContacts(business, labels) : [];
   const [activeModalTab, setActiveModalTab] = useState<"about" | "services" | "events">(
@@ -3232,13 +3275,21 @@ function BusinessModal({
                       >
                         {labels.contacts}
                       </Text>
-                      {contacts.map((contact) => (
-                        <ContactRow
-                          contact={contact}
+                      {canViewContacts ? (
+                        contacts.map((contact) => (
+                          <ContactRow
+                            contact={contact}
+                            isDarkMode={isDarkMode}
+                            key={contact.key}
+                          />
+                        ))
+                      ) : (
+                        <ContactSignInPrompt
                           isDarkMode={isDarkMode}
-                          key={contact.key}
+                          labels={labels}
+                          onPress={onRequireSignIn}
                         />
-                      ))}
+                      )}
                     </View>
                   ) : null}
                 </>
@@ -3297,6 +3348,39 @@ type ContactItem = {
   url: string;
   value: string;
 };
+
+function ContactSignInPrompt({
+  isDarkMode,
+  labels,
+  onPress,
+}: {
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  onPress: () => void;
+}) {
+  return (
+    <View style={[styles.contactSignInPrompt, isDarkMode ? styles.darkIconBox : null]}>
+      <View style={[styles.contactIcon, isDarkMode ? styles.darkSettingRow : null]}>
+        <Lock color={isDarkMode ? "#A78D78" : "#6E473B"} size={18} strokeWidth={2.5} />
+      </View>
+      <View style={styles.flex}>
+        <Text style={[styles.contactSectionTitle, isDarkMode ? styles.darkText : null]}>
+          {labels.contactSignInTitle}
+        </Text>
+        <Text style={[styles.contactSignInText, isDarkMode ? styles.darkMutedText : null]}>
+          {labels.contactSignInText}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onPress}
+          style={styles.contactSignInButton}
+        >
+          <Text style={styles.contactSignInButtonText}>{labels.signInGoogle}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
 
 function ContactRow({
   contact,
@@ -3731,6 +3815,15 @@ function hasBusinessOwnerInfo(business: Business) {
   return Boolean(
     business.ownerId &&
       (business.ownerName.trim() || business.ownerAvatarUrl?.trim()),
+  );
+}
+
+function hasBusinessContacts(business: Business) {
+  return Boolean(
+    business.phone ||
+      business.website ||
+      business.instagram ||
+      business.address,
   );
 }
 
@@ -4381,6 +4474,38 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "900",
   },
+  contactSignInButton: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "#6E473B",
+    borderRadius: 12,
+    justifyContent: "center",
+    marginTop: 12,
+    minHeight: 42,
+    paddingHorizontal: 14,
+  },
+  contactSignInButtonText: {
+    color: "#E1D4C2",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  contactSignInPrompt: {
+    alignItems: "flex-start",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    padding: 12,
+  },
+  contactSignInText: {
+    color: "#6E473B",
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 19,
+    marginTop: 4,
+  },
   contentArea: {
     flex: 1,
     minHeight: 0,
@@ -4899,6 +5024,23 @@ const styles = StyleSheet.create({
     shadowOffset: { height: -8, width: 0 },
     shadowOpacity: 0.18,
     shadowRadius: 28,
+  },
+  lockedContactNote: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "#E1D4C2",
+    borderColor: "#A78D78",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 7,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+  },
+  lockedContactTitle: {
+    color: "#291C0E",
+    fontSize: 12,
+    fontWeight: "900",
   },
   logoPreviewImage: {
     borderRadius: 13,

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ExternalLink, Globe2, MapPin, Phone } from "lucide-react";
+import { ExternalLink, Globe2, Lock, MapPin, Phone } from "lucide-react";
 
 import { BusinessLogo } from "@/components/business-logo";
 import { BusinessOwnerChip } from "@/components/business-owner-chip";
@@ -11,12 +11,14 @@ import type { Locale } from "@/lib/i18n";
 
 type BusinessCardProps = {
   business: Business;
+  canViewContacts: boolean;
   priority?: boolean;
   locale: Locale;
 };
 
 export function BusinessCard({
   business,
+  canViewContacts,
   locale,
 }: BusinessCardProps) {
   const hasContactPreview = Boolean(business.phone || business.website);
@@ -30,6 +32,10 @@ export function BusinessCard({
   );
   const servesAllCanadaLabel =
     locale === "uk" ? "Онлайн · по всій Канаді" : "Online · Canada-wide";
+  const contactLockedLabel =
+    locale === "uk"
+      ? "Увійдіть, щоб побачити контакти"
+      : "Sign in to view contact details";
 
   return (
     <Card className="group overflow-hidden border-white/70 bg-card/95 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-1 hover:border-hover-blue-border hover:shadow-lift dark:border-white/10">
@@ -81,7 +87,7 @@ export function BusinessCard({
               {business.description}
             </p>
           </div>
-          {hasContactPreview ? (
+          {hasContactPreview && canViewContacts ? (
             <div className="grid gap-2 border-t pt-3 text-sm text-muted-foreground">
               {business.phone ? (
                 <span className="flex items-center gap-2">
@@ -95,6 +101,12 @@ export function BusinessCard({
                   {formatExternalUrl(business.website)}
                 </span>
               ) : null}
+            </div>
+          ) : null}
+          {hasContactPreview && !canViewContacts ? (
+            <div className="flex items-center gap-2 border-t pt-3 text-sm font-bold text-muted-foreground">
+              <Lock className="h-4 w-4 text-primary" />
+              {contactLockedLabel}
             </div>
           ) : null}
         </CardContent>
