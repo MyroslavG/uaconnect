@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { headers } from "next/headers";
 import Link from "next/link";
 import {
   CheckCircle2,
@@ -35,6 +36,10 @@ export const metadata: Metadata = {
 type Registration =
   Database["public"]["Tables"]["business_registrations"]["Row"];
 type BusinessRow = Database["public"]["Tables"]["businesses"]["Row"];
+type UnownedBusinessOption = Pick<BusinessRow, "id" | "name" | "city"> & {
+  claimUrl?: string;
+  ownerEmail?: string | null;
+};
 type BusinessChange = {
   after: string;
   before: string;
@@ -117,13 +122,25 @@ export default async function AdminRegistrationsPage() {
   ]);
   let registrations: Registration[] = [];
   let businessesByRegistrationId = new Map<string, BusinessRow>();
-  let unownedBusinesses: Pick<BusinessRow, "id" | "name" | "city">[] = [];
+  let unownedBusinesses: UnownedBusinessOption[] = [];
   let errorMessage = "";
   const localizedCategories = localizeCategories(categories, locale);
   const localizedCities = localizeCities(cities, locale);
 
   if (isSupabaseConfigured() && user && isAdmin) {
     const supabase = await createClient();
+    const requestHeaders = await headers();
+    const configuredOrigin = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(
+      /\/$/,
+      "",
+    );
+    const requestOrigin =
+      requestHeaders.get("origin") ??
+      (requestHeaders.get("host")
+        ? `${requestHeaders.get("x-forwarded-proto") ?? "https"}://${requestHeaders.get("host")}`
+        : null) ??
+      configuredOrigin ??
+      "http://localhost:3000";
     const [registrationsResult, businessesResult] = await Promise.all([
       supabase
         .from("business_registrations")
@@ -141,6 +158,44 @@ export default async function AdminRegistrationsPage() {
     unownedBusinesses = businessesResult.data ?? [];
     errorMessage =
       registrationsResult.error?.message ?? businessesResult.error?.message ?? "";
+
+    if (unownedBusinesses.length > 0) {
+      const { data: activeInvites, error: activeInvitesError } = await supabase
+        .from("business_claim_invites")
+        .select("business_id, token, invited_email, expires_at, created_at")
+        .in(
+          "business_id",
+          unownedBusinesses.map((business) => business.id),
+        )
+        .is("used_at", null)
+        .is("revoked_at", null)
+        .gt("expires_at", new Date().toISOString())
+        .not("token", "is", null)
+        .order("created_at", { ascending: false });
+      const inviteByBusinessId = new Map<
+        string,
+        NonNullable<typeof activeInvites>[number]
+      >();
+
+      for (const invite of activeInvites ?? []) {
+        if (invite.token && !inviteByBusinessId.has(invite.business_id)) {
+          inviteByBusinessId.set(invite.business_id, invite);
+        }
+      }
+
+      unownedBusinesses = unownedBusinesses.map((business) => {
+        const invite = inviteByBusinessId.get(business.id);
+
+        return {
+          ...business,
+          claimUrl: invite?.token
+            ? `${requestOrigin}/claim/${invite.token}`
+            : undefined,
+          ownerEmail: invite?.invited_email,
+        };
+      });
+      errorMessage = errorMessage || activeInvitesError?.message || "";
+    }
 
     if (registrations.length > 0) {
       const { data: existingBusinesses, error: existingBusinessesError } =

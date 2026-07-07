@@ -105,6 +105,7 @@ alter table public.businesses
 create table if not exists public.business_claim_invites (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null references public.businesses(id) on delete cascade,
+  token text,
   token_hash text not null unique,
   invited_email text,
   expires_at timestamptz not null default (now() + interval '14 days'),
@@ -115,6 +116,9 @@ create table if not exists public.business_claim_invites (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.business_claim_invites
+  add column if not exists token text;
 
 create index if not exists business_claim_invites_business_id_idx
 on public.business_claim_invites (business_id);

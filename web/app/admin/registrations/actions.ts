@@ -17,7 +17,13 @@ import { slugify } from "@/lib/utils";
 type AdminBusinessActionState = {
   ok: boolean;
   message: string;
+  businessId?: string;
   claimUrl?: string;
+  createdBusiness?: {
+    id: string;
+    city: string;
+    name: string;
+  };
   ownerEmail?: string;
 };
 
@@ -47,6 +53,24 @@ async function requireAdmin() {
   }
 
   return user;
+}
+
+async function getRequestOrigin() {
+  const requestHeaders = await headers();
+  const configuredOrigin = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(
+    /\/$/,
+    "",
+  );
+  const forwardedHost =
+    requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+  const forwardedProto = requestHeaders.get("x-forwarded-proto") ?? "https";
+
+  return (
+    requestHeaders.get("origin") ??
+    (forwardedHost ? `${forwardedProto}://${forwardedHost}` : null) ??
+    configuredOrigin ??
+    "http://localhost:3000"
+  );
 }
 
 async function getUniqueBusinessSlug(
@@ -290,6 +314,11 @@ export async function createAdminBusiness(
     return {
       ok: true,
       message: "Business was published without an owner. Generate a claim link next.",
+      createdBusiness: {
+        id: businessId,
+        city,
+        name: businessName,
+      },
     };
   } catch (error) {
     return {
@@ -337,11 +366,53 @@ export async function createClaimInvite(
       };
     }
 
+    const origin = await getRequestOrigin();
+    const { data: activeInvites, error: activeInviteError } = await supabase
+      .from("business_claim_invites")
+      .select("token, invited_email, expires_at")
+      .eq("business_id", business.id)
+      .is("used_at", null)
+      .is("revoked_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .not("token", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    if (activeInviteError) {
+      return {
+        ok: false,
+        message: activeInviteError.message,
+      };
+    }
+
+    const reusableInvite = activeInvites?.find((invite) => {
+      if (!invite.token) {
+        return false;
+      }
+
+      if (!ownerEmail || !invite.invited_email) {
+        return true;
+      }
+
+      return invite.invited_email.toLowerCase() === ownerEmail;
+    });
+
+    if (reusableInvite?.token) {
+      return {
+        ok: true,
+        businessId: business.id,
+        message: `Active claim link found for ${business.name}.`,
+        claimUrl: `${origin}/claim/${reusableInvite.token}`,
+        ownerEmail: reusableInvite.invited_email ?? ownerEmail ?? undefined,
+      };
+    }
+
     const token = randomBytes(32).toString("base64url");
     const tokenHash = createHash("sha256").update(token).digest("hex");
     const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
     const { error } = await supabase.from("business_claim_invites").insert({
       business_id: business.id,
+      token,
       token_hash: tokenHash,
       invited_email: ownerEmail,
       expires_at: expiresAt,
@@ -355,16 +426,11 @@ export async function createClaimInvite(
       };
     }
 
-    const requestHeaders = await headers();
-    const origin =
-      requestHeaders.get("origin") ??
-      process.env.NEXT_PUBLIC_SITE_URL ??
-      "http://localhost:3000";
-
     revalidatePath("/admin/registrations");
 
     return {
       ok: true,
+      businessId: business.id,
       message: `Claim link created for ${business.name}. It expires in 14 days.`,
       claimUrl: `${origin}/claim/${token}`,
       ownerEmail: ownerEmail ?? undefined,

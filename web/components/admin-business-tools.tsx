@@ -1,8 +1,7 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { BriefcaseBusiness, Link2, Mail, Plus } from "lucide-react";
+import { useActionState, useEffect, useMemo, useState } from "react";
+import { BriefcaseBusiness, Check, Copy, Link2, Mail, Plus } from "lucide-react";
 
 import {
   createAdminBusiness,
@@ -18,18 +17,24 @@ import type { Database } from "@/lib/supabase/database.types";
 import type { Category, City } from "@/lib/types";
 
 type BusinessRow = Database["public"]["Tables"]["businesses"]["Row"];
+type UnownedBusiness = Pick<BusinessRow, "id" | "name" | "city"> & {
+  claimUrl?: string;
+  ownerEmail?: string | null;
+};
 
 type AdminBusinessToolsProps = {
   categories: Category[];
   cities: City[];
   locale: Locale;
-  unownedBusinesses: Pick<BusinessRow, "id" | "name" | "city">[];
+  unownedBusinesses: UnownedBusiness[];
 };
 
 type ActionState = {
   ok: boolean;
   message: string;
+  businessId?: string;
   claimUrl?: string;
+  createdBusiness?: Pick<BusinessRow, "id" | "name" | "city">;
   ownerEmail?: string;
 };
 
@@ -69,6 +74,8 @@ const text = {
     generating: "Створюємо...",
     noBusinesses: "Немає бізнесів без власника.",
     generatedLink: "Приватне посилання",
+    copy: "Скопіювати",
+    copied: "Скопійовано",
     sendEmail: "Надіслати email",
   },
   en: {
@@ -101,6 +108,8 @@ const text = {
     generating: "Creating...",
     noBusinesses: "No unowned businesses.",
     generatedLink: "Private link",
+    copy: "Copy link",
+    copied: "Copied",
     sendEmail: "Send email",
   },
 } satisfies Record<Locale, Record<string, string>>;
@@ -112,7 +121,10 @@ export function AdminBusinessTools({
   unownedBusinesses,
 }: AdminBusinessToolsProps) {
   const labels = text[locale];
-  const router = useRouter();
+  const [businessOptions, setBusinessOptions] =
+    useState<UnownedBusiness[]>(unownedBusinesses);
+  const [selectedBusinessId, setSelectedBusinessId] = useState("");
+  const [copiedLink, setCopiedLink] = useState("");
   const [createState, createAction, isCreating] = useActionState(
     createAdminBusiness,
     initialState,
@@ -121,11 +133,26 @@ export function AdminBusinessTools({
     createClaimInvite,
     initialState,
   );
-  const emailBody = claimState.claimUrl
+  const selectedBusiness = useMemo(
+    () =>
+      businessOptions.find((business) => business.id === selectedBusinessId) ??
+      null,
+    [businessOptions, selectedBusinessId],
+  );
+  const actionClaimMatchesSelection =
+    claimState.businessId !== undefined &&
+    claimState.businessId === selectedBusinessId;
+  const displayedClaimUrl = actionClaimMatchesSelection
+    ? claimState.claimUrl
+    : selectedBusiness?.claimUrl;
+  const displayedOwnerEmail = actionClaimMatchesSelection
+    ? claimState.ownerEmail
+    : selectedBusiness?.ownerEmail;
+  const emailBody = displayedClaimUrl
     ? encodeURIComponent(
         locale === "uk"
-          ? `Вітаю! Я створив(ла) для вас доступ до профілю бізнесу на UAConnect. Відкрийте це посилання, увійдіть через Google і підтвердіть доступ:\n\n${claimState.claimUrl}`
-          : `Hi! I created access for your business profile on UAConnect. Open this link, sign in with Google, and confirm access:\n\n${claimState.claimUrl}`,
+          ? `Вітаю! Я створив(ла) для вас доступ до профілю бізнесу на UAConnect. Відкрийте це посилання, увійдіть через Google і підтвердіть доступ:\n\n${displayedClaimUrl}`
+          : `Hi! I created access for your business profile on UAConnect. Open this link, sign in with Google, and confirm access:\n\n${displayedClaimUrl}`,
       )
     : "";
   const emailSubject = encodeURIComponent(
@@ -133,12 +160,65 @@ export function AdminBusinessTools({
       ? "Доступ до профілю бізнесу на UAConnect"
       : "UAConnect business profile access",
   );
+  const hasCopiedDisplayedLink = copiedLink === displayedClaimUrl;
+  const copyClaimLink = () => {
+    if (!displayedClaimUrl) {
+      return;
+    }
+
+    void navigator.clipboard.writeText(displayedClaimUrl).then(() => {
+      setCopiedLink(displayedClaimUrl);
+    });
+  };
 
   useEffect(() => {
-    if (createState.ok) {
-      router.refresh();
+    setBusinessOptions(unownedBusinesses);
+  }, [unownedBusinesses]);
+
+  useEffect(() => {
+    const createdBusiness = createState.createdBusiness;
+
+    if (!createState.ok || !createdBusiness) {
+      return;
     }
-  }, [createState.ok, router]);
+
+    setBusinessOptions((currentBusinesses) => {
+      const existingBusiness = currentBusinesses.find(
+        (business) => business.id === createdBusiness.id,
+      );
+
+      if (existingBusiness) {
+        return currentBusinesses;
+      }
+
+      return [createdBusiness, ...currentBusinesses];
+    });
+    setSelectedBusinessId(createdBusiness.id);
+  }, [createState.createdBusiness, createState.ok]);
+
+  useEffect(() => {
+    if (!claimState.ok || !claimState.businessId || !claimState.claimUrl) {
+      return;
+    }
+
+    setSelectedBusinessId(claimState.businessId);
+    setBusinessOptions((currentBusinesses) =>
+      currentBusinesses.map((business) =>
+        business.id === claimState.businessId
+          ? {
+              ...business,
+              claimUrl: claimState.claimUrl,
+              ownerEmail: claimState.ownerEmail ?? business.ownerEmail,
+            }
+          : business,
+      ),
+    );
+  }, [
+    claimState.businessId,
+    claimState.claimUrl,
+    claimState.ok,
+    claimState.ownerEmail,
+  ]);
 
   return (
     <div className="mb-8 grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
@@ -266,15 +346,17 @@ export function AdminBusinessTools({
               <select
                 name="businessId"
                 required
-                disabled={unownedBusinesses.length === 0}
+                value={selectedBusinessId}
+                disabled={businessOptions.length === 0}
+                onChange={(event) => setSelectedBusinessId(event.target.value)}
                 className="h-11 rounded-md border border-input bg-background/85 px-3 text-sm shadow-sm outline-none transition focus:border-primary/45 focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
               >
                 <option value="">
-                  {unownedBusinesses.length
+                  {businessOptions.length
                     ? labels.chooseBusiness
                     : labels.noBusinesses}
                 </option>
-                {unownedBusinesses.map((business) => (
+                {businessOptions.map((business) => (
                   <option key={business.id} value={business.id}>
                     {business.name} · {business.city}
                   </option>
@@ -287,7 +369,7 @@ export function AdminBusinessTools({
 
             <Button
               type="submit"
-              disabled={isGenerating || unownedBusinesses.length === 0}
+              disabled={isGenerating || businessOptions.length === 0}
             >
               <Link2 className="h-4 w-4" />
               {isGenerating ? labels.generating : labels.generate}
@@ -295,14 +377,24 @@ export function AdminBusinessTools({
             <ActionMessage state={claimState} />
           </form>
 
-          {claimState.claimUrl ? (
+          {displayedClaimUrl ? (
             <div className="mt-5 grid gap-3 rounded-lg border border-primary/20 bg-primary/10 p-4">
               <Label className="text-sm font-black">{labels.generatedLink}</Label>
-              <Input readOnly value={claimState.claimUrl} />
-              {claimState.ownerEmail ? (
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                <Input readOnly value={displayedClaimUrl} />
+                <Button type="button" variant="outline" onClick={copyClaimLink}>
+                  {hasCopiedDisplayedLink ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                  {hasCopiedDisplayedLink ? labels.copied : labels.copy}
+                </Button>
+              </div>
+              {displayedOwnerEmail ? (
                 <Button asChild variant="outline">
                   <a
-                    href={`mailto:${claimState.ownerEmail}?subject=${emailSubject}&body=${emailBody}`}
+                    href={`mailto:${displayedOwnerEmail}?subject=${emailSubject}&body=${emailBody}`}
                   >
                     <Mail className="h-4 w-4" />
                     {labels.sendEmail}

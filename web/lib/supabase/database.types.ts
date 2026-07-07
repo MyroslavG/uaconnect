@@ -176,6 +176,7 @@ export type Database = {
         Row: {
           id: string;
           business_id: string;
+          token: string | null;
           token_hash: string;
           invited_email: string | null;
           expires_at: string;
@@ -189,6 +190,7 @@ export type Database = {
         Insert: {
           id?: string;
           business_id: string;
+          token?: string | null;
           token_hash: string;
           invited_email?: string | null;
           expires_at?: string;
@@ -202,6 +204,7 @@ export type Database = {
         Update: {
           id?: string;
           business_id?: string;
+          token?: string | null;
           token_hash?: string;
           invited_email?: string | null;
           expires_at?: string;
