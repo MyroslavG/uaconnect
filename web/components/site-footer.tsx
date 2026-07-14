@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 import { categories, cities } from "@/lib/data";
 import { copy, localizeCategories, localizeCities, type Locale } from "@/lib/i18n";
@@ -11,17 +12,33 @@ export function SiteFooter({ locale }: SiteFooterProps) {
   const labels = copy[locale].footer;
   const localizedCities = localizeCities(cities, locale);
   const localizedCategories = localizeCategories(categories, locale);
+  const privacyLabel = locale === "uk" ? "Політика конфіденційності" : "Privacy Policy";
 
   return (
     <footer className="border-t bg-card/40">
       <div className="container grid gap-8 py-10 md:grid-cols-[1.5fr_1fr_1fr]">
         <div>
-          <Link href="/" className="text-lg font-black">
-            UAConnect
+          <Link href="/" className="inline-flex items-center gap-2 text-lg font-black">
+            <span className="grid h-9 w-9 place-items-center overflow-hidden rounded-md border bg-card">
+              <Image
+                alt=""
+                className="h-7 w-7 object-contain dark:invert"
+                height={28}
+                src="/kolo-logo.png"
+                width={28}
+              />
+            </span>
+            <span>Kolo</span>
           </Link>
           <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">
             {labels.text}
           </p>
+          <Link
+            className="mt-4 inline-flex text-sm font-bold text-muted-foreground transition hover:text-foreground"
+            href="/privacy"
+          >
+            {privacyLabel}
+          </Link>
         </div>
         <div>
           <p className="text-sm font-semibold">{labels.cities}</p>

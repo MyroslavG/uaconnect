@@ -1,6 +1,6 @@
-# UAConnect
+# Kolo
 
-UAConnect is a Next.js 15 App Router application for discovering Ukrainian-owned and Ukraine-connected businesses in Canada. The app uses TypeScript, Tailwind CSS, local shadcn/ui-style components, Supabase Auth, and a Supabase-ready verification backend.
+Kolo is a Next.js 15 App Router application for discovering Ukrainian-owned and Ukraine-connected businesses in Canada. The app uses TypeScript, Tailwind CSS, local shadcn/ui-style components, Supabase Auth, and a Supabase-ready verification backend.
 
 Ukrainian is the default language. English is available through the header language toggle.
 
@@ -8,7 +8,7 @@ Ukrainian is the default language. English is available through the header langu
 
 - Modern responsive homepage, location search, city/category exploration, and business profiles
 - Global search page at `/search` with city/category filters and nearby location suggestions
-- Map panels use addresses from UAConnect listings instead of generic Google Maps category searches
+- Map panels use addresses from Kolo listings instead of generic Google Maps category searches
 - Google sign-in through Supabase Auth
 - Business owner registration form at `/register`
 - Owner dashboard at `/dashboard` with editable business details

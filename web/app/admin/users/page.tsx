@@ -29,7 +29,7 @@ import type { Locale } from "@/lib/i18n";
 
 export const metadata: Metadata = {
   title: "Admin users",
-  description: "Manage UAConnect user profile information.",
+  description: "Manage Kolo user profile information.",
 };
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];

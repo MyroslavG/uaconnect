@@ -30,7 +30,7 @@ import type { Locale } from "@/lib/i18n";
 
 export const metadata: Metadata = {
   title: "Business verification",
-  description: "Review and approve UAConnect business registrations.",
+  description: "Review and approve Kolo business registrations.",
 };
 
 type Registration =

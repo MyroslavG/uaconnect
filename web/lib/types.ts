@@ -15,6 +15,27 @@ export type Category = {
   description: string;
 };
 
+export type BusinessContentType = "service" | "event";
+
+export type BusinessContentItem = {
+  id: string;
+  registrationId: string;
+  ownerId: string;
+  type: BusinessContentType;
+  title: string;
+  description: string;
+  imageUrl?: string;
+  isFree: boolean;
+  isOnline: boolean;
+  price?: string;
+  startsAt?: string;
+  location?: string;
+  linkUrl?: string;
+  status: "draft" | "published";
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type Business = {
   id: string;
   registrationId?: string;
@@ -42,6 +63,7 @@ export type Business = {
   featured: boolean;
   hours: string;
   tags: string[];
+  contentItems?: BusinessContentItem[];
   distanceInKm?: number;
   verifiedAt?: string;
 };

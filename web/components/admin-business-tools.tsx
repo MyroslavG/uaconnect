@@ -151,14 +151,14 @@ export function AdminBusinessTools({
   const emailBody = displayedClaimUrl
     ? encodeURIComponent(
         locale === "uk"
-          ? `Вітаю! Я створив(ла) для вас доступ до профілю бізнесу на UAConnect. Відкрийте це посилання, увійдіть через Google і підтвердіть доступ:\n\n${displayedClaimUrl}`
-          : `Hi! I created access for your business profile on UAConnect. Open this link, sign in with Google, and confirm access:\n\n${displayedClaimUrl}`,
+          ? `Вітаю! Я створив(ла) для вас доступ до профілю бізнесу на Kolo. Відкрийте це посилання, увійдіть через Google і підтвердіть доступ:\n\n${displayedClaimUrl}`
+          : `Hi! I created access for your business profile on Kolo. Open this link, sign in with Google, and confirm access:\n\n${displayedClaimUrl}`,
       )
     : "";
   const emailSubject = encodeURIComponent(
     locale === "uk"
-      ? "Доступ до профілю бізнесу на UAConnect"
-      : "UAConnect business profile access",
+      ? "Доступ до профілю бізнесу на Kolo"
+      : "Kolo business profile access",
   );
   const hasCopiedDisplayedLink = copiedLink === displayedClaimUrl;
   const copyClaimLink = () => {

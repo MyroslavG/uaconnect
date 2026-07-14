@@ -24,7 +24,7 @@ const text = {
     kicker: "Доступ власника",
     title: "Підтвердіть доступ до бізнесу",
     intro:
-      "Це приватне посилання створене адміністратором UAConnect для передачі профілю власнику бізнесу.",
+      "Це приватне посилання створене адміністратором Kolo для передачі профілю власнику бізнесу.",
     signInTitle: "Увійдіть через Google",
     signInText:
       "Після входу ви побачите підтвердження і зможете прив'язати бізнес до свого акаунта.",
@@ -40,7 +40,7 @@ const text = {
     kicker: "Owner access",
     title: "Confirm business access",
     intro:
-      "This private link was created by a UAConnect admin to transfer a profile to the business owner.",
+      "This private link was created by a Kolo admin to transfer a profile to the business owner.",
     signInTitle: "Sign in with Google",
     signInText:
       "After sign-in, you will see the confirmation and can connect the business to your account.",

@@ -36,9 +36,10 @@ export function BusinessCard({
     locale === "uk"
       ? "Увійдіть, щоб побачити контакти"
       : "Sign in to view contact details";
+  const descriptionPreview = truncateText(business.description, 150);
 
   return (
-    <Card className="group overflow-hidden border-white/70 bg-card/95 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-1 hover:border-hover-blue-border hover:shadow-lift dark:border-white/10">
+    <Card className="group overflow-hidden border-border bg-card shadow-sm transition duration-300 hover:-translate-y-1 hover:border-hover-blue-border hover:shadow-soft">
       <Link
         href={`/business/${business.slug}`}
         className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -66,7 +67,7 @@ export function BusinessCard({
             </div>
             <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
               {business.servesAllCanada ? (
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 font-semibold text-primary">
+                <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary px-2 py-1 font-semibold text-foreground">
                   <Globe2 className="h-3.5 w-3.5" />
                   {servesAllCanadaLabel}
                 </span>
@@ -83,8 +84,11 @@ export function BusinessCard({
               className="mt-3"
               name={business.ownerName}
             />
-            <p className="mt-3 line-clamp-2 text-sm leading-6 text-muted-foreground">
-              {business.description}
+            <p
+              className="mt-3 line-clamp-2 text-sm leading-6 text-muted-foreground"
+              title={business.description}
+            >
+              {descriptionPreview}
             </p>
           </div>
           {hasContactPreview && canViewContacts ? (
@@ -113,4 +117,14 @@ export function BusinessCard({
       </Link>
     </Card>
   );
+}
+
+function truncateText(text: string, maxLength: number) {
+  const trimmedText = text.trim();
+
+  if (trimmedText.length <= maxLength) {
+    return trimmedText;
+  }
+
+  return `${trimmedText.slice(0, maxLength).trimEnd()}...`;
 }

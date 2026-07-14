@@ -35,7 +35,7 @@ const text = {
     trigger: "Редагувати профіль",
     title: "Профіль власника",
     description:
-      "Ці дані використовуються в UAConnect. Email Google акаунта показаний окремо і керується через Google.",
+      "Ці дані використовуються в Kolo. Email Google акаунта показаний окремо і керується через Google.",
     name: "Ім'я",
     contactEmail: "Контактний email",
     googleEmail: "Google акаунт",
@@ -51,7 +51,7 @@ const text = {
     trigger: "Edit profile",
     title: "Owner profile",
     description:
-      "These details are used on UAConnect. Your Google account email is shown separately and managed by Google.",
+      "These details are used on Kolo. Your Google account email is shown separately and managed by Google.",
     name: "Name",
     contactEmail: "Contact email",
     googleEmail: "Google account",

@@ -4,54 +4,54 @@
 
 @layer base {
   :root {
-    --background: 40 24% 97%;
-    --foreground: 190 14% 9%;
+    --background: 240 12% 98%;
+    --foreground: 240 6% 8%;
     --card: 0 0% 100%;
-    --card-foreground: 190 14% 9%;
+    --card-foreground: 240 6% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 190 14% 9%;
-    --primary: 166 43% 27%;
-    --primary-foreground: 40 32% 97%;
-    --secondary: 165 16% 91%;
-    --secondary-foreground: 190 14% 12%;
-    --muted: 180 12% 92%;
-    --muted-foreground: 190 8% 39%;
-    --accent: 199 89% 63%;
-    --accent-foreground: 202 58% 13%;
-    --hover-blue: 202 90% 91%;
-    --hover-blue-foreground: 202 58% 18%;
-    --hover-blue-border: 201 86% 73%;
+    --popover-foreground: 240 6% 10%;
+    --primary: 240 6% 10%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 6% 94%;
+    --secondary-foreground: 240 6% 12%;
+    --muted: 240 7% 94%;
+    --muted-foreground: 240 4% 45%;
+    --accent: 240 6% 12%;
+    --accent-foreground: 0 0% 100%;
+    --hover-blue: 240 8% 93%;
+    --hover-blue-foreground: 240 6% 8%;
+    --hover-blue-border: 240 6% 78%;
     --destructive: 0 72% 50%;
     --destructive-foreground: 0 0% 100%;
-    --border: 180 10% 84%;
-    --input: 180 10% 84%;
-    --ring: 166 43% 27%;
+    --border: 240 6% 86%;
+    --input: 240 6% 86%;
+    --ring: 240 6% 18%;
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 190 11% 8%;
-    --foreground: 40 22% 94%;
-    --card: 190 10% 11%;
-    --card-foreground: 40 22% 94%;
-    --popover: 190 10% 11%;
-    --popover-foreground: 40 22% 94%;
-    --primary: 166 43% 58%;
-    --primary-foreground: 190 14% 8%;
-    --secondary: 185 8% 17%;
-    --secondary-foreground: 40 22% 94%;
-    --muted: 185 8% 16%;
-    --muted-foreground: 42 10% 70%;
-    --accent: 199 89% 68%;
-    --accent-foreground: 202 58% 10%;
-    --hover-blue: 202 76% 24%;
-    --hover-blue-foreground: 198 92% 88%;
-    --hover-blue-border: 200 80% 55%;
+    --background: 240 6% 4%;
+    --foreground: 240 7% 96%;
+    --card: 240 5% 11%;
+    --card-foreground: 240 7% 96%;
+    --popover: 240 5% 11%;
+    --popover-foreground: 240 7% 96%;
+    --primary: 240 7% 96%;
+    --primary-foreground: 240 6% 5%;
+    --secondary: 240 4% 16%;
+    --secondary-foreground: 240 7% 96%;
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 5% 66%;
+    --accent: 240 7% 96%;
+    --accent-foreground: 240 6% 5%;
+    --hover-blue: 240 4% 18%;
+    --hover-blue-foreground: 240 7% 96%;
+    --hover-blue-border: 240 4% 30%;
     --destructive: 0 68% 48%;
     --destructive-foreground: 0 0% 100%;
-    --border: 185 8% 22%;
-    --input: 185 8% 22%;
-    --ring: 166 43% 58%;
+    --border: 240 4% 20%;
+    --input: 240 4% 20%;
+    --ring: 240 7% 82%;
   }
 
   * {
@@ -73,10 +73,7 @@
   body {
     @apply bg-background text-foreground antialiased;
     background-image:
-      linear-gradient(180deg, hsl(var(--background)) 0%, hsl(166 24% 94%) 42%, hsl(var(--background)) 100%),
-      linear-gradient(90deg, rgb(31 96 82 / 0.045) 1px, transparent 1px),
-      linear-gradient(180deg, rgb(31 96 82 / 0.045) 1px, transparent 1px);
-    background-size: auto, 42px 42px, 42px 42px;
+      radial-gradient(circle at top, hsl(0 0% 100%) 0%, hsl(var(--background)) 38%, hsl(var(--background)) 100%);
     font-family:
       Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
       "Segoe UI", sans-serif;
@@ -84,9 +81,7 @@
 
   .dark body {
     background-image:
-      linear-gradient(180deg, hsl(var(--background)) 0%, hsl(176 13% 10%) 52%, hsl(var(--background)) 100%),
-      linear-gradient(90deg, rgb(116 202 184 / 0.045) 1px, transparent 1px),
-      linear-gradient(180deg, rgb(116 202 184 / 0.045) 1px, transparent 1px);
+      radial-gradient(circle at top, hsl(240 5% 13%) 0%, hsl(var(--background)) 44%, hsl(var(--background)) 100%);
   }
 
   ::selection {
@@ -101,7 +96,7 @@
   }
 
   .premium-panel {
-    @apply border border-white/70 bg-white/85 shadow-soft backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/70;
+    @apply border border-border bg-card shadow-soft;
   }
 
   .section-kicker {

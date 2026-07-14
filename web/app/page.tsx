@@ -1,36 +1,58 @@
 import Link from "next/link";
-import { ArrowRight, MapPin } from "lucide-react";
+import {
+  ArrowRight,
+  CalendarDays,
+  Compass,
+  Globe2,
+  MapPin,
+  Search,
+  Sparkles,
+  Store,
+  Utensils,
+} from "lucide-react";
 
 import { CategoryGrid } from "@/components/category-grid";
 import { SearchPanel } from "@/components/search-panel";
 import { Badge } from "@/components/ui/badge";
 import { categories, cities } from "@/lib/data";
+import { getDirectoryBusinesses } from "@/lib/directory-data";
 import { copy, localizeCategories, localizeCities } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/locale";
+import type { Business } from "@/lib/types";
 
 export default async function HomePage() {
   const locale = await getRequestLocale();
   const labels = copy[locale].home;
+  const contentLabels = getHomeContentLabels(locale);
   const localizedCities = localizeCities(cities, locale).map((city) => ({
     ...city,
     summary: "",
   }));
   const localizedCategories = localizeCategories(categories, locale);
+  const directoryBusinesses = await getDirectoryBusinesses();
+  const featuredContentItems = getFeaturedContentItems(directoryBusinesses, 6);
+  const featuredBusinesses = getFeaturedBusinesses(directoryBusinesses, 5);
+  const homeStats = getHomeStats(
+    directoryBusinesses,
+    localizedCategories.length,
+    localizedCities.length,
+    locale,
+  );
+  const quickPlans = getQuickPlans(locale);
 
   return (
     <>
-      <section className="relative isolate overflow-hidden bg-neutral-950">
-        <div className="absolute inset-0 bg-[linear-gradient(115deg,rgba(10,12,11,0.98)_0%,rgba(20,32,36,0.92)_52%,rgba(40,56,62,0.82)_100%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0,transparent_47px,rgba(255,255,255,0.045)_48px),linear-gradient(0deg,transparent_0,transparent_47px,rgba(255,255,255,0.045)_48px)] bg-[size:48px_48px]" />
-        <div className="container relative grid min-h-[600px] gap-8 py-12 text-white md:py-16 lg:grid-cols-[1fr_360px] lg:items-center">
+      <section className="relative isolate overflow-hidden border-b bg-background">
+        <div className="absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_top,hsl(var(--foreground)/0.08),transparent_62%)]" />
+        <div className="container relative grid min-h-[600px] gap-8 py-12 md:py-16 lg:grid-cols-[1fr_360px] lg:items-center">
           <div className="max-w-3xl">
-            <Badge className="border-accent/30 bg-accent/15 text-accent hover:border-hover-blue-border hover:bg-hover-blue hover:text-hover-blue-foreground">
+            <Badge variant="outline" className="bg-card text-foreground">
               {labels.badge}
             </Badge>
             <h1 className="mt-5 text-balance text-5xl font-black tracking-normal sm:text-6xl lg:text-7xl">
-              UAConnect
+              Kolo
             </h1>
-            <p className="mt-5 max-w-2xl text-balance text-lg leading-8 text-white/85">
+            <p className="mt-5 max-w-2xl text-balance text-lg leading-8 text-muted-foreground">
               {labels.intro}
             </p>
             <div className="mt-8">
@@ -45,35 +67,68 @@ export default async function HomePage() {
                 <Link
                   key={city.slug}
                   href={`/search?city=${city.slug}`}
-                  className="rounded-md border border-white/20 bg-white/10 px-3 py-2 text-sm font-bold text-white/90 backdrop-blur transition hover:border-hover-blue-border hover:bg-hover-blue hover:text-hover-blue-foreground"
+                  className="rounded-md border bg-card px-3 py-2 text-sm font-bold text-foreground shadow-sm transition hover:border-hover-blue-border hover:bg-hover-blue hover:text-hover-blue-foreground"
                 >
                   {city.name}
                 </Link>
               ))}
             </div>
-          </div>
-
-          <div className="hidden rounded-lg border border-white/15 bg-white/10 p-5 backdrop-blur lg:block">
-            <p className="text-xs font-black uppercase text-accent">
-              {labels.categoryKicker}
-            </p>
-            <div className="mt-4 grid gap-3">
-              {localizedCategories.slice(0, 5).map((category) => (
-                <Link
-                  key={category.slug}
-                  href={`/search?category=${category.slug}`}
-                  className="group flex items-center justify-between rounded-md border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-bold transition hover:border-hover-blue-border hover:bg-hover-blue hover:text-hover-blue-foreground"
+            <div className="mt-6 grid gap-2 sm:grid-cols-3">
+              {homeStats.map((stat) => (
+                <div
+                  className="rounded-lg border bg-card/80 px-4 py-3 shadow-sm"
+                  key={stat.label}
                 >
-                  {category.name}
-                  <ArrowRight className="h-4 w-4 opacity-60 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
-                </Link>
+                  <p className="text-2xl font-black leading-none">{stat.value}</p>
+                  <p className="mt-1 text-xs font-bold uppercase text-muted-foreground">
+                    {stat.label}
+                  </p>
+                </div>
               ))}
             </div>
           </div>
+
+          <HomePulsePanel
+            businesses={featuredBusinesses}
+            contentItems={featuredContentItems.slice(0, 3)}
+            labels={contentLabels}
+          />
         </div>
       </section>
 
-      <section className="container py-12 md:py-16">
+      <section className="container py-10 md:py-12">
+        <div className="grid gap-4 md:grid-cols-3">
+          {quickPlans.map((plan, index) => (
+            <Link
+              className="group rounded-lg border bg-card p-5 shadow-sm transition hover:-translate-y-1 hover:border-hover-blue-border hover:shadow-lift"
+              href={`/search?category=${plan.categorySlug}`}
+              key={plan.title}
+            >
+              <span className="flex h-12 w-12 items-center justify-center rounded-md bg-primary text-primary-foreground transition group-hover:bg-hover-blue group-hover:text-hover-blue-foreground">
+                {index === 0 ? (
+                  <Utensils className="h-5 w-5" />
+                ) : index === 1 ? (
+                  <Sparkles className="h-5 w-5" />
+                ) : (
+                  <Compass className="h-5 w-5" />
+                )}
+              </span>
+              <h2 className="mt-5 text-2xl font-black tracking-normal">
+                {plan.title}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {plan.text}
+              </p>
+              <span className="mt-6 inline-flex items-center gap-2 text-sm font-black text-primary transition group-hover:text-hover-blue-foreground">
+                {plan.cta}
+                <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+              </span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="container pb-12 md:pb-16">
         <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="section-kicker">{labels.categoryKicker}</p>
@@ -88,7 +143,82 @@ export default async function HomePage() {
         <CategoryGrid categories={localizedCategories} />
       </section>
 
-      <section className="border-y border-white/60 bg-white/55 py-12 backdrop-blur dark:border-white/10 dark:bg-zinc-950/30 md:py-16">
+      {featuredContentItems.length > 0 ? (
+        <section className="container pb-12 md:pb-16">
+          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="section-kicker">{contentLabels.kicker}</p>
+              <h2 className="mt-2 text-3xl font-black tracking-normal">
+                {contentLabels.title}
+              </h2>
+            </div>
+            <p className="max-w-xl text-sm leading-6 text-muted-foreground">
+              {contentLabels.text}
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {featuredContentItems.map(({ business, item }) => (
+              <Link
+                className="group overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm transition hover:-translate-y-1 hover:border-hover-blue-border hover:shadow-lift"
+                href={`/business/${business.slug}`}
+                key={item.id}
+              >
+                {item.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    alt=""
+                    className="h-44 w-full object-cover"
+                    src={item.imageUrl}
+                  />
+                ) : null}
+                <div className="grid gap-3 p-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-md border bg-background px-2.5 py-1 text-xs font-bold">
+                      {item.type === "event"
+                        ? contentLabels.event
+                        : contentLabels.service}
+                    </span>
+                    {item.isFree ? (
+                      <span className="rounded-md border bg-background px-2.5 py-1 text-xs font-bold">
+                        {contentLabels.free}
+                      </span>
+                    ) : item.price ? (
+                      <span className="rounded-md border bg-background px-2.5 py-1 text-xs font-bold">
+                        {item.price}
+                      </span>
+                    ) : null}
+                    {item.isOnline ? (
+                      <span className="inline-flex items-center gap-1 rounded-md border bg-background px-2.5 py-1 text-xs font-bold">
+                        <Globe2 className="h-3.5 w-3.5" />
+                        {contentLabels.online}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div>
+                    <h3 className="line-clamp-2 text-xl font-black leading-tight">
+                      {item.title}
+                    </h3>
+                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">
+                      {item.description}
+                    </p>
+                  </div>
+                  <div className="mt-1 grid gap-2 text-sm font-semibold text-muted-foreground">
+                    <span>{business.name}</span>
+                    {item.startsAt ? (
+                      <span className="flex items-center gap-2">
+                        <CalendarDays className="h-4 w-4 text-primary" />
+                        {formatContentDate(item.startsAt, locale)}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="border-y bg-card/65 py-12 backdrop-blur dark:bg-card/40 md:py-16">
         <div className="container">
           <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
@@ -127,4 +257,215 @@ export default async function HomePage() {
 
     </>
   );
+}
+
+function HomePulsePanel({
+  businesses,
+  contentItems,
+  labels,
+}: {
+  businesses: Business[];
+  contentItems: Array<{ business: Business; item: NonNullable<Business["contentItems"]>[number] }>;
+  labels: ReturnType<typeof getHomeContentLabels>;
+}) {
+  return (
+    <aside className="hidden rounded-lg border bg-card/90 p-5 shadow-soft backdrop-blur lg:block">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase text-muted-foreground">
+            {labels.pulseKicker}
+          </p>
+          <h2 className="mt-2 text-2xl font-black tracking-normal">
+            {labels.pulseTitle}
+          </h2>
+        </div>
+        <span className="grid h-11 w-11 place-items-center rounded-md bg-primary text-primary-foreground">
+          <Sparkles className="h-5 w-5" />
+        </span>
+      </div>
+
+      <div className="mt-5 grid gap-3">
+        {contentItems.length > 0
+          ? contentItems.map(({ business, item }) => (
+              <Link
+                className="group rounded-md border bg-background p-4 transition hover:border-hover-blue-border hover:bg-hover-blue"
+                href={`/business/${business.slug}`}
+                key={item.id}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase text-muted-foreground">
+                      {item.type === "event" ? labels.event : labels.service}
+                    </p>
+                    <h3 className="mt-1 line-clamp-1 font-black">{item.title}</h3>
+                    <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">
+                      {business.name}
+                    </p>
+                  </div>
+                  <ArrowRight className="mt-1 h-4 w-4 shrink-0 opacity-50 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
+                </div>
+              </Link>
+            ))
+          : businesses.slice(0, 3).map((business) => (
+              <Link
+                className="group rounded-md border bg-background p-4 transition hover:border-hover-blue-border hover:bg-hover-blue"
+                href={`/business/${business.slug}`}
+                key={business.id}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-secondary">
+                    <Store className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="line-clamp-1 font-black">{business.name}</h3>
+                    <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">
+                      {business.category} · {business.city}
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            ))}
+      </div>
+
+      <Link
+        className="mt-4 flex items-center justify-center gap-2 rounded-md border bg-background px-4 py-3 text-sm font-black transition hover:border-hover-blue-border hover:bg-hover-blue"
+        href="/search"
+      >
+        <Search className="h-4 w-4" />
+        {labels.searchCta}
+      </Link>
+    </aside>
+  );
+}
+
+function getFeaturedContentItems(businesses: Business[], limit: number) {
+  return businesses
+    .flatMap((business) =>
+      (business.contentItems ?? []).map((item) => ({ business, item })),
+    )
+    .sort((firstItem, secondItem) => {
+      const firstTime = new Date(firstItem.item.createdAt ?? 0).getTime();
+      const secondTime = new Date(secondItem.item.createdAt ?? 0).getTime();
+
+      return secondTime - firstTime;
+    })
+    .slice(0, limit);
+}
+
+function getFeaturedBusinesses(businesses: Business[], limit: number) {
+  return [
+    ...businesses.filter(
+      (business) => business.logoUrl || (business.contentItems ?? []).length > 0,
+    ),
+    ...businesses,
+  ]
+    .filter(
+      (business, index, allBusinesses) =>
+        allBusinesses.findIndex((item) => item.id === business.id) === index,
+    )
+    .slice(0, limit);
+}
+
+function getHomeStats(
+  businesses: Business[],
+  categoryCount: number,
+  cityCount: number,
+  locale: "uk" | "en",
+) {
+  return locale === "uk"
+    ? [
+        { label: "бізнесів", value: businesses.length.toString() },
+        { label: "категорій", value: categoryCount.toString() },
+        { label: "міст", value: cityCount.toString() },
+      ]
+    : [
+        { label: "businesses", value: businesses.length.toString() },
+        { label: "categories", value: categoryCount.toString() },
+        { label: "cities", value: cityCount.toString() },
+      ];
+}
+
+function getQuickPlans(locale: "uk" | "en") {
+  return locale === "uk"
+    ? [
+        {
+          categorySlug: "grocery-stores",
+          cta: "Знайти їжу",
+          text: "Кафе, пекарні, готові страви та локальні продукти на сьогодні.",
+          title: "Смачна зупинка",
+        },
+        {
+          categorySlug: "wellness-care",
+          cta: "Обрати сервіс",
+          text: "Краса, здоров'я, тренери, фото та спеціалісти для себе.",
+          title: "Час для себе",
+        },
+        {
+          categorySlug: "events",
+          cta: "Подивитись події",
+          text: "Івенти, туризм, квіти, декор і цікаві місця на вихідні.",
+          title: "Плани на вихідні",
+        },
+      ]
+    : [
+        {
+          categorySlug: "grocery-stores",
+          cta: "Find food",
+          text: "Cafes, bakeries, ready meals, and local products for today.",
+          title: "Something tasty",
+        },
+        {
+          categorySlug: "wellness-care",
+          cta: "Pick a service",
+          text: "Beauty, wellness, trainers, photo, and specialists for yourself.",
+          title: "Time for yourself",
+        },
+        {
+          categorySlug: "events",
+          cta: "Browse events",
+          text: "Events, travel, flowers, decor, and interesting weekend places.",
+          title: "Weekend plans",
+        },
+      ];
+}
+
+function getHomeContentLabels(locale: "uk" | "en") {
+  return locale === "uk"
+    ? {
+        kicker: "Нове",
+        title: "Послуги та події",
+        text: "Актуальні пропозиції від українських бізнесів у Канаді.",
+        service: "Послуга",
+        event: "Подія",
+        free: "Безкоштовно",
+        online: "Онлайн",
+        pulseKicker: "Живий пульс",
+        pulseTitle: "Новинки від бізнесів",
+        searchCta: "Відкрити пошук",
+      }
+    : {
+        kicker: "New",
+        title: "Services and events",
+        text: "Fresh offers and upcoming events from Ukrainian businesses in Canada.",
+        service: "Service",
+        event: "Event",
+        free: "Free",
+        online: "Online",
+        pulseKicker: "Live pulse",
+        pulseTitle: "Fresh from owners",
+        searchCta: "Open search",
+      };
+}
+
+function formatContentDate(value: string, locale: "uk" | "en") {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(locale === "uk" ? "uk-CA" : "en-CA", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }

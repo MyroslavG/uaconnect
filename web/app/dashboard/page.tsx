@@ -26,12 +26,14 @@ import type { Locale } from "@/lib/i18n";
 
 export const metadata: Metadata = {
   title: "Dashboard",
-  description: "Track UAConnect business registration submissions.",
+  description: "Track Kolo business registration submissions.",
 };
 
 type Registration =
   Database["public"]["Tables"]["business_registrations"]["Row"];
 type BusinessRow = Database["public"]["Tables"]["businesses"]["Row"];
+type BusinessContentRow =
+  Database["public"]["Tables"]["business_content_items"]["Row"];
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
 type OwnerProfile = {
@@ -88,6 +90,7 @@ export default async function DashboardPage() {
   const localizedCities = localizeCities(cities, locale);
   let registrations: Registration[] = [];
   let publishedBusinessesByRegistrationId = new Map<string, BusinessRow>();
+  const contentItemsByRegistrationId = new Map<string, BusinessContentRow[]>();
   let profile: ProfileRow | null = null;
   let errorMessage = "";
 
@@ -120,6 +123,22 @@ export default async function DashboardPage() {
           .filter((business) => business.registration_id)
           .map((business) => [business.registration_id as string, business]),
       );
+
+      const { data: contentItems } = await supabase
+        .from("business_content_items")
+        .select("*")
+        .in(
+          "registration_id",
+          registrations.map((registration) => registration.id),
+        )
+        .eq("owner_id", user.id)
+        .order("created_at", { ascending: false });
+
+      for (const item of contentItems ?? []) {
+        const items = contentItemsByRegistrationId.get(item.registration_id) ?? [];
+        items.push(item);
+        contentItemsByRegistrationId.set(item.registration_id, items);
+      }
     }
   }
 
@@ -174,6 +193,7 @@ export default async function DashboardPage() {
               publishedBusiness={publishedBusinessesByRegistrationId.get(
                 registration.id,
               )}
+              contentItems={contentItemsByRegistrationId.get(registration.id) ?? []}
               categories={localizedCategories}
               cities={localizedCities}
               locale={locale}

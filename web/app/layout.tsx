@@ -12,18 +12,22 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   metadataBase: new URL("https://uaconnect.vercel.app"),
   title: {
-    default: "UAConnect | Українські бізнеси в Канаді",
-    template: "%s | UAConnect",
+    default: "Kolo | Українські бізнеси в Канаді",
+    template: "%s | Kolo",
   },
   description:
     "Знаходьте українські ресторани, юристів, рієлторів, салони, будівельників, репетиторів, автосервіси та продуктові магазини в Канаді.",
   openGraph: {
-    title: "UAConnect",
+    title: "Kolo",
     description:
       "Гарний і зручний спосіб знайти українські бізнеси в Канаді.",
     url: "https://uaconnect.vercel.app",
-    siteName: "UAConnect",
+    siteName: "Kolo",
     type: "website",
+  },
+  icons: {
+    icon: [{ url: "/favicon.png", type: "image/png" }],
+    apple: [{ url: "/kolo-logo.png", type: "image/png" }],
   },
 };
 

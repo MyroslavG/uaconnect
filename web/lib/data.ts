@@ -66,6 +66,9 @@ export function searchBusinesses(
       business.neighborhood,
       business.address,
       business.tags.join(" "),
+      business.contentItems
+        ?.map((item) => [item.title, item.description, item.location].join(" "))
+        .join(" "),
     ]
       .join(" ")
       .toLowerCase();

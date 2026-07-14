@@ -38,7 +38,7 @@ export async function GET(request: Request) {
     const response = await fetch(url, {
       headers: {
         "Accept-Language": "en-CA,uk;q=0.9,en;q=0.8",
-        "User-Agent": "UAConnect/1.0",
+        "User-Agent": "Kolo/1.0",
       },
       next: {
         revalidate: 60 * 60 * 24 * 30,

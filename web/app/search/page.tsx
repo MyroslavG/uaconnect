@@ -36,7 +36,7 @@ type SearchPageProps = {
 
 export const metadata: Metadata = {
   title: "Search",
-  description: "Search Ukrainian-owned businesses across Canada on UAConnect.",
+  description: "Search Ukrainian-owned businesses across Canada on Kolo.",
 };
 
 const text = {

@@ -9,6 +9,8 @@ export type Json =
 export type AppRole = "user" | "admin";
 export type BusinessRegistrationStatus = "pending" | "approved" | "rejected";
 export type BusinessStatus = "published" | "hidden";
+export type BusinessContentType = "service" | "event";
+export type BusinessContentStatus = "draft" | "published";
 
 export type Database = {
   public: {
@@ -217,6 +219,63 @@ export type Database = {
         };
         Relationships: [];
       };
+      business_content_items: {
+        Row: {
+          id: string;
+          registration_id: string;
+          owner_id: string;
+          content_type: BusinessContentType;
+          title: string;
+          description: string;
+          image_url: string | null;
+          is_free: boolean;
+          is_online: boolean;
+          price: string | null;
+          starts_at: string | null;
+          location: string | null;
+          link_url: string | null;
+          status: BusinessContentStatus;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          registration_id: string;
+          owner_id: string;
+          content_type: BusinessContentType;
+          title: string;
+          description: string;
+          image_url?: string | null;
+          is_free?: boolean;
+          is_online?: boolean;
+          price?: string | null;
+          starts_at?: string | null;
+          location?: string | null;
+          link_url?: string | null;
+          status?: BusinessContentStatus;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          registration_id?: string;
+          owner_id?: string;
+          content_type?: BusinessContentType;
+          title?: string;
+          description?: string;
+          image_url?: string | null;
+          is_free?: boolean;
+          is_online?: boolean;
+          price?: string | null;
+          starts_at?: string | null;
+          location?: string | null;
+          link_url?: string | null;
+          status?: BusinessContentStatus;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -266,6 +325,7 @@ export type Database = {
     Enums: {
       app_role: AppRole;
       business_registration_status: BusinessRegistrationStatus;
+      business_content_type: BusinessContentType;
     };
     CompositeTypes: Record<string, never>;
   };

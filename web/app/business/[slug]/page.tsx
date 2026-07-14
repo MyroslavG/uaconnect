@@ -2,19 +2,20 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
+  CalendarDays,
   Clock,
   ExternalLink,
   Globe,
   Globe2,
   Instagram,
   Languages,
+  LinkIcon,
   MapPin,
   Phone,
   ShieldCheck,
 } from "lucide-react";
 
 import { BusinessLogo } from "@/components/business-logo";
-import { BusinessOwnerChip } from "@/components/business-owner-chip";
 import { BusinessProfileActions } from "@/components/business-profile-actions";
 import { ContactAccessCard } from "@/components/contact-access-card";
 import { MapEmbed } from "@/components/map-embed";
@@ -30,6 +31,7 @@ import {
   formatLocationParts,
   getInstagramUrl,
 } from "@/lib/utils";
+import type { BusinessContentItem } from "@/lib/types";
 
 type BusinessProfilePageProps = {
   params: Promise<{
@@ -64,7 +66,7 @@ export async function generateMetadata({
       canonical: `/business/${business.slug}`,
     },
     openGraph: {
-      title: `${business.name} | UAConnect`,
+      title: `${business.name} | Kolo`,
       description: localizedBusiness.description,
     },
   };
@@ -111,6 +113,13 @@ export default async function BusinessProfilePage({
         business.city,
       )}`;
   const nextPath = `/business/${rawBusiness.slug}`;
+  const contentLabels = getBusinessContentLabels(locale);
+  const serviceItems = (business.contentItems ?? []).filter(
+    (item) => item.type === "service",
+  );
+  const eventItems = (business.contentItems ?? []).filter(
+    (item) => item.type === "event",
+  );
 
   return (
     <article>
@@ -144,7 +153,10 @@ export default async function BusinessProfilePage({
                 {business.category}
               </Badge>
               {business.servesAllCanada ? (
-                <Badge variant="green">
+                <Badge
+                  variant="outline"
+                  className="bg-secondary text-foreground"
+                >
                   <Globe2 className="mr-1.5 h-3.5 w-3.5" />
                   {servesAllCanadaLabel}
                 </Badge>
@@ -161,11 +173,6 @@ export default async function BusinessProfilePage({
                 </Badge>
               ) : null}
             </div>
-            <BusinessOwnerChip
-              avatarUrl={business.ownerAvatarUrl}
-              className="mt-4"
-              name={business.ownerName}
-            />
             <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
               {locationLabel ? (
                 <span className="flex items-center gap-1.5">
@@ -191,6 +198,20 @@ export default async function BusinessProfilePage({
                 {business.longDescription}
               </p>
             </div>
+            {serviceItems.length > 0 ? (
+              <BusinessContentSection
+                items={serviceItems}
+                labels={contentLabels}
+                title={contentLabels.services}
+              />
+            ) : null}
+            {eventItems.length > 0 ? (
+              <BusinessContentSection
+                items={eventItems}
+                labels={contentLabels}
+                title={contentLabels.events}
+              />
+            ) : null}
             <div>
               <h2 className="text-2xl font-bold">
                 {labels.business.languages}
@@ -314,4 +335,130 @@ export default async function BusinessProfilePage({
 
     </article>
   );
+}
+
+function BusinessContentSection({
+  items,
+  labels,
+  title,
+}: {
+  items: BusinessContentItem[];
+  labels: ReturnType<typeof getBusinessContentLabels>;
+  title: string;
+}) {
+  return (
+    <section>
+      <h2 className="text-2xl font-bold">{title}</h2>
+      <div className="mt-3 grid gap-4 md:grid-cols-2">
+        {items.map((item) => (
+          <article
+            className="overflow-hidden rounded-lg border bg-card shadow-sm"
+            key={item.id}
+          >
+            {item.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                alt=""
+                className="h-48 w-full object-cover"
+                src={item.imageUrl}
+              />
+            ) : null}
+            <div className="grid gap-3 p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className="bg-background">
+                  {item.type === "event" ? labels.event : labels.service}
+                </Badge>
+                {item.isFree ? (
+                  <Badge variant="green">{labels.free}</Badge>
+                ) : item.price ? (
+                  <Badge variant="outline" className="bg-background">
+                    {item.price}
+                  </Badge>
+                ) : null}
+                {item.isOnline ? (
+                  <Badge variant="secondary">
+                    <Globe2 className="mr-1.5 h-3.5 w-3.5" />
+                    {labels.online}
+                  </Badge>
+                ) : null}
+              </div>
+              <div>
+                <h3 className="text-xl font-black leading-tight">
+                  {item.title}
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  {item.description}
+                </p>
+              </div>
+              {item.type === "event" ? (
+                <div className="grid gap-2 text-sm font-semibold text-muted-foreground">
+                  {item.startsAt ? (
+                    <span className="flex items-center gap-2">
+                      <CalendarDays className="h-4 w-4 text-primary" />
+                      {formatContentDate(item.startsAt)}
+                    </span>
+                  ) : null}
+                  {item.location ? (
+                    <span className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-primary" />
+                      {item.location}
+                    </span>
+                  ) : null}
+                  {item.linkUrl ? (
+                    <a
+                      className="flex items-center gap-2 text-foreground hover:underline"
+                      href={formatContentLink(item.linkUrl)}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <LinkIcon className="h-4 w-4 text-primary" />
+                      {formatExternalUrl(item.linkUrl)}
+                      <ExternalLink className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function getBusinessContentLabels(locale: "uk" | "en") {
+  return locale === "uk"
+    ? {
+        services: "Послуги",
+        events: "Події",
+        service: "Послуга",
+        event: "Подія",
+        free: "Безкоштовно",
+        online: "Онлайн",
+      }
+    : {
+        services: "Services",
+        events: "Events",
+        service: "Service",
+        event: "Event",
+        free: "Free",
+        online: "Online",
+      };
+}
+
+function formatContentDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function formatContentLink(value: string) {
+  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
 }

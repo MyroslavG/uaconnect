@@ -4,16 +4,24 @@ import Link from "next/link";
 import { type ReactNode, useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  CalendarDays,
+  DollarSign,
   Edit3,
   ExternalLink,
   Globe,
   Instagram,
+  LinkIcon,
   MapPin,
   Phone,
+  Plus,
   Save,
+  Trash2,
 } from "lucide-react";
 
 import {
+  createBusinessContentItem,
+  deleteBusinessContentItem,
+  updateBusinessContentItem,
   updateBusinessRegistration,
   type DashboardActionState,
 } from "@/app/dashboard/actions";
@@ -42,10 +50,13 @@ import { formatExternalUrl, formatInstagramHandle } from "@/lib/utils";
 type Registration =
   Database["public"]["Tables"]["business_registrations"]["Row"];
 type PublishedBusiness = Database["public"]["Tables"]["businesses"]["Row"];
+type BusinessContentRow =
+  Database["public"]["Tables"]["business_content_items"]["Row"];
 
 type DashboardBusinessEditorProps = {
   categories: Category[];
   cities: City[];
+  contentItems: BusinessContentRow[];
   locale: Locale;
   publishedBusiness?: PublishedBusiness;
   registration: Registration;
@@ -82,6 +93,29 @@ const text = {
     rejected: "Відхилено",
     reviewed: "Коментар адміністратора",
     noContact: "Контакти ще не додані",
+    services: "Послуги",
+    events: "Події",
+    addService: "Додати послугу",
+    addEvent: "Додати подію",
+    editService: "Редагувати послугу",
+    editEvent: "Редагувати подію",
+    noServices: "Додайте послуги, щоб люди швидше зрозуміли, що ви пропонуєте.",
+    noEvents: "Додайте події, зустрічі або спеціальні пропозиції.",
+    title: "Назва",
+    contentDescription: "Опис",
+    image: "Фото",
+    imageHint: "PNG, JPG, WebP або GIF до 5 MB.",
+    price: "Ціна",
+    free: "Безкоштовно",
+    dateTime: "Дата і час",
+    location: "Місце",
+    online: "Онлайн",
+    link: "Посилання",
+    add: "Додати",
+    update: "Оновити",
+    delete: "Видалити",
+    deleting: "Видаляємо...",
+    emptyPrice: "Не вказано",
   },
   en: {
     businessName: "Business name",
@@ -113,6 +147,29 @@ const text = {
     rejected: "Rejected",
     reviewed: "Admin note",
     noContact: "No contact details yet",
+    services: "Services",
+    events: "Events",
+    addService: "Add service",
+    addEvent: "Add event",
+    editService: "Edit service",
+    editEvent: "Edit event",
+    noServices: "Add services so people quickly understand what you offer.",
+    noEvents: "Add events, meetups, or special offers.",
+    title: "Title",
+    contentDescription: "Description",
+    image: "Photo",
+    imageHint: "PNG, JPG, WebP, or GIF up to 5 MB.",
+    price: "Price",
+    free: "Free",
+    dateTime: "Date and time",
+    location: "Location",
+    online: "Online",
+    link: "Link",
+    add: "Add",
+    update: "Update",
+    delete: "Delete",
+    deleting: "Deleting...",
+    emptyPrice: "Not listed",
   },
 } satisfies Record<Locale, Record<string, string>>;
 
@@ -124,6 +181,7 @@ const initialState: DashboardActionState = {
 export function DashboardBusinessEditor({
   categories,
   cities,
+  contentItems,
   locale,
   publishedBusiness,
   registration,
@@ -146,6 +204,12 @@ export function DashboardBusinessEditor({
   const logoUrl = registration.logo_url ?? publishedBusiness?.logo_url ?? "";
   const hasContact = Boolean(
     registration.phone || registration.website || registration.instagram,
+  );
+  const serviceItems = contentItems.filter(
+    (item) => item.content_type === "service",
+  );
+  const eventItems = contentItems.filter(
+    (item) => item.content_type === "event",
   );
 
   useEffect(() => {
@@ -452,8 +516,384 @@ export function DashboardBusinessEditor({
             ) : null}
           </aside>
         </div>
+        <div className="border-t bg-background/55 p-5">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ContentColumn
+              items={serviceItems}
+              labels={labels}
+              registrationId={registration.id}
+              title={labels.services}
+              type="service"
+            />
+            <ContentColumn
+              items={eventItems}
+              labels={labels}
+              registrationId={registration.id}
+              title={labels.events}
+              type="event"
+            />
+          </div>
+        </div>
       </CardContent>
     </Card>
+  );
+}
+
+function ContentColumn({
+  items,
+  labels,
+  registrationId,
+  title,
+  type,
+}: {
+  items: BusinessContentRow[];
+  labels: Record<string, string>;
+  registrationId: string;
+  title: string;
+  type: "service" | "event";
+}) {
+  const router = useRouter();
+  const [state, formAction, isPending] = useActionState(
+    createBusinessContentItem,
+    initialState,
+  );
+  const addLabel = type === "event" ? labels.addEvent : labels.addService;
+
+  useEffect(() => {
+    if (state.ok) {
+      router.refresh();
+    }
+  }, [router, state.ok]);
+
+  return (
+    <section className="rounded-lg border bg-card p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-black">{title}</h3>
+          <p className="text-xs font-semibold text-muted-foreground">
+            {items.length}
+          </p>
+        </div>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button size="sm" type="button" variant="outline">
+              <Plus className="h-4 w-4" />
+              {addLabel}
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{addLabel}</DialogTitle>
+            </DialogHeader>
+            <form action={formAction} className="grid gap-5">
+              <ContentFormFields
+                labels={labels}
+                registrationId={registrationId}
+                type={type}
+              />
+              <div className="grid gap-3 sm:grid-cols-[auto_1fr] sm:items-center">
+                <Button disabled={isPending} type="submit">
+                  <Save className="h-4 w-4" />
+                  {isPending ? labels.saving : labels.add}
+                </Button>
+                <ActionMessage labels={labels} state={state} />
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="mt-4 grid gap-3">
+        {items.length > 0 ? (
+          items.map((item) => (
+            <ContentItemCard item={item} key={item.id} labels={labels} />
+          ))
+        ) : (
+          <p className="rounded-lg border border-dashed bg-background/70 p-4 text-sm leading-6 text-muted-foreground">
+            {type === "event" ? labels.noEvents : labels.noServices}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ContentItemCard({
+  item,
+  labels,
+}: {
+  item: BusinessContentRow;
+  labels: Record<string, string>;
+}) {
+  const router = useRouter();
+  const [updateState, updateAction, isUpdating] = useActionState(
+    updateBusinessContentItem,
+    initialState,
+  );
+  const [deleteState, deleteAction, isDeleting] = useActionState(
+    deleteBusinessContentItem,
+    initialState,
+  );
+  const isEvent = item.content_type === "event";
+
+  useEffect(() => {
+    if (updateState.ok || deleteState.ok) {
+      router.refresh();
+    }
+  }, [deleteState.ok, router, updateState.ok]);
+
+  return (
+    <article className="overflow-hidden rounded-lg border bg-background">
+      {item.image_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          alt=""
+          className="h-40 w-full object-cover"
+          src={item.image_url}
+        />
+      ) : null}
+      <div className="grid gap-3 p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="bg-card">
+            {isEvent ? labels.events : labels.services}
+          </Badge>
+          <Badge variant="green">
+            {item.is_free ? labels.free : item.price || labels.emptyPrice}
+          </Badge>
+          {isEvent && item.is_online ? (
+            <Badge variant="secondary">
+              <Globe className="mr-1.5 h-3.5 w-3.5" />
+              {labels.online}
+            </Badge>
+          ) : null}
+        </div>
+        <div>
+          <h4 className="text-base font-black">{item.title}</h4>
+          <p className="mt-1 line-clamp-2 text-sm leading-6 text-muted-foreground">
+            {item.description}
+          </p>
+        </div>
+        {isEvent ? (
+          <div className="grid gap-2 text-xs font-semibold text-muted-foreground">
+            {item.starts_at ? (
+              <span className="flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-primary" />
+                {formatContentDate(item.starts_at)}
+              </span>
+            ) : null}
+            {item.location ? (
+              <span className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-primary" />
+                {item.location}
+              </span>
+            ) : null}
+            {item.link_url ? (
+              <a
+                className="flex items-center gap-2 text-foreground hover:underline"
+                href={formatContentLink(item.link_url)}
+                rel="noreferrer"
+                target="_blank"
+              >
+                <LinkIcon className="h-4 w-4 text-primary" />
+                {formatExternalUrl(item.link_url)}
+              </a>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button className="justify-center" type="button" variant="outline">
+                <Edit3 className="h-4 w-4" />
+                {labels.edit}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>
+                  {isEvent ? labels.editEvent : labels.editService}
+                </DialogTitle>
+              </DialogHeader>
+              <form action={updateAction} className="grid gap-5">
+                <ContentFormFields
+                  item={item}
+                  labels={labels}
+                  registrationId={item.registration_id}
+                  type={item.content_type}
+                />
+                <div className="grid gap-3 sm:grid-cols-[auto_1fr] sm:items-center">
+                  <Button disabled={isUpdating} type="submit">
+                    <Save className="h-4 w-4" />
+                    {isUpdating ? labels.saving : labels.update}
+                  </Button>
+                  <ActionMessage labels={labels} state={updateState} />
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+          <form action={deleteAction}>
+            <input name="contentId" type="hidden" value={item.id} />
+            <input
+              name="registrationId"
+              type="hidden"
+              value={item.registration_id}
+            />
+            <Button
+              className="w-full justify-center"
+              disabled={isDeleting}
+              type="submit"
+              variant="outline"
+            >
+              <Trash2 className="h-4 w-4" />
+              {isDeleting ? labels.deleting : labels.delete}
+            </Button>
+          </form>
+        </div>
+        <ActionMessage labels={labels} state={deleteState} />
+      </div>
+    </article>
+  );
+}
+
+function ContentFormFields({
+  item,
+  labels,
+  registrationId,
+  type,
+}: {
+  item?: BusinessContentRow;
+  labels: Record<string, string>;
+  registrationId: string;
+  type: "service" | "event";
+}) {
+  const idPrefix = `${type}-${item?.id ?? registrationId}`;
+  const isEvent = type === "event";
+
+  return (
+    <>
+      <input name="registrationId" type="hidden" value={registrationId} />
+      <input name="contentType" type="hidden" value={type} />
+      {item ? <input name="contentId" type="hidden" value={item.id} /> : null}
+
+      <div className="grid gap-2">
+        <FieldLabel htmlFor={`${idPrefix}-title`} badge={labels.required}>
+          {labels.title}
+        </FieldLabel>
+        <Input
+          defaultValue={item?.title ?? ""}
+          id={`${idPrefix}-title`}
+          name="title"
+          required
+        />
+      </div>
+
+      <div className="grid gap-2">
+        <FieldLabel
+          htmlFor={`${idPrefix}-description`}
+          badge={labels.required}
+        >
+          {labels.contentDescription}
+        </FieldLabel>
+        <Textarea
+          defaultValue={item?.description ?? ""}
+          id={`${idPrefix}-description`}
+          name="description"
+          required
+          rows={4}
+        />
+      </div>
+
+      <div className="grid gap-2">
+        <FieldLabel htmlFor={`${idPrefix}-image`} badge={labels.optional}>
+          {labels.image}
+        </FieldLabel>
+        <Input
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          id={`${idPrefix}-image`}
+          name="imageFile"
+          type="file"
+        />
+        <p className="text-xs text-muted-foreground">{labels.imageHint}</p>
+      </div>
+
+      {isEvent ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <FieldLabel htmlFor={`${idPrefix}-startsAt`} badge={labels.required}>
+              {labels.dateTime}
+            </FieldLabel>
+            <Input
+              defaultValue={toDateTimeLocal(item?.starts_at)}
+              id={`${idPrefix}-startsAt`}
+              name="startsAt"
+              required
+              type="datetime-local"
+            />
+          </div>
+          <label className="flex items-center justify-between gap-3 rounded-lg border bg-muted/35 px-4 py-3">
+            <span className="text-sm font-bold">{labels.online}</span>
+            <input
+              className="h-4 w-4 rounded border-input accent-primary"
+              defaultChecked={item?.is_online ?? false}
+              name="isOnline"
+              type="checkbox"
+            />
+          </label>
+        </div>
+      ) : null}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-2">
+          <FieldLabel htmlFor={`${idPrefix}-price`} badge={labels.optional}>
+            {labels.price}
+          </FieldLabel>
+          <div className="relative">
+            <DollarSign className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              defaultValue={item?.price ?? ""}
+              id={`${idPrefix}-price`}
+              name="price"
+            />
+          </div>
+        </div>
+        <label className="flex items-center justify-between gap-3 rounded-lg border bg-muted/35 px-4 py-3">
+          <span className="text-sm font-bold">{labels.free}</span>
+          <input
+            className="h-4 w-4 rounded border-input accent-primary"
+            defaultChecked={item?.is_free ?? false}
+            name="isFree"
+            type="checkbox"
+          />
+        </label>
+      </div>
+
+      {isEvent ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <FieldLabel htmlFor={`${idPrefix}-location`} badge={labels.optional}>
+              {labels.location}
+            </FieldLabel>
+            <Input
+              defaultValue={item?.location ?? ""}
+              id={`${idPrefix}-location`}
+              name="location"
+            />
+          </div>
+          <div className="grid gap-2">
+            <FieldLabel htmlFor={`${idPrefix}-linkUrl`} badge={labels.optional}>
+              {labels.link}
+            </FieldLabel>
+            <Input
+              defaultValue={item?.link_url ?? ""}
+              id={`${idPrefix}-linkUrl`}
+              name="linkUrl"
+              type="url"
+            />
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -479,6 +919,39 @@ function ActionMessage({
       {state.ok ? state.message || labels.saved : state.message}
     </p>
   );
+}
+
+function formatContentDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function formatContentLink(value: string) {
+  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+}
+
+function toDateTimeLocal(value?: string | null) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+
+  return localDate.toISOString().slice(0, 16);
 }
 
 function StatusBadge({

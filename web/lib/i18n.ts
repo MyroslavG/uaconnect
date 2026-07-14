@@ -23,7 +23,7 @@ export const copy = {
       contact: "Контакти",
     },
     header: {
-      ariaHome: "Головна UAConnect",
+      ariaHome: "Головна Kolo",
       ariaNav: "Основна навігація",
       explore: "Пошук",
       listBusiness: "Додати бізнес",
@@ -168,7 +168,7 @@ export const copy = {
       contact: "Contact",
     },
     header: {
-      ariaHome: "UAConnect home",
+      ariaHome: "Kolo home",
       ariaNav: "Primary navigation",
       explore: "Explore",
       listBusiness: "List a business",

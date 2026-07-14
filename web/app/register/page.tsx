@@ -23,7 +23,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 export const metadata: Metadata = {
   title: "Register a business",
   description:
-    "Submit a business to UAConnect for manual verification and approval.",
+    "Submit a business to Kolo for manual verification and approval.",
 };
 
 const text = {
@@ -45,11 +45,11 @@ const text = {
       "Надішліть заявку",
       "Ми перевіримо дані",
       "Отримаєте рішення",
-      "Бізнес з'явиться на UAConnect",
+      "Бізнес з'явиться на Kolo",
     ],
     noteTitle: "Що відбувається далі",
     noteText:
-      "Після надсилання заявка потрапить на ручну перевірку. Якщо дані підтвердяться, бізнес буде схвалено й додано до UAConnect.",
+      "Після надсилання заявка потрапить на ручну перевірку. Якщо дані підтвердяться, бізнес буде схвалено й додано до Kolo.",
   },
   en: {
     kicker: "Business registration",
@@ -69,11 +69,11 @@ const text = {
       "Submit your request",
       "We review the details",
       "You receive a decision",
-      "Your business appears on UAConnect",
+      "Your business appears on Kolo",
     ],
     noteTitle: "What happens next",
     noteText:
-      "After you submit, your request goes into manual review. Once the details are confirmed, the business can be approved and added to UAConnect.",
+      "After you submit, your request goes into manual review. Once the details are confirmed, the business can be approved and added to Kolo.",
   },
 } satisfies Record<Locale, Record<string, string | string[]>>;
 

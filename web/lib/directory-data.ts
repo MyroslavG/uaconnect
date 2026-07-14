@@ -8,9 +8,11 @@ import {
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
-import type { Business } from "@/lib/types";
+import type { Business, BusinessContentItem } from "@/lib/types";
 
 type PublishedBusiness = Database["public"]["Tables"]["businesses"]["Row"];
+type BusinessContentRow =
+  Database["public"]["Tables"]["business_content_items"]["Row"];
 type PublicBusinessOwner =
   Database["public"]["Functions"]["get_public_business_owners"]["Returns"][number];
 
@@ -146,6 +148,13 @@ async function getPublishedBusinesses(): Promise<Business[]> {
     ),
   );
   const ownersById = new Map<string, PublicBusinessOwner>();
+  const registrationIds = data
+    .map((row) => row.registration_id)
+    .filter((registrationId): registrationId is string =>
+      Boolean(registrationId),
+    );
+  const contentItemsByRegistrationId =
+    await getPublishedBusinessContentItems(registrationIds);
 
   if (ownerIds.length > 0) {
     const { data: owners, error: ownersError } = await supabase.rpc(
@@ -164,13 +173,45 @@ async function getPublishedBusinesses(): Promise<Business[]> {
     mapPublishedBusiness(
       row,
       row.owner_id ? ownersById.get(row.owner_id) : undefined,
+      row.registration_id
+        ? contentItemsByRegistrationId.get(row.registration_id)
+        : undefined,
     ),
   );
+}
+
+async function getPublishedBusinessContentItems(registrationIds: string[]) {
+  const itemsByRegistrationId = new Map<string, BusinessContentItem[]>();
+
+  if (registrationIds.length === 0) {
+    return itemsByRegistrationId;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("business_content_items")
+    .select("*")
+    .in("registration_id", registrationIds)
+    .eq("status", "published")
+    .order("created_at", { ascending: false });
+
+  if (error || !data) {
+    return itemsByRegistrationId;
+  }
+
+  for (const row of data as BusinessContentRow[]) {
+    const items = itemsByRegistrationId.get(row.registration_id) ?? [];
+    items.push(mapBusinessContentItem(row));
+    itemsByRegistrationId.set(row.registration_id, items);
+  }
+
+  return itemsByRegistrationId;
 }
 
 function mapPublishedBusiness(
   row: PublishedBusiness,
   owner?: PublicBusinessOwner,
+  contentItems: BusinessContentItem[] = [],
 ): Business {
   const category =
     categories.find((candidate) => candidate.slug === row.category_slug) ??
@@ -207,6 +248,28 @@ function mapPublishedBusiness(
     featured: false,
     hours: "See website",
     tags: [category.name],
+    contentItems,
     verifiedAt: row.verified_at ?? undefined,
+  };
+}
+
+function mapBusinessContentItem(row: BusinessContentRow): BusinessContentItem {
+  return {
+    id: row.id,
+    registrationId: row.registration_id,
+    ownerId: row.owner_id,
+    type: row.content_type,
+    title: row.title,
+    description: row.description,
+    imageUrl: row.image_url ?? undefined,
+    isFree: row.is_free,
+    isOnline: row.is_online,
+    price: row.price ?? undefined,
+    startsAt: row.starts_at ?? undefined,
+    location: row.location ?? undefined,
+    linkUrl: row.link_url ?? undefined,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
