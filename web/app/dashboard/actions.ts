@@ -745,6 +745,75 @@ export async function deleteBusinessContentItem(
   };
 }
 
+export async function toggleSavedBusiness(formData: FormData) {
+  if (!isSupabaseConfigured()) {
+    logServerEvent("saved_business.not_configured");
+    return;
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    logServerError("saved_business.auth_failed", userError, {
+      hasUser: Boolean(user),
+    });
+    return;
+  }
+
+  const businessId = String(formData.get("businessId") ?? "").trim();
+  const slug = String(formData.get("slug") ?? "").trim();
+  const intent = String(formData.get("intent") ?? "save").trim();
+
+  if (!businessId) {
+    logServerEvent("saved_business.validation_failed", {
+      userId: user.id,
+    });
+    return;
+  }
+
+  const result =
+    intent === "remove"
+      ? await supabase
+          .from("saved_businesses")
+          .delete()
+          .eq("business_id", businessId)
+          .eq("user_id", user.id)
+      : await supabase.from("saved_businesses").upsert(
+          {
+            business_id: businessId,
+            user_id: user.id,
+          },
+          { ignoreDuplicates: true, onConflict: "user_id,business_id" },
+        );
+
+  if (result.error) {
+    logServerError("saved_business.toggle_failed", result.error, {
+      businessId,
+      intent,
+      userId: user.id,
+    });
+    return;
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/");
+  revalidatePath("/search");
+
+  if (slug) {
+    revalidatePath(`/business/${slug}`);
+  }
+
+  logServerEvent("saved_business.toggled", {
+    businessId,
+    intent,
+    userId: user.id,
+  });
+}
+
 function getBusinessContentInput(formData: FormData) {
   const rawType = String(formData.get("contentType") ?? "").trim();
   const type: BusinessContentType = rawType === "event" ? "event" : "service";

@@ -135,6 +135,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     citySlug: coordinates ? undefined : city?.slug,
     categorySlug: category?.slug,
     coordinates,
+    currentUserId: user?.id,
     radiusInKm,
   });
   const localizedResults = localizeBusinesses(results, locale);

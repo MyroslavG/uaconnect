@@ -159,6 +159,19 @@ alter table public.business_content_items
   add column if not exists is_free boolean not null default false,
   add column if not exists is_online boolean not null default false;
 
+create table if not exists public.saved_businesses (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, business_id)
+);
+
+create index if not exists saved_businesses_user_created_idx
+on public.saved_businesses (user_id, created_at desc);
+
+create index if not exists saved_businesses_business_idx
+on public.saved_businesses (business_id);
+
 insert into storage.buckets (
   id,
   name,
@@ -613,11 +626,30 @@ as $$
     );
 $$;
 
+create or replace function public.delete_current_user_account()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  requester uuid := auth.uid();
+begin
+  if requester is null then
+    raise exception 'Please sign in before deleting your account.';
+  end if;
+
+  delete from auth.users
+  where id = requester;
+end;
+$$;
+
 alter table public.profiles enable row level security;
 alter table public.business_registrations enable row level security;
 alter table public.businesses enable row level security;
 alter table public.business_claim_invites enable row level security;
 alter table public.business_content_items enable row level security;
+alter table public.saved_businesses enable row level security;
 
 drop policy if exists "Profiles are visible to owner and admins" on public.profiles;
 create policy "Profiles are visible to owner and admins"
@@ -749,6 +781,29 @@ create policy "Owners can delete business content"
 on public.business_content_items for delete
 using ((select auth.uid()) = owner_id or public.is_admin());
 
+drop policy if exists "Users can view their saved businesses" on public.saved_businesses;
+create policy "Users can view their saved businesses"
+on public.saved_businesses for select
+using ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can save published businesses" on public.saved_businesses;
+create policy "Users can save published businesses"
+on public.saved_businesses for insert
+with check (
+  (select auth.uid()) = user_id
+  and exists (
+    select 1
+    from public.businesses
+    where businesses.id = saved_businesses.business_id
+      and businesses.status = 'published'
+  )
+);
+
+drop policy if exists "Users can remove their saved businesses" on public.saved_businesses;
+create policy "Users can remove their saved businesses"
+on public.saved_businesses for delete
+using ((select auth.uid()) = user_id);
+
 drop policy if exists "Anyone can view business logos" on storage.objects;
 create policy "Anyone can view business logos"
 on storage.objects for select
@@ -795,6 +850,7 @@ grant execute on function public.get_business_claim_invite(text) to anon, authen
 grant execute on function public.claim_business_with_token(text) to authenticated;
 grant execute on function public.sync_owned_business_from_registration(uuid) to authenticated;
 grant execute on function public.get_public_business_owners(uuid[]) to anon, authenticated;
+grant execute on function public.delete_current_user_account() to authenticated;
 
 notify pgrst, 'reload schema';
 

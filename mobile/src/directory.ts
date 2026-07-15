@@ -86,6 +86,10 @@ type BusinessContentRow = {
   created_at: string;
 };
 
+type SavedBusinessRow = {
+  business_id: string;
+};
+
 export async function fetchPublishedBusinesses(currentUserId?: string) {
   if (!isSupabaseConfigured) {
     return [];
@@ -101,6 +105,9 @@ export async function fetchPublishedBusinesses(currentUserId?: string) {
       .map((business) => business.registration_id)
       .filter((registrationId): registrationId is string => Boolean(registrationId)),
   );
+  const savedBusinessIds = currentUserId
+    ? await fetchSavedBusinessIds(currentUserId)
+    : new Set<string>();
 
   return rows.map((business) =>
     mapPublicBusiness(
@@ -108,8 +115,76 @@ export async function fetchPublishedBusinesses(currentUserId?: string) {
       ownerMap.get(business.owner_id ?? ""),
       currentUserId,
       contentMap.get(business.registration_id ?? "") ?? [],
+      savedBusinessIds.has(business.id),
     ),
   );
+}
+
+export async function fetchSavedBusinessIds(userId: string) {
+  if (!isSupabaseConfigured) {
+    return new Set<string>();
+  }
+
+  const { data, error } = await supabase
+    .from("saved_businesses")
+    .select("business_id")
+    .eq("user_id", userId);
+
+  if (error) {
+    if (isMissingSavedBusinessesTableError(error)) {
+      return new Set<string>();
+    }
+
+    throw error;
+  }
+
+  return new Set(
+    ((data ?? []) as SavedBusinessRow[]).map((row) => row.business_id),
+  );
+}
+
+export async function saveBusiness(businessId: string, userId: string) {
+  if (!isSupabaseConfigured) {
+    throw new Error("Supabase is not configured for the mobile app.");
+  }
+
+  const { error } = await supabase
+    .from("saved_businesses")
+    .upsert(
+      {
+        business_id: businessId,
+        user_id: userId,
+      },
+      { ignoreDuplicates: true, onConflict: "user_id,business_id" },
+    );
+
+  if (error) {
+    if (isMissingSavedBusinessesTableError(error)) {
+      throw new Error("Run the saved businesses SQL setup in Supabase first.");
+    }
+
+    throw error;
+  }
+}
+
+export async function unsaveBusiness(businessId: string, userId: string) {
+  if (!isSupabaseConfigured) {
+    throw new Error("Supabase is not configured for the mobile app.");
+  }
+
+  const { error } = await supabase
+    .from("saved_businesses")
+    .delete()
+    .eq("business_id", businessId)
+    .eq("user_id", userId);
+
+  if (error) {
+    if (isMissingSavedBusinessesTableError(error)) {
+      throw new Error("Run the saved businesses SQL setup in Supabase first.");
+    }
+
+    throw error;
+  }
 }
 
 async function fetchAllPublishedBusinessRows() {
@@ -684,6 +759,7 @@ function mapPublicBusiness(
   owner?: OwnerProfileRow,
   currentUserId?: string,
   contentItems: BusinessContentItem[] = [],
+  isSaved = false,
 ): Business {
   return {
     address: business.address ?? undefined,
@@ -702,6 +778,7 @@ function mapPublicBusiness(
     ownerName: owner?.owner_name ?? "",
     phone: business.phone ?? "",
     registrationId: business.registration_id ?? undefined,
+    isSaved,
     servesAllCanada: business.serves_all_canada,
     slug: business.slug,
     website: business.website ?? "",
@@ -747,4 +824,15 @@ function mapBusinessContentItem(row: BusinessContentRow): BusinessContentItem {
     title: row.title,
     type: row.content_type,
   };
+}
+
+function isMissingSavedBusinessesTableError(error: { code?: string; message?: string }) {
+  const message = error.message?.toLowerCase() ?? "";
+
+  return (
+    error.code === "42P01" ||
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    message.includes("saved_businesses")
+  );
 }

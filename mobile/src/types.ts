@@ -23,6 +23,7 @@ export type Business = {
   logoUrl?: string;
   servesAllCanada: boolean;
   ownedByCurrentUser?: boolean;
+  isSaved?: boolean;
   contentItems?: BusinessContentItem[];
 };
 

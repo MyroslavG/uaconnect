@@ -276,6 +276,24 @@ export type Database = {
         };
         Relationships: [];
       };
+      saved_businesses: {
+        Row: {
+          user_id: string;
+          business_id: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          business_id: string;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          business_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -308,6 +326,10 @@ export type Database = {
           owner_name: string | null;
           owner_avatar_url: string | null;
         }[];
+      };
+      delete_current_user_account: {
+        Args: Record<string, never>;
+        Returns: undefined;
       };
       is_admin: {
         Args: {

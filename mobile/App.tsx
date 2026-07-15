@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
-import Constants, { AppOwnership } from "expo-constants";
 import * as Linking from "expo-linking";
 import * as ImagePicker from "expo-image-picker";
 import {
@@ -23,6 +22,7 @@ import {
   View,
 } from "react-native";
 import {
+  Bookmark,
   ExternalLink,
   Home,
   LayoutDashboard,
@@ -33,6 +33,8 @@ import {
   Phone,
   Plus,
   Search,
+  Sparkles,
+  Store,
   Sun,
   Trash2,
   type LucideIcon,
@@ -51,9 +53,11 @@ import {
 import {
   completeAuthFromUrl,
   signInWithEmailPassword,
+  signUpWithEmailPassword,
   signInWithGoogle,
   signOut,
 } from "./src/auth";
+import { deleteCurrentAccount } from "./src/account";
 import {
   createBusinessContentItem,
   createBusinessRegistration,
@@ -61,6 +65,8 @@ import {
   fetchOwnedBusinessContent,
   fetchOwnedBusiness,
   fetchPublishedBusinesses,
+  saveBusiness,
+  unsaveBusiness,
   updateBusinessContentItem,
   updateOwnedBusiness,
   type BusinessLogoInput,
@@ -87,8 +93,6 @@ const CATEGORY_PICKER_SHEET_HEIGHT = Math.round(
 const LOCATION_PICKER_SHEET_HEIGHT = Math.round(
   Dimensions.get("window").height * 0.58,
 );
-const isExpoGo = Constants.appOwnership === AppOwnership.Expo;
-
 const copy = {
   uk: {
     addBusiness: "Додати",
@@ -127,6 +131,11 @@ const copy = {
     dashboard: "Кабінет",
     day: "День",
     delete: "Видалити",
+    deleteAccount: "Видалити акаунт",
+    deleteAccountConfirm: "Видалити назавжди",
+    deleteAccountMessage:
+      "Це видалить ваш акаунт Kolo, профіль користувача та дані, пов'язані з цим акаунтом. Цю дію неможливо скасувати.",
+    deleteAccountTitle: "Видалити акаунт?",
     deleteContentMessage: "Цей запис буде видалено з профілю бізнесу.",
     deleteContentTitle: "Видалити запис?",
     description: "Опис",
@@ -148,6 +157,17 @@ const copy = {
       "Знаходьте українські бізнеси, сервіси та спеціалістів у Канаді.",
     homeTitle: "Українські бізнеси поруч",
     latestUpdates: "Нові послуги та події",
+    liveNearby: "Живий пульс поруч",
+    planToday: "Що хочете знайти сьогодні?",
+    planFood: "Смачна зупинка",
+    planFoodText: "Кухня, випічка, готова їжа та локальні продукти.",
+    planCare: "Для себе",
+    planCareText: "Краса, здоров'я, тренери, фото та сервісні спеціалісти.",
+    planWeekend: "Плани на вихідні",
+    planWeekendText: "Події, туризм, квіти, декор і корисні місця.",
+    statBusinesses: "бізнесів",
+    statCategories: "категорій",
+    statCities: "міст",
     location: "Локація",
     manageProfile: "Керувати профілем",
     myLocation: "Моя локація",
@@ -180,6 +200,12 @@ const copy = {
     save: "Зберегти",
     saveChanges: "Зберегти зміни",
     saved: "Зміни збережено",
+    saveBusiness: "Зберегти",
+    savedBusiness: "Збережено",
+    savedBusinesses: "Збережені бізнеси",
+    removeSavedBusiness: "Прибрати",
+    signInToSave: "Увійдіть, щоб зберегти бізнес.",
+    noSavedBusinesses: "Поки що немає збережених бізнесів.",
     settings: "Налаштування",
     seeAll: "Усі",
     search: "Пошук",
@@ -187,6 +213,14 @@ const copy = {
     selected: "Вибрано",
     serviceTitle: "Назва послуги",
     services: "Послуги",
+    accountDeleted: "Акаунт видалено.",
+    accountCreated:
+      "Акаунт створено. Перевірте email, якщо підтвердження пошти увімкнено.",
+    accountDeletionNote:
+      "Видалення акаунта назавжди прибере ваш доступ і профіль користувача.",
+    accountDeletionTitle: "Керування акаунтом",
+    passwordTooShort: "Пароль має містити щонайменше 6 символів.",
+    createAccountEmail: "Створити акаунт",
     signInEmail: "Увійти з email",
     signedInAs: "Ви увійшли як",
     submit: "Надіслати",
@@ -237,6 +271,11 @@ const copy = {
     dashboard: "Dashboard",
     day: "Day",
     delete: "Delete",
+    deleteAccount: "Delete account",
+    deleteAccountConfirm: "Delete permanently",
+    deleteAccountMessage:
+      "This deletes your Kolo account, user profile, and data connected to this account. This action cannot be undone.",
+    deleteAccountTitle: "Delete account?",
     deleteContentMessage: "This item will be removed from the business profile.",
     deleteContentTitle: "Delete item?",
     description: "Description",
@@ -258,6 +297,17 @@ const copy = {
       "Find Ukrainian-owned businesses, services, and specialists in Canada.",
     homeTitle: "Ukrainian businesses nearby",
     latestUpdates: "New services & events",
+    liveNearby: "Live nearby",
+    planToday: "What do you want to find today?",
+    planFood: "Something tasty",
+    planFoodText: "Food, bakeries, ready meals, and local products.",
+    planCare: "For yourself",
+    planCareText: "Beauty, wellness, trainers, photo, and service specialists.",
+    planWeekend: "Weekend plans",
+    planWeekendText: "Events, travel, flowers, decor, and useful places.",
+    statBusinesses: "businesses",
+    statCategories: "categories",
+    statCities: "cities",
     location: "Location",
     manageProfile: "Manage profile",
     myLocation: "My location",
@@ -290,6 +340,12 @@ const copy = {
     save: "Save",
     saveChanges: "Save changes",
     saved: "Changes saved",
+    saveBusiness: "Save",
+    savedBusiness: "Saved",
+    savedBusinesses: "Saved businesses",
+    removeSavedBusiness: "Remove",
+    signInToSave: "Sign in to save this business.",
+    noSavedBusinesses: "No saved businesses yet.",
     settings: "Settings",
     seeAll: "All",
     search: "Search",
@@ -297,6 +353,14 @@ const copy = {
     selected: "Selected",
     serviceTitle: "Service title",
     services: "Services",
+    accountDeleted: "Account deleted.",
+    accountCreated:
+      "Account created. Check your email if email confirmation is enabled.",
+    accountDeletionNote:
+      "Account deletion permanently removes your access and user profile.",
+    accountDeletionTitle: "Account management",
+    passwordTooShort: "Password must be at least 6 characters.",
+    createAccountEmail: "Create account",
     signInEmail: "Sign in with email",
     signedInAs: "Signed in as",
     submit: "Submit",
@@ -405,6 +469,9 @@ export default function App() {
   const [authMessage, setAuthMessage] = useState("");
   const [dataMessage, setDataMessage] = useState("");
   const [isAuthBusy, setIsAuthBusy] = useState(false);
+  const [savedBusyBusinessId, setSavedBusyBusinessId] = useState<string | null>(
+    null,
+  );
   const labels = { ...copy[locale], ...connectionCopy[locale] };
 
   useEffect(() => {
@@ -622,6 +689,10 @@ export default function App() {
     () => businesses.length,
     [businesses],
   );
+  const savedBusinesses = useMemo(
+    () => businesses.filter((business) => business.isSaved),
+    [businesses],
+  );
 
   const results = useMemo(
     () =>
@@ -651,7 +722,6 @@ export default function App() {
   );
 
   const profileName = getSessionName(session);
-  const profileEmail = session?.user.email ?? labels.notSignedIn;
 
   async function handleGoogleSignIn() {
     try {
@@ -680,10 +750,6 @@ export default function App() {
   }
 
   async function handleEmailSignIn(email: string, password: string) {
-    if (!isExpoGo) {
-      return;
-    }
-
     if (!email.trim() || !password.trim()) {
       setAuthMessage(labels.emailPasswordRequired);
       return;
@@ -706,6 +772,59 @@ export default function App() {
     }
   }
 
+  async function handleEmailSignUp(email: string, password: string) {
+    if (!email.trim() || !password.trim()) {
+      setAuthMessage(labels.emailPasswordRequired);
+      return;
+    }
+
+    if (password.length < 6) {
+      setAuthMessage(labels.passwordTooShort);
+      return;
+    }
+
+    try {
+      setAuthMessage("");
+      setIsAuthBusy(true);
+      const nextSession = await signUpWithEmailPassword(email, password);
+
+      if (nextSession) {
+        setSession(nextSession);
+      } else {
+        setAuthMessage(labels.accountCreated);
+      }
+    } catch (error) {
+      console.error("[kolo:mobile-email-signup]", error);
+      setAuthMessage(getErrorMessage(error));
+    } finally {
+      setIsAuthBusy(false);
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (!isSupabaseConfigured || !session?.user.id) {
+      setAuthMessage(labels.signInRequired);
+      return;
+    }
+
+    try {
+      setAuthMessage("");
+      setIsAuthBusy(true);
+      await deleteCurrentAccount();
+      setSession(null);
+      setOwnedBusiness(null);
+      setOwnedContentItems([]);
+      setSelectedBusiness(null);
+      setActiveTab("profile");
+      setAuthMessage(labels.accountDeleted);
+    } catch (error) {
+      console.error("[kolo:mobile-account-delete]", error);
+      setAuthMessage(getErrorMessage(error));
+    } finally {
+      setIsAuthBusy(false);
+    }
+  }
+
   async function handleSignOut() {
     try {
       setAuthMessage("");
@@ -719,6 +838,57 @@ export default function App() {
       setAuthMessage(getErrorMessage(error));
     } finally {
       setIsAuthBusy(false);
+    }
+  }
+
+  async function handleToggleSavedBusiness(business: Business) {
+    if (!isSupabaseConfigured || !session?.user.id) {
+      setAuthMessage(labels.signInToSave);
+      setSelectedBusiness(null);
+      setActiveTab("profile");
+      return;
+    }
+
+    const nextIsSaved = !business.isSaved;
+    const applySavedState = (currentBusinesses: Business[]) =>
+      currentBusinesses.map((currentBusiness) =>
+        isSameBusinessReference(currentBusiness, business)
+          ? { ...currentBusiness, isSaved: nextIsSaved }
+          : currentBusiness,
+      );
+
+    try {
+      setAuthMessage("");
+      setSavedBusyBusinessId(business.id);
+      setDirectoryBusinesses(applySavedState);
+      setSelectedBusiness((currentBusiness) =>
+        currentBusiness && isSameBusinessReference(currentBusiness, business)
+          ? { ...currentBusiness, isSaved: nextIsSaved }
+          : currentBusiness,
+      );
+
+      if (nextIsSaved) {
+        await saveBusiness(business.id, session.user.id);
+      } else {
+        await unsaveBusiness(business.id, session.user.id);
+      }
+    } catch (error) {
+      console.error("[kolo:mobile-saved-business]", error);
+      setAuthMessage(getErrorMessage(error));
+      setDirectoryBusinesses((currentBusinesses) =>
+        currentBusinesses.map((currentBusiness) =>
+          isSameBusinessReference(currentBusiness, business)
+            ? { ...currentBusiness, isSaved: Boolean(business.isSaved) }
+            : currentBusiness,
+        ),
+      );
+      setSelectedBusiness((currentBusiness) =>
+        currentBusiness && isSameBusinessReference(currentBusiness, business)
+          ? { ...currentBusiness, isSaved: Boolean(business.isSaved) }
+          : currentBusiness,
+      );
+    } finally {
+      setSavedBusyBusinessId(null);
     }
   }
 
@@ -853,6 +1023,8 @@ export default function App() {
                 setActiveTab("search");
               }}
               onSearchPress={() => setActiveTab("search")}
+              onToggleSavedBusiness={handleToggleSavedBusiness}
+              savedBusyBusinessId={savedBusyBusinessId}
             />
           ) : null}
 
@@ -876,6 +1048,8 @@ export default function App() {
               setQuery={setQuery}
               setSelectedBusiness={setSelectedBusiness}
               setSelectedCategory={setSelectedCategory}
+              onToggleSavedBusiness={handleToggleSavedBusiness}
+              savedBusyBusinessId={savedBusyBusinessId}
               totalCount={totalBusinessesCount}
             />
           ) : null}
@@ -901,8 +1075,6 @@ export default function App() {
               onDeleteContent={handleBusinessContentDelete}
               onSave={handleBusinessSave}
               onUpdateContent={handleBusinessContentUpdate}
-              profileEmail={profileEmail}
-              profileName={profileName}
             />
           ) : null}
 
@@ -913,12 +1085,18 @@ export default function App() {
               isAuthBusy={isAuthBusy}
               isSupabaseConfigured={isSupabaseConfigured}
               labels={labels}
+              locale={locale}
+              onDeleteAccount={handleDeleteAccount}
               onEmailSignIn={handleEmailSignIn}
+              onEmailSignUp={handleEmailSignUp}
+              onBusinessPress={setSelectedBusiness}
+              onToggleSavedBusiness={handleToggleSavedBusiness}
+              savedBusinesses={savedBusinesses}
+              savedBusyBusinessId={savedBusyBusinessId}
               onSignIn={handleGoogleSignIn}
               onSignOut={handleSignOut}
               session={session}
               setIsDarkMode={setIsDarkMode}
-              showEmailPasswordSignIn={isExpoGo}
             />
           ) : null}
         </View>
@@ -973,6 +1151,8 @@ export default function App() {
           setSelectedBusiness(null);
           setActiveTab("profile");
         }}
+        onToggleSavedBusiness={handleToggleSavedBusiness}
+        saveBusyBusinessId={savedBusyBusinessId}
         onManage={() => {
           setSelectedBusiness(null);
           setActiveTab("dashboard");
@@ -991,6 +1171,7 @@ function KeyboardAwareScreen({ children }: { children: React.ReactNode }) {
     >
       <ScrollView
         automaticallyAdjustKeyboardInsets
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[
           styles.screenContent,
           styles.keyboardAwareContent,
@@ -1014,8 +1195,10 @@ function SearchScreen({
   locale,
   location,
   onClearFilters,
+  onToggleSavedBusiness,
   query,
   results,
+  savedBusyBusinessId,
   selectedCategory,
   setLocation,
   setQuery,
@@ -1030,8 +1213,10 @@ function SearchScreen({
   locale: Locale;
   location: string;
   onClearFilters: () => void;
+  onToggleSavedBusiness: (business: Business) => void;
   query: string;
   results: Business[];
+  savedBusyBusinessId: string | null;
   selectedCategory: string;
   setLocation: (value: string) => void;
   setQuery: (value: string) => void;
@@ -1053,7 +1238,7 @@ function SearchScreen({
             autoCapitalize="none"
             onChangeText={setQuery}
             placeholder={labels.searchPlaceholder}
-            placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+            placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
             style={[styles.input, isDarkMode ? styles.darkInput : null]}
             value={query}
           />
@@ -1096,7 +1281,7 @@ function SearchScreen({
               ]}
             >
               <X
-                color={isDarkMode ? "#A78D78" : "#6E473B"}
+                color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
                 size={15}
                 strokeWidth={2.7}
               />
@@ -1128,6 +1313,8 @@ function SearchScreen({
             labels={labels}
             locale={locale}
             onPress={() => setSelectedBusiness(business)}
+            onToggleSaved={() => onToggleSavedBusiness(business)}
+            saveBusy={savedBusyBusinessId === business.id}
           />
         ))
       ) : (
@@ -1149,6 +1336,8 @@ function HomeScreen({
   onCategoryPress,
   onLocationPress,
   onSearchPress,
+  onToggleSavedBusiness,
+  savedBusyBusinessId,
 }: {
   businesses: Business[];
   canViewContacts: boolean;
@@ -1159,6 +1348,8 @@ function HomeScreen({
   onCategoryPress: (categorySlug: string) => void;
   onLocationPress: (location: string) => void;
   onSearchPress: () => void;
+  onToggleSavedBusiness: (business: Business) => void;
+  savedBusyBusinessId: string | null;
 }) {
   const uniqueBusinesses = getUniqueBusinessesById(businesses);
   const contentFeedItems = uniqueBusinesses
@@ -1207,6 +1398,28 @@ function HomeScreen({
     .sort((first, second) => second.count - first.count)
     .slice(0, 6);
   const quickCities = citySuggestions.slice(0, 8);
+  const homeStats = [
+    { label: labels.statBusinesses, value: uniqueBusinesses.length.toString() },
+    { label: labels.statCategories, value: categories.length.toString() },
+    { label: labels.statCities, value: citySuggestions.length.toString() },
+  ];
+  const discoveryCards = [
+    {
+      categorySlug: "grocery-stores",
+      text: labels.planFoodText,
+      title: labels.planFood,
+    },
+    {
+      categorySlug: "wellness-care",
+      text: labels.planCareText,
+      title: labels.planCare,
+    },
+    {
+      categorySlug: "events",
+      text: labels.planWeekendText,
+      title: labels.planWeekend,
+    },
+  ];
 
   return (
     <ScrollView
@@ -1222,6 +1435,21 @@ function HomeScreen({
         <Text style={[styles.homeIntro, isDarkMode ? styles.darkMutedText : null]}>
           {labels.homeIntro}
         </Text>
+        <View style={styles.homeStatsRow}>
+          {homeStats.map((stat) => (
+            <View
+              key={stat.label}
+              style={[styles.homeStatPill, isDarkMode ? styles.darkSettingRow : null]}
+            >
+              <Text style={[styles.homeStatValue, isDarkMode ? styles.darkText : null]}>
+                {stat.value}
+              </Text>
+              <Text style={[styles.homeStatLabel, isDarkMode ? styles.darkMutedText : null]}>
+                {stat.label}
+              </Text>
+            </View>
+          ))}
+        </View>
         <Pressable
           accessibilityRole="button"
           onPress={onSearchPress}
@@ -1230,7 +1458,7 @@ function HomeScreen({
             isDarkMode ? styles.darkSettingRow : null,
           ]}
         >
-          <Search color={isDarkMode ? "#A78D78" : "#6E473B"} size={20} strokeWidth={2.5} />
+          <Search color={isDarkMode ? "#E5E5EA" : "#6E6E73"} size={20} strokeWidth={2.5} />
           <View style={styles.flex}>
             <Text style={[styles.homeSearchTitle, isDarkMode ? styles.darkText : null]}>
               {labels.search}
@@ -1244,7 +1472,70 @@ function HomeScreen({
 
       <View style={styles.homeSectionHeader}>
         <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
-          {labels.latestUpdates}
+          {labels.planToday}
+        </Text>
+      </View>
+      <ScrollView
+        contentContainerStyle={styles.discoveryRail}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+      >
+        {discoveryCards.map((card, index) => (
+          <Pressable
+            accessibilityRole="button"
+            key={card.categorySlug}
+            onPress={() => onCategoryPress(card.categorySlug)}
+            style={[
+              styles.discoveryCard,
+              index === 0 ? styles.discoveryCardDark : null,
+              isDarkMode && index !== 0 ? styles.darkCard : null,
+            ]}
+          >
+            <View
+              style={[
+                styles.discoveryIcon,
+                index === 0 ? styles.discoveryIconDark : null,
+                isDarkMode && index !== 0 ? styles.discoveryIconDark : null,
+              ]}
+            >
+              {index === 1 ? (
+                <Sparkles
+                  color={isDarkMode ? "#FFFFFF" : "#111111"}
+                  size={19}
+                  strokeWidth={2.8}
+                />
+              ) : (
+                <Store
+                  color={index === 0 || isDarkMode ? "#FFFFFF" : "#111111"}
+                  size={19}
+                  strokeWidth={2.8}
+                />
+              )}
+            </View>
+            <Text
+              style={[
+                styles.discoveryTitle,
+                index === 0 || isDarkMode ? styles.discoveryTitleLight : null,
+              ]}
+            >
+              {card.title}
+            </Text>
+            <Text
+              style={[
+                styles.discoveryText,
+                index === 0 ? styles.discoveryTextLight : null,
+                isDarkMode && index !== 0 ? styles.darkMutedText : null,
+              ]}
+            >
+              {card.text}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      <View style={styles.homeSectionHeader}>
+        <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+          {labels.liveNearby}
         </Text>
         <Text style={[styles.resultCount, isDarkMode ? styles.darkBadge : null]}>
           {contentFeedItems.length}
@@ -1272,6 +1563,8 @@ function HomeScreen({
             labels={labels}
             locale={locale}
             onPress={() => onBusinessPress(business)}
+            onToggleSaved={() => onToggleSavedBusiness(business)}
+            saveBusy={savedBusyBusinessId === business.id}
           />
         ))
       )}
@@ -1286,17 +1579,22 @@ function HomeScreen({
               {featuredBusinesses.length}
             </Text>
           </View>
-          {featuredBusinesses.map((business) => (
-            <BusinessCard
-              business={business}
-              canViewContacts={canViewContacts}
-              isDarkMode={isDarkMode}
-              key={business.id}
-              labels={labels}
-              locale={locale}
-              onPress={() => onBusinessPress(business)}
-            />
-          ))}
+          <ScrollView
+            contentContainerStyle={styles.featuredBusinessRail}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+          >
+            {featuredBusinesses.map((business) => (
+              <HomeBusinessFeatureCard
+                business={business}
+                isDarkMode={isDarkMode}
+                key={business.id}
+                labels={labels}
+                locale={locale}
+                onPress={() => onBusinessPress(business)}
+              />
+            ))}
+          </ScrollView>
         </>
       ) : null}
 
@@ -1339,7 +1637,7 @@ function HomeScreen({
             onPress={() => onLocationPress(city)}
             style={[styles.cityPill, isDarkMode ? styles.darkSettingRow : null]}
           >
-            <MapPin color={isDarkMode ? "#A78D78" : "#6E473B"} size={16} strokeWidth={2.5} />
+            <MapPin color={isDarkMode ? "#E5E5EA" : "#6E6E73"} size={16} strokeWidth={2.5} />
             <Text style={[styles.cityPillText, isDarkMode ? styles.darkText : null]}>
               {city}
             </Text>
@@ -1465,7 +1763,7 @@ function RegisterScreen({
               setSubmitError("");
             }}
             placeholder={labels.name}
-            placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+            placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
             style={[styles.input, isDarkMode ? styles.darkInput : null]}
             value={name}
           />
@@ -1497,8 +1795,8 @@ function RegisterScreen({
           </Text>
           <Switch
             onValueChange={setServesAllCanada}
-            thumbColor={servesAllCanada ? "#E1D4C2" : "#291C0E"}
-            trackColor={{ false: "#A78D78", true: "#6E473B" }}
+            thumbColor={servesAllCanada ? "#FFFFFF" : "#111111"}
+            trackColor={{ false: "#E5E5EA", true: "#6E6E73" }}
             value={servesAllCanada}
           />
         </View>
@@ -1510,7 +1808,7 @@ function RegisterScreen({
               setSubmitError("");
             }}
             placeholder={labels.description}
-            placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+            placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
             style={[
               styles.input,
               styles.textArea,
@@ -1527,7 +1825,7 @@ function RegisterScreen({
             keyboardType="phone-pad"
             onChangeText={setPhone}
             placeholder={labels.phone}
-            placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+            placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
             style={[styles.input, isDarkMode ? styles.darkInput : null]}
             value={phone}
           />
@@ -1538,7 +1836,7 @@ function RegisterScreen({
             keyboardType="url"
             onChangeText={setWebsite}
             placeholder={labels.website}
-            placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+            placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
             style={[styles.input, isDarkMode ? styles.darkInput : null]}
             value={website}
           />
@@ -1548,7 +1846,7 @@ function RegisterScreen({
             autoCapitalize="none"
             onChangeText={setInstagram}
             placeholder={labels.instagram}
-            placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+            placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
             style={[styles.input, isDarkMode ? styles.darkInput : null]}
             value={instagram}
           />
@@ -1557,7 +1855,7 @@ function RegisterScreen({
           <TextInput
             onChangeText={setAddress}
             placeholder={labels.address}
-            placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+            placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
             style={[styles.input, isDarkMode ? styles.darkInput : null]}
             value={address}
           />
@@ -1578,7 +1876,7 @@ function RegisterScreen({
                 <Image source={{ uri: logo.uri }} style={styles.logoPreviewImage} />
               ) : (
                 <Upload
-                  color={isDarkMode ? "#A78D78" : "#6E473B"}
+                  color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
                   size={24}
                   strokeWidth={2.5}
                 />
@@ -1618,8 +1916,6 @@ function DashboardScreen({
   onDeleteContent,
   onSave,
   onUpdateContent,
-  profileEmail,
-  profileName,
 }: {
   business: Business | null;
   contentItems: BusinessContentItem[];
@@ -1630,8 +1926,6 @@ function DashboardScreen({
   onDeleteContent: (contentItemId: string) => Promise<void> | void;
   onSave: (business: Business) => Promise<void> | void;
   onUpdateContent: (input: BusinessContentUpdateInput) => Promise<void> | void;
-  profileEmail: string;
-  profileName: string;
 }) {
   const [draft, setDraft] = useState(business ?? defaultOwnedBusiness);
   const [saved, setSaved] = useState(false);
@@ -1683,20 +1977,6 @@ function DashboardScreen({
 
   return (
     <KeyboardAwareScreen>
-      <View style={[styles.profileCard, isDarkMode ? styles.darkCard : null]}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{getInitials(profileName)}</Text>
-        </View>
-        <View style={styles.flex}>
-          <Text style={[styles.profileName, isDarkMode ? styles.darkText : null]}>
-            {profileName}
-          </Text>
-          <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
-            {profileEmail}
-          </Text>
-        </View>
-      </View>
-
       <View style={[styles.dashboardTabs, isDarkMode ? styles.darkSettingRow : null]}>
         <DashboardPanelButton
           active={activePanel === "profile"}
@@ -1753,7 +2033,7 @@ function DashboardScreen({
               ]}
             >
               <X
-                color={isDarkMode ? "#A78D78" : "#291C0E"}
+                color={isDarkMode ? "#E5E5EA" : "#111111"}
                 size={19}
                 strokeWidth={2.7}
               />
@@ -1802,8 +2082,8 @@ function DashboardScreen({
                 setDraft({ ...draft, servesAllCanada: value });
                 setSaved(false);
               }}
-              thumbColor={draft.servesAllCanada ? "#E1D4C2" : "#291C0E"}
-              trackColor={{ false: "#A78D78", true: "#6E473B" }}
+              thumbColor={draft.servesAllCanada ? "#FFFFFF" : "#111111"}
+              trackColor={{ false: "#E5E5EA", true: "#6E6E73" }}
               value={draft.servesAllCanada}
             />
           </View>
@@ -1833,7 +2113,7 @@ function DashboardScreen({
                 setSaved(false);
               }}
               placeholder={labels.phone}
-              placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+              placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
               style={[styles.input, isDarkMode ? styles.darkInput : null]}
               value={draft.phone}
             />
@@ -1847,7 +2127,7 @@ function DashboardScreen({
                 setSaved(false);
               }}
               placeholder={labels.website}
-              placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+              placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
               style={[styles.input, isDarkMode ? styles.darkInput : null]}
               value={draft.website}
             />
@@ -1860,7 +2140,7 @@ function DashboardScreen({
                 setSaved(false);
               }}
               placeholder={labels.instagram}
-              placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+              placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
               style={[styles.input, isDarkMode ? styles.darkInput : null]}
               value={draft.instagram ?? ""}
             />
@@ -1872,7 +2152,7 @@ function DashboardScreen({
                 setSaved(false);
               }}
               placeholder={labels.address}
-              placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+              placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
               style={[styles.input, isDarkMode ? styles.darkInput : null]}
               value={draft.address ?? ""}
             />
@@ -1988,7 +2268,7 @@ function DashboardProfilePreview({
           ]}
         >
           <Pencil
-            color={isDarkMode ? "#A78D78" : "#291C0E"}
+            color={isDarkMode ? "#E5E5EA" : "#111111"}
             size={19}
             strokeWidth={2.7}
           />
@@ -2197,7 +2477,7 @@ function ContentDateTimePicker({
                   ]}
                 >
                   <X
-                    color={isDarkMode ? "#A78D78" : "#291C0E"}
+                    color={isDarkMode ? "#E5E5EA" : "#111111"}
                     size={19}
                     strokeWidth={2.7}
                   />
@@ -2208,7 +2488,7 @@ function ContentDateTimePicker({
                   display="spinner"
                   mode="datetime"
                   onChange={handleNativeChange}
-                  textColor={isDarkMode ? "#E1D4C2" : "#291C0E"}
+                  textColor={isDarkMode ? "#FFFFFF" : "#111111"}
                   value={selectedDate}
                 />
                 <PrimaryButton label={labels.done} onPress={handleApply} />
@@ -2435,7 +2715,7 @@ function BusinessContentSection({
           ]}
         >
           <Plus
-            color={isDarkMode ? "#A78D78" : "#6E473B"}
+            color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
             size={18}
             strokeWidth={2.7}
           />
@@ -2522,7 +2802,7 @@ function BusinessContentSection({
                     ]}
                   >
                     <X
-                      color={isDarkMode ? "#A78D78" : "#291C0E"}
+                      color={isDarkMode ? "#E5E5EA" : "#111111"}
                       size={19}
                       strokeWidth={2.7}
                     />
@@ -2540,7 +2820,7 @@ function BusinessContentSection({
               setSuccessMessage("");
             }}
             placeholder={isEvent ? labels.eventTitle : labels.serviceTitle}
-            placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+            placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
             style={[styles.input, isDarkMode ? styles.darkInput : null]}
             value={title}
           />
@@ -2555,7 +2835,7 @@ function BusinessContentSection({
               setSuccessMessage("");
             }}
             placeholder={labels.contentDescription}
-            placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+            placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
             style={[
               styles.input,
               styles.textArea,
@@ -2574,7 +2854,7 @@ function BusinessContentSection({
                 setSuccessMessage("");
               }}
               placeholder={isFree ? labels.free : labels.pricePlaceholder}
-              placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+              placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
               style={[
                 styles.input,
                 styles.inlinePickerInput,
@@ -2612,7 +2892,7 @@ function BusinessContentSection({
                 <Image source={{ uri: imagePreviewUri }} style={styles.logoPreviewImage} />
               ) : (
                 <Upload
-                  color={isDarkMode ? "#A78D78" : "#6E473B"}
+                  color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
                   size={24}
                   strokeWidth={2.5}
                 />
@@ -2653,7 +2933,7 @@ function BusinessContentSection({
                     setSuccessMessage("");
                   }}
                   placeholder={labels.eventLocation}
-                  placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+                  placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
                   style={[
                     styles.input,
                     styles.inlinePickerInput,
@@ -2681,7 +2961,7 @@ function BusinessContentSection({
                   setSuccessMessage("");
                 }}
                 placeholder="https://"
-                placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+                placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
                 style={[styles.input, isDarkMode ? styles.darkInput : null]}
                 value={linkUrl}
               />
@@ -2760,7 +3040,7 @@ function BusinessContentCard({
             ]}
           >
             <Pencil
-              color={isDarkMode ? "#A78D78" : "#6E473B"}
+              color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
               size={16}
               strokeWidth={2.6}
             />
@@ -2775,7 +3055,7 @@ function BusinessContentCard({
             ]}
           >
             <Trash2
-              color={isDarkMode ? "#E1D4C2" : "#6E473B"}
+              color={isDarkMode ? "#FFFFFF" : "#6E6E73"}
               size={16}
               strokeWidth={2.6}
             />
@@ -2810,24 +3090,36 @@ function ProfileScreen({
   isAuthBusy,
   isSupabaseConfigured,
   labels,
+  locale,
+  onBusinessPress,
+  onDeleteAccount,
   onEmailSignIn,
+  onEmailSignUp,
   onSignIn,
   onSignOut,
+  onToggleSavedBusiness,
+  savedBusinesses,
+  savedBusyBusinessId,
   session,
   setIsDarkMode,
-  showEmailPasswordSignIn,
 }: {
   authMessage: string;
   isDarkMode: boolean;
   isAuthBusy: boolean;
   isSupabaseConfigured: boolean;
   labels: Record<string, string>;
+  locale: Locale;
+  onBusinessPress: (business: Business) => void;
+  onDeleteAccount: () => Promise<void>;
   onEmailSignIn: (email: string, password: string) => Promise<void>;
+  onEmailSignUp: (email: string, password: string) => Promise<void>;
   onSignIn: () => Promise<void>;
   onSignOut: () => Promise<void>;
+  onToggleSavedBusiness: (business: Business) => void;
+  savedBusinesses: Business[];
+  savedBusyBusinessId: string | null;
   session: Session | null;
   setIsDarkMode: (value: boolean) => void;
-  showEmailPasswordSignIn: boolean;
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -2838,6 +3130,27 @@ function ProfileScreen({
   async function handleEmailSubmit() {
     await onEmailSignIn(email, password);
     setPassword("");
+  }
+
+  async function handleEmailCreate() {
+    await onEmailSignUp(email, password);
+    setPassword("");
+  }
+
+  function handleDeleteAccountPress() {
+    Alert.alert(labels.deleteAccountTitle, labels.deleteAccountMessage, [
+      {
+        style: "cancel",
+        text: labels.cancel,
+      },
+      {
+        onPress: () => {
+          void onDeleteAccount();
+        },
+        style: "destructive",
+        text: labels.deleteAccountConfirm,
+      },
+    ]);
   }
 
   return (
@@ -2888,47 +3201,52 @@ function ProfileScreen({
               }}
             />
 
-            {showEmailPasswordSignIn ? (
-              <View
-                style={[
-                  styles.contentComposer,
-                  isDarkMode ? styles.darkSettingRow : null,
-                ]}
-              >
-                <Field isDarkMode={isDarkMode} label={labels.email}>
-                  <TextInput
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    keyboardType="email-address"
-                    onChangeText={setEmail}
-                    placeholder="email@example.com"
-                    placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
-                    style={[styles.input, isDarkMode ? styles.darkInput : null]}
-                    textContentType="emailAddress"
-                    value={email}
-                  />
-                </Field>
-                <Field isDarkMode={isDarkMode} label={labels.password}>
-                  <TextInput
-                    autoCapitalize="none"
-                    onChangeText={setPassword}
-                    placeholder={labels.password}
-                    placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
-                    secureTextEntry
-                    style={[styles.input, isDarkMode ? styles.darkInput : null]}
-                    textContentType="password"
-                    value={password}
-                  />
-                </Field>
-                <PrimaryButton
-                  disabled={isAuthBusy || !isSupabaseConfigured}
-                  label={labels.signInEmail}
-                  onPress={() => {
-                    void handleEmailSubmit();
-                  }}
+            <View
+              style={[
+                styles.contentComposer,
+                isDarkMode ? styles.darkSettingRow : null,
+              ]}
+            >
+              <Field isDarkMode={isDarkMode} label={labels.email}>
+                <TextInput
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  keyboardType="email-address"
+                  onChangeText={setEmail}
+                  placeholder="email@example.com"
+                  placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
+                  style={[styles.input, isDarkMode ? styles.darkInput : null]}
+                  textContentType="emailAddress"
+                  value={email}
                 />
-              </View>
-            ) : null}
+              </Field>
+              <Field isDarkMode={isDarkMode} label={labels.password}>
+                <TextInput
+                  autoCapitalize="none"
+                  onChangeText={setPassword}
+                  placeholder={labels.password}
+                  placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
+                  secureTextEntry
+                  style={[styles.input, isDarkMode ? styles.darkInput : null]}
+                  textContentType="password"
+                  value={password}
+                />
+              </Field>
+              <PrimaryButton
+                disabled={isAuthBusy || !isSupabaseConfigured}
+                label={labels.signInEmail}
+                onPress={() => {
+                  void handleEmailSubmit();
+                }}
+              />
+              <SecondaryButton
+                disabled={isAuthBusy || !isSupabaseConfigured}
+                label={labels.createAccountEmail}
+                onPress={() => {
+                  void handleEmailCreate();
+                }}
+              />
+            </View>
           </>
         )}
         {!isSupabaseConfigured ? (
@@ -2936,6 +3254,51 @@ function ProfileScreen({
         ) : null}
         {authMessage ? <Text style={styles.errorText}>{authMessage}</Text> : null}
       </View>
+
+      {session ? (
+        <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
+          <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+            {labels.savedBusinesses}
+          </Text>
+          {savedBusinesses.length > 0 ? (
+            <View style={styles.contentList}>
+              {savedBusinesses.map((business) => (
+                <BusinessCard
+                  business={business}
+                  canViewContacts
+                  isDarkMode={isDarkMode}
+                  key={business.id}
+                  labels={labels}
+                  locale={locale}
+                  onPress={() => onBusinessPress(business)}
+                  onToggleSaved={() => onToggleSavedBusiness(business)}
+                  saveBusy={savedBusyBusinessId === business.id}
+                />
+              ))}
+            </View>
+          ) : (
+            <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
+              {labels.noSavedBusinesses}
+            </Text>
+          )}
+        </View>
+      ) : null}
+
+      {session ? (
+        <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
+          <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+            {labels.accountDeletionTitle}
+          </Text>
+          <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+            {labels.accountDeletionNote}
+          </Text>
+          <DangerButton
+            disabled={isAuthBusy || !isSupabaseConfigured}
+            label={labels.deleteAccount}
+            onPress={handleDeleteAccountPress}
+          />
+        </View>
+      ) : null}
 
       <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
         <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
@@ -2945,9 +3308,9 @@ function ProfileScreen({
         <View style={[styles.settingsRow, isDarkMode ? styles.darkSettingRow : null]}>
           <View style={styles.settingLabelRow}>
             {isDarkMode ? (
-              <Moon color="#A78D78" size={20} strokeWidth={2.4} />
+              <Moon color="#E5E5EA" size={20} strokeWidth={2.4} />
             ) : (
-              <Sun color="#6E473B" size={20} strokeWidth={2.4} />
+              <Sun color="#6E6E73" size={20} strokeWidth={2.4} />
             )}
             <View>
               <Text
@@ -2970,14 +3333,79 @@ function ProfileScreen({
           </View>
           <Switch
             onValueChange={setIsDarkMode}
-            thumbColor={isDarkMode ? "#E1D4C2" : "#291C0E"}
-            trackColor={{ false: "#A78D78", true: "#6E473B" }}
+            thumbColor={isDarkMode ? "#FFFFFF" : "#111111"}
+            trackColor={{ false: "#E5E5EA", true: "#6E6E73" }}
             value={isDarkMode}
           />
         </View>
 
       </View>
     </KeyboardAwareScreen>
+  );
+}
+
+function HomeBusinessFeatureCard({
+  business,
+  isDarkMode,
+  labels,
+  locale,
+  onPress,
+}: {
+  business: Business;
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  locale: Locale;
+  onPress: () => void;
+}) {
+  const contentCount = business.contentItems?.length ?? 0;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={[styles.homeFeatureCard, isDarkMode ? styles.darkBusinessCard : null]}
+    >
+      <View style={styles.homeFeatureTopRow}>
+        {business.logoUrl ? (
+          <Image
+            resizeMode="cover"
+            source={{ uri: business.logoUrl }}
+            style={styles.homeFeatureLogo}
+          />
+        ) : (
+          <View style={[styles.homeFeatureLogo, styles.homeFeatureLogoFallback]}>
+            <Store
+              color={isDarkMode ? "#E5E5EA" : "#111111"}
+              size={20}
+              strokeWidth={2.8}
+            />
+          </View>
+        )}
+        <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
+          {getCategoryName(business.categorySlug, locale)}
+        </Text>
+      </View>
+      <Text
+        numberOfLines={2}
+        style={[styles.homeFeatureName, isDarkMode ? styles.darkText : null]}
+      >
+        {business.name}
+      </Text>
+      <Text style={[styles.homeFeatureMeta, isDarkMode ? styles.darkMutedText : null]}>
+        {business.servesAllCanada ? labels.canadaWide : business.city}
+      </Text>
+      <Text
+        numberOfLines={2}
+        style={[styles.descriptionText, isDarkMode ? styles.darkMutedText : null]}
+      >
+        {business.description}
+      </Text>
+      {contentCount > 0 ? (
+        <Text style={[styles.homeFeatureSignal, isDarkMode ? styles.darkBadge : null]}>
+          {contentCount} {labels.contentItems}
+        </Text>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -2988,6 +3416,8 @@ function BusinessCard({
   labels,
   locale,
   onPress,
+  onToggleSaved,
+  saveBusy,
 }: {
   business: Business;
   canViewContacts: boolean;
@@ -2995,8 +3425,11 @@ function BusinessCard({
   labels: Record<string, string>;
   locale: Locale;
   onPress: () => void;
+  onToggleSaved: () => void;
+  saveBusy: boolean;
 }) {
   const hasContacts = hasBusinessContacts(business);
+  const saveLabel = business.isSaved ? labels.savedBusiness : labels.saveBusiness;
 
   return (
     <Pressable
@@ -3008,12 +3441,35 @@ function BusinessCard({
         <Text style={[styles.categoryBadge, isDarkMode ? styles.darkBadge : null]}>
           {getCategoryName(business.categorySlug, locale)}
         </Text>
-        {hasBusinessOwnerInfo(business) && business.ownerAvatarUrl ? (
-          <Image
-            source={{ uri: business.ownerAvatarUrl }}
-            style={styles.cardOwnerAvatar}
-          />
-        ) : null}
+        <View style={styles.cardHeaderActions}>
+          {hasBusinessOwnerInfo(business) && business.ownerAvatarUrl ? (
+            <Image
+              source={{ uri: business.ownerAvatarUrl }}
+              style={styles.cardOwnerAvatar}
+            />
+          ) : null}
+          <Pressable
+            accessibilityLabel={saveLabel}
+            accessibilityRole="button"
+            disabled={saveBusy}
+            onPress={(event) => {
+              event.stopPropagation();
+              onToggleSaved();
+            }}
+            style={[
+              styles.saveIconButton,
+              isDarkMode ? styles.darkIconBox : null,
+              business.isSaved ? styles.activeSaveIconButton : null,
+            ]}
+          >
+            <Bookmark
+              color={business.isSaved ? "#FFFFFF" : isDarkMode ? "#E5E5EA" : "#111111"}
+              fill={business.isSaved ? "#FFFFFF" : "transparent"}
+              size={17}
+              strokeWidth={2.7}
+            />
+          </Pressable>
+        </View>
       </View>
       <Text style={[styles.businessName, isDarkMode ? styles.darkText : null]}>
         {business.name}
@@ -3028,13 +3484,17 @@ function BusinessCard({
           {business.city}
         </Text>
       </View>
-      <Text style={[styles.descriptionText, isDarkMode ? styles.darkMutedText : null]}>
+      <Text
+        ellipsizeMode="tail"
+        numberOfLines={2}
+        style={[styles.descriptionText, isDarkMode ? styles.darkMutedText : null]}
+      >
         {business.description}
       </Text>
       {hasContacts && !canViewContacts ? (
         <View style={[styles.lockedContactNote, isDarkMode ? styles.darkSettingRow : null]}>
           <Lock
-            color={isDarkMode ? "#A78D78" : "#6E473B"}
+            color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
             size={16}
             strokeWidth={2.6}
           />
@@ -3044,45 +3504,6 @@ function BusinessCard({
         </View>
       ) : null}
     </Pressable>
-  );
-}
-
-function BusinessOwnerRow({
-  business,
-  isDarkMode,
-  labels,
-}: {
-  business: Business;
-  isDarkMode: boolean;
-  labels: Record<string, string>;
-}) {
-  const ownerName = business.ownerName.trim();
-
-  return (
-    <View style={[styles.businessOwnerRow, isDarkMode ? styles.darkSettingRow : null]}>
-      {business.ownerAvatarUrl ? (
-        <Image
-          source={{ uri: business.ownerAvatarUrl }}
-          style={styles.businessOwnerAvatar}
-        />
-      ) : (
-        <View style={[styles.businessOwnerFallback, isDarkMode ? styles.darkIconBox : null]}>
-          <UserRound
-            color={isDarkMode ? "#A78D78" : "#6E473B"}
-            size={17}
-            strokeWidth={2.5}
-          />
-        </View>
-      )}
-      <View style={styles.flex}>
-        <Text style={[styles.businessOwnerLabel, isDarkMode ? styles.darkMutedText : null]}>
-          {labels.owner}
-        </Text>
-        <Text style={[styles.businessOwnerName, isDarkMode ? styles.darkText : null]}>
-          {ownerName}
-        </Text>
-      </View>
-    </View>
   );
 }
 
@@ -3158,6 +3579,8 @@ function BusinessModal({
   onClose,
   onManage,
   onRequireSignIn,
+  onToggleSavedBusiness,
+  saveBusyBusinessId,
 }: {
   business: Business | null;
   canViewContacts: boolean;
@@ -3167,6 +3590,8 @@ function BusinessModal({
   onClose: () => void;
   onManage: () => void;
   onRequireSignIn: () => void;
+  onToggleSavedBusiness: (business: Business) => void;
+  saveBusyBusinessId: string | null;
 }) {
   const contacts = business ? getBusinessContacts(business, labels) : [];
   const [activeModalTab, setActiveModalTab] = useState<"about" | "services" | "events">(
@@ -3199,6 +3624,7 @@ function BusinessModal({
           {business ? (
             <ScrollView
               bounces
+              contentInsetAdjustmentBehavior="automatic"
               contentContainerStyle={styles.modalContent}
               keyboardShouldPersistTaps="handled"
               nestedScrollEnabled
@@ -3209,36 +3635,56 @@ function BusinessModal({
                 <Text style={[styles.categoryBadge, isDarkMode ? styles.darkBadge : null]}>
                   {getCategoryName(business.categorySlug, locale)}
                 </Text>
-                <Pressable
-                  accessibilityLabel={labels.close}
-                  accessibilityRole="button"
-                  onPress={onClose}
-                  style={[
-                    styles.modalCloseButton,
-                    isDarkMode ? styles.darkSettingRow : null,
-                  ]}
-                >
-                  <X
-                    color={isDarkMode ? "#A78D78" : "#291C0E"}
-                    size={19}
-                    strokeWidth={2.7}
-                  />
-                </Pressable>
+                <View style={styles.cardHeaderActions}>
+                  <Pressable
+                    accessibilityLabel={
+                      business.isSaved ? labels.savedBusiness : labels.saveBusiness
+                    }
+                    accessibilityRole="button"
+                    disabled={saveBusyBusinessId === business.id}
+                    onPress={() => onToggleSavedBusiness(business)}
+                    style={[
+                      styles.saveIconButton,
+                      isDarkMode ? styles.darkIconBox : null,
+                      business.isSaved ? styles.activeSaveIconButton : null,
+                    ]}
+                  >
+                    <Bookmark
+                      color={business.isSaved ? "#FFFFFF" : isDarkMode ? "#E5E5EA" : "#111111"}
+                      fill={business.isSaved ? "#FFFFFF" : "transparent"}
+                      size={17}
+                      strokeWidth={2.7}
+                    />
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel={labels.close}
+                    accessibilityRole="button"
+                    onPress={onClose}
+                    style={[
+                      styles.modalCloseButton,
+                      isDarkMode ? styles.darkSettingRow : null,
+                    ]}
+                  >
+                    <X
+                      color={isDarkMode ? "#E5E5EA" : "#111111"}
+                      size={19}
+                      strokeWidth={2.7}
+                    />
+                  </Pressable>
+                </View>
               </View>
               <Text style={[styles.modalTitle, isDarkMode ? styles.darkText : null]}>
                 {business.name}
               </Text>
-              <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
-                {business.servesAllCanada ? labels.canadaWide : business.city}
-              </Text>
-              {hasBusinessOwnerInfo(business) ? (
-                <BusinessOwnerRow
-                  business={business}
-                  isDarkMode={isDarkMode}
-                  labels={labels}
-                />
-              ) : null}
-
+              {business.servesAllCanada ? (
+                <Text style={[styles.onlineBadge, isDarkMode ? styles.darkOnlineBadge : null]}>
+                  {labels.canadaWide}
+                </Text>
+              ) : (
+                <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+                  {business.city}
+                </Text>
+              )}
               <View style={[styles.dashboardTabs, isDarkMode ? styles.darkSettingRow : null]}>
                 <DashboardPanelButton
                   active={activeModalTab === "about"}
@@ -3361,7 +3807,7 @@ function ContactSignInPrompt({
   return (
     <View style={[styles.contactSignInPrompt, isDarkMode ? styles.darkIconBox : null]}>
       <View style={[styles.contactIcon, isDarkMode ? styles.darkSettingRow : null]}>
-        <Lock color={isDarkMode ? "#A78D78" : "#6E473B"} size={18} strokeWidth={2.5} />
+        <Lock color={isDarkMode ? "#E5E5EA" : "#6E6E73"} size={18} strokeWidth={2.5} />
       </View>
       <View style={styles.flex}>
         <Text style={[styles.contactSectionTitle, isDarkMode ? styles.darkText : null]}>
@@ -3400,7 +3846,7 @@ function ContactRow({
       style={[styles.contactRow, isDarkMode ? styles.darkSettingRow : null]}
     >
       <View style={[styles.contactIcon, isDarkMode ? styles.darkIconBox : null]}>
-        <Icon color={isDarkMode ? "#A78D78" : "#6E473B"} size={18} strokeWidth={2.5} />
+        <Icon color={isDarkMode ? "#E5E5EA" : "#6E6E73"} size={18} strokeWidth={2.5} />
       </View>
       <View style={styles.flex}>
         <Text style={[styles.contactLabel, isDarkMode ? styles.darkMutedText : null]}>
@@ -3458,7 +3904,7 @@ function TabButton({
       style={[styles.tabButton, active ? styles.activeTabButton : null]}
     >
       <Icon
-        color={active ? "#E1D4C2" : isDarkMode ? "#A78D78" : "#6E473B"}
+        color={active ? "#FFFFFF" : isDarkMode ? "#E5E5EA" : "#6E6E73"}
         size={21}
         strokeWidth={2.6}
       />
@@ -3550,7 +3996,7 @@ function CategoryPicker({
                 ]}
               >
                 <X
-                  color={isDarkMode ? "#A78D78" : "#291C0E"}
+                  color={isDarkMode ? "#E5E5EA" : "#111111"}
                   size={19}
                   strokeWidth={2.7}
                 />
@@ -3642,7 +4088,7 @@ function LocationPicker({
           autoCapitalize="words"
           onChangeText={onChange}
           placeholder={allowAll ? labels.allCanada : placeholder}
-          placeholderTextColor={isDarkMode ? "#BEB5A9" : "#6E473B"}
+          placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
           style={[
             styles.input,
             styles.locationPickerInput,
@@ -3659,7 +4105,7 @@ function LocationPicker({
             isDarkMode ? styles.darkIconBox : null,
           ]}
         >
-          <MapPin color={isDarkMode ? "#A78D78" : "#6E473B"} size={20} strokeWidth={2.5} />
+          <MapPin color={isDarkMode ? "#E5E5EA" : "#6E6E73"} size={20} strokeWidth={2.5} />
         </Pressable>
       </View>
 
@@ -3697,7 +4143,7 @@ function LocationPicker({
                 ]}
               >
                 <X
-                  color={isDarkMode ? "#A78D78" : "#291C0E"}
+                  color={isDarkMode ? "#E5E5EA" : "#111111"}
                   size={19}
                   strokeWidth={2.7}
                 />
@@ -3736,7 +4182,7 @@ function LocationPicker({
                       ]}
                     >
                       <MapPin
-                        color={isDarkMode ? "#A78D78" : "#6E473B"}
+                        color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
                         size={17}
                         strokeWidth={2.5}
                       />
@@ -3803,6 +4249,48 @@ function PrimaryButton({
       style={[styles.primaryButton, disabled ? styles.disabledButton : null]}
     >
       <Text style={styles.primaryButtonText}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function SecondaryButton({
+  disabled,
+  label,
+  onPress,
+}: {
+  disabled?: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.secondaryButton, disabled ? styles.disabledButton : null]}
+    >
+      <Text style={styles.secondaryButtonText}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function DangerButton({
+  disabled,
+  label,
+  onPress,
+}: {
+  disabled?: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.dangerButton, disabled ? styles.disabledButton : null]}
+    >
+      <Text style={styles.dangerButtonText}>{label}</Text>
     </Pressable>
   );
 }
@@ -4003,6 +4491,10 @@ function isOwnedBusinessMatch(publicBusiness: Business, ownedBusiness: Business)
     publicBusiness.registrationId &&
       publicBusiness.registrationId === ownedRegistrationId,
   );
+}
+
+function isSameBusinessReference(firstBusiness: Business, secondBusiness: Business) {
+  return getBusinessDedupeKey(firstBusiness) === getBusinessDedupeKey(secondBusiness);
 }
 
 function getBusinessDedupeKey(business: Business) {
@@ -4207,28 +4699,32 @@ function normalize(value: string) {
 
 const styles = StyleSheet.create({
   activeCategoryOption: {
-    backgroundColor: "#A78D78",
-    borderColor: "#6E473B",
+    backgroundColor: "#111111",
+    borderColor: "#111111",
   },
   activeCategoryOptionText: {
-    color: "#291C0E",
+    color: "#FFFFFF",
   },
   activeLocationOption: {
-    backgroundColor: "#A78D78",
-    borderColor: "#6E473B",
+    backgroundColor: "#111111",
+    borderColor: "#111111",
   },
   activeLocationOptionText: {
-    color: "#291C0E",
+    color: "#FFFFFF",
   },
   activeDashboardTabButton: {
-    backgroundColor: "#291C0E",
-    borderColor: "#291C0E",
+    backgroundColor: "#111111",
+    borderColor: "#111111",
   },
   activeDashboardTabButtonText: {
-    color: "#E1D4C2",
+    color: "#FFFFFF",
   },
   activeTabButton: {
-    backgroundColor: "#291C0E",
+    backgroundColor: "#111111",
+  },
+  activeSaveIconButton: {
+    backgroundColor: "#111111",
+    borderColor: "#111111",
   },
   appShell: {
     flex: 1,
@@ -4237,7 +4733,7 @@ const styles = StyleSheet.create({
   },
   avatar: {
     alignItems: "center",
-    backgroundColor: "#A78D78",
+    backgroundColor: "#F2F2F7",
     borderRadius: 18,
     height: 54,
     justifyContent: "center",
@@ -4245,76 +4741,38 @@ const styles = StyleSheet.create({
   },
   avatarLarge: {
     alignItems: "center",
-    backgroundColor: "#A78D78",
+    backgroundColor: "#F2F2F7",
     borderRadius: 22,
     height: 68,
     justifyContent: "center",
     width: 68,
   },
   avatarText: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 17,
     fontWeight: "900",
   },
   businessCard: {
-    backgroundColor: "#A78D78",
-    borderColor: "#6E473B",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 22,
     borderWidth: 1,
     gap: 12,
     padding: 18,
-    shadowColor: "#291C0E",
+    shadowColor: "#111111",
     shadowOffset: { height: 10, width: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 18,
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
   },
   businessName: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 24,
     fontWeight: "900",
     lineHeight: 28,
   },
-  businessOwnerAvatar: {
-    borderRadius: 18,
-    height: 36,
-    width: 36,
-  },
-  businessOwnerFallback: {
-    alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
-    borderRadius: 18,
-    borderWidth: 1,
-    height: 36,
-    justifyContent: "center",
-    width: 36,
-  },
-  businessOwnerLabel: {
-    color: "#6E473B",
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 0.3,
-    textTransform: "uppercase",
-  },
-  businessOwnerName: {
-    color: "#291C0E",
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  businessOwnerRow: {
-    alignItems: "center",
-    alignSelf: "stretch",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
-    borderRadius: 16,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 10,
-    padding: 10,
-  },
   card: {
-    backgroundColor: "#A78D78",
-    borderColor: "#6E473B",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 24,
     borderWidth: 1,
     gap: 16,
@@ -4322,8 +4780,8 @@ const styles = StyleSheet.create({
   },
   clearFiltersButton: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 999,
     borderWidth: 1,
     flexDirection: "row",
@@ -4332,7 +4790,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   clearFiltersButtonText: {
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 12,
     fontWeight: "900",
   },
@@ -4341,13 +4799,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
   },
+  cardHeaderActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
   categoryBadge: {
     alignSelf: "flex-start",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#6E473B",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 8,
     borderWidth: 1,
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 12,
     fontWeight: "800",
     overflow: "hidden",
@@ -4356,8 +4819,8 @@ const styles = StyleSheet.create({
   },
   categoryOption: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
@@ -4368,9 +4831,9 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   categoryOptionCheck: {
-    backgroundColor: "#A78D78",
+    backgroundColor: "#E5E5EA",
     borderRadius: 999,
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 12,
     fontWeight: "900",
     overflow: "hidden",
@@ -4378,15 +4841,15 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   categoryOptionText: {
-    color: "#291C0E",
+    color: "#111111",
     flex: 1,
     fontSize: 16,
     fontWeight: "800",
   },
   categoryPickerButton: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 14,
     borderWidth: 1,
     flexDirection: "row",
@@ -4395,7 +4858,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   categoryPickerChevron: {
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 15,
     fontWeight: "900",
   },
@@ -4405,8 +4868,8 @@ const styles = StyleSheet.create({
     paddingBottom: 34,
   },
   categoryPickerSheet: {
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 30,
     borderWidth: 1,
     elevation: 16,
@@ -4414,32 +4877,32 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginHorizontal: 10,
     overflow: "hidden",
-    shadowColor: "#291C0E",
+    shadowColor: "#111111",
     shadowOffset: { height: -8, width: 0 },
     shadowOpacity: 0.18,
     shadowRadius: 28,
   },
   categoryPickerText: {
-    color: "#291C0E",
+    color: "#111111",
     flex: 1,
     fontSize: 16,
     fontWeight: "800",
   },
   cityText: {
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 14,
     fontWeight: "700",
   },
   contactCard: {
-    backgroundColor: "#A78D78",
+    backgroundColor: "#F5F5F7",
     borderRadius: 14,
     gap: 10,
     padding: 14,
   },
   contactIcon: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 12,
     borderWidth: 1,
     height: 38,
@@ -4447,22 +4910,22 @@ const styles = StyleSheet.create({
     width: 38,
   },
   contactLabel: {
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.3,
     textTransform: "uppercase",
   },
   contactLine: {
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 14,
     fontWeight: "700",
     lineHeight: 20,
   },
   contactRow: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 14,
     borderWidth: 1,
     flexDirection: "row",
@@ -4470,14 +4933,14 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   contactSectionTitle: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 15,
     fontWeight: "900",
   },
   contactSignInButton: {
     alignItems: "center",
     alignSelf: "flex-start",
-    backgroundColor: "#6E473B",
+    backgroundColor: "#111111",
     borderRadius: 12,
     justifyContent: "center",
     marginTop: 12,
@@ -4485,14 +4948,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   contactSignInButtonText: {
-    color: "#E1D4C2",
+    color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "900",
   },
   contactSignInPrompt: {
     alignItems: "flex-start",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 14,
     borderWidth: 1,
     flexDirection: "row",
@@ -4500,7 +4963,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   contactSignInText: {
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 13,
     fontWeight: "700",
     lineHeight: 19,
@@ -4512,8 +4975,8 @@ const styles = StyleSheet.create({
   },
   contentAddButton: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 999,
     borderWidth: 1,
     flexDirection: "row",
@@ -4522,12 +4985,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   contentAddButtonText: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 13,
     fontWeight: "900",
   },
   contentBusinessName: {
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.3,
@@ -4535,30 +4998,30 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   contentComposer: {
-    backgroundColor: "#A78D78",
-    borderColor: "#6E473B",
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
     borderRadius: 18,
     borderWidth: 1,
     gap: 12,
     padding: 14,
   },
   contentComposerSheet: {
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     borderWidth: 1,
     elevation: 16,
     maxHeight: Math.round(Dimensions.get("window").height * 0.84),
     overflow: "hidden",
-    shadowColor: "#291C0E",
+    shadowColor: "#111111",
     shadowOffset: { height: -8, width: 0 },
     shadowOpacity: 0.18,
     shadowRadius: 28,
   },
   contentItemCard: {
-    backgroundColor: "#A78D78",
-    borderColor: "#6E473B",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 16,
     borderWidth: 1,
     gap: 10,
@@ -4566,8 +5029,8 @@ const styles = StyleSheet.create({
   },
   contentItemActionButton: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 10,
     borderWidth: 1,
     height: 34,
@@ -4592,13 +5055,13 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   contentItemMeta: {
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 13,
     fontWeight: "800",
     lineHeight: 18,
   },
   contentItemTitle: {
-    color: "#291C0E",
+    color: "#111111",
     flex: 1,
     fontSize: 17,
     fontWeight: "900",
@@ -4613,11 +5076,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   dateTimePlaceholder: {
-    color: "#6E473B",
+    color: "#6E6E73",
   },
   dateTimeTrigger: {
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 14,
     borderWidth: 1,
     justifyContent: "center",
@@ -4625,12 +5088,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   dateTimeTriggerText: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 16,
     fontWeight: "800",
   },
   descriptionText: {
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 15,
     lineHeight: 22,
   },
@@ -4641,80 +5104,94 @@ const styles = StyleSheet.create({
     opacity: 0.72,
   },
   darkCard: {
-    backgroundColor: "#6E473B",
-    borderColor: "#A78D78",
+    backgroundColor: "#1C1C1E",
+    borderColor: "#2C2C2E",
   },
   darkAccentText: {
-    color: "#A78D78",
+    color: "#0A84FF",
   },
   darkActiveOption: {
-    backgroundColor: "#6E473B",
-    borderColor: "#A78D78",
+    backgroundColor: "#0A84FF",
+    borderColor: "#0A84FF",
   },
   darkActiveOptionText: {
-    color: "#A78D78",
+    color: "#FFFFFF",
   },
   darkBadge: {
-    backgroundColor: "#291C0E",
-    borderColor: "#A78D78",
-    color: "#A78D78",
+    backgroundColor: "#2C2C2E",
+    borderColor: "#3A3A3C",
+    color: "#F5F5F7",
   },
   darkBusinessCard: {
-    backgroundColor: "#6E473B",
-    borderColor: "#A78D78",
+    backgroundColor: "#1C1C1E",
+    borderColor: "#2C2C2E",
     shadowColor: "#000000",
     shadowOpacity: 0.18,
   },
   darkEmptyState: {
-    backgroundColor: "#291C0E",
-    color: "#BEB5A9",
+    backgroundColor: "#1C1C1E",
+    color: "#A1A1A6",
   },
   darkIconBox: {
-    backgroundColor: "#291C0E",
-    borderColor: "#6E473B",
+    backgroundColor: "#2C2C2E",
+    borderColor: "#3A3A3C",
   },
   darkInput: {
-    backgroundColor: "#291C0E",
-    borderColor: "#6E473B",
-    color: "#E1D4C2",
+    backgroundColor: "#1C1C1E",
+    borderColor: "#3A3A3C",
+    color: "#F5F5F7",
   },
   darkModalSheet: {
-    backgroundColor: "#291C0E",
-    borderColor: "#6E473B",
+    backgroundColor: "#111111",
+    borderColor: "#2C2C2E",
     shadowColor: "#000000",
   },
   darkMutedText: {
-    color: "#BEB5A9",
+    color: "#A1A1A6",
   },
   darkOnlineBadge: {
-    backgroundColor: "#6E473B",
-    color: "#A78D78",
+    backgroundColor: "#2C2C2E",
+    borderColor: "#3A3A3C",
+    color: "#F5F5F7",
   },
   darkPickerHeader: {
-    borderBottomColor: "#6E473B",
+    borderBottomColor: "#2C2C2E",
   },
   darkPickerOption: {
-    backgroundColor: "#291C0E",
-    borderColor: "#6E473B",
+    backgroundColor: "#1C1C1E",
+    borderColor: "#2C2C2E",
   },
   darkPickerSheet: {
-    backgroundColor: "#291C0E",
-    borderColor: "#6E473B",
+    backgroundColor: "#111111",
+    borderColor: "#2C2C2E",
     shadowColor: "#000000",
   },
   darkSafeArea: {
-    backgroundColor: "#291C0E",
+    backgroundColor: "#000000",
   },
   darkSettingRow: {
-    backgroundColor: "#6E473B",
-    borderColor: "#A78D78",
+    backgroundColor: "#1C1C1E",
+    borderColor: "#2C2C2E",
   },
   darkTabBar: {
-    backgroundColor: "#6E473B",
-    borderColor: "#A78D78",
+    backgroundColor: "#1C1C1E",
+    borderColor: "#2C2C2E",
   },
   darkText: {
-    color: "#E1D4C2",
+    color: "#F5F5F7",
+  },
+  dangerButton: {
+    alignItems: "center",
+    backgroundColor: "#D92D20",
+    borderRadius: 14,
+    justifyContent: "center",
+    minHeight: 52,
+    paddingHorizontal: 18,
+  },
+  dangerButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "900",
   },
   dashboardEditHeader: {
     alignItems: "center",
@@ -4738,8 +5215,8 @@ const styles = StyleSheet.create({
   },
   dashboardPreviewLogo: {
     alignItems: "center",
-    backgroundColor: "#A78D78",
-    borderColor: "#6E473B",
+    backgroundColor: "#F2F2F7",
+    borderColor: "#E5E5EA",
     borderRadius: 20,
     borderWidth: 1,
     height: 68,
@@ -4749,8 +5226,8 @@ const styles = StyleSheet.create({
   },
   dashboardTabButton: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 14,
     borderWidth: 1,
     flex: 1,
@@ -4759,13 +5236,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   dashboardTabButtonText: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 13,
     fontWeight: "900",
   },
   dashboardTabs: {
-    backgroundColor: "#A78D78",
-    borderColor: "#6E473B",
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
     borderRadius: 18,
     borderWidth: 1,
     flexDirection: "row",
@@ -4773,20 +5250,20 @@ const styles = StyleSheet.create({
     padding: 6,
   },
   emptyState: {
-    backgroundColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 16,
     fontWeight: "700",
     padding: 18,
     textAlign: "center",
   },
   errorText: {
-    backgroundColor: "#A78D78",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 12,
     borderWidth: 1,
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 14,
     fontWeight: "800",
     lineHeight: 20,
@@ -4796,7 +5273,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   fieldLabel: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.4,
@@ -4807,8 +5284,8 @@ const styles = StyleSheet.create({
   },
   googleLogoLarge: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 22,
     borderWidth: 1,
     height: 68,
@@ -4816,8 +5293,8 @@ const styles = StyleSheet.create({
     width: 68,
   },
   categoryPreviewCard: {
-    backgroundColor: "#A78D78",
-    borderColor: "#6E473B",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 18,
     borderWidth: 1,
     flexBasis: "48%",
@@ -4825,10 +5302,10 @@ const styles = StyleSheet.create({
     gap: 8,
     minHeight: 94,
     padding: 14,
-    shadowColor: "#291C0E",
+    shadowColor: "#111111",
     shadowOffset: { height: 8, width: 0 },
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
   },
   categoryPreviewGrid: {
     flexDirection: "row",
@@ -4836,20 +5313,20 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   categoryPreviewMeta: {
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 13,
     fontWeight: "700",
   },
   categoryPreviewName: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 16,
     fontWeight: "900",
     lineHeight: 21,
   },
   cityPill: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 999,
     borderWidth: 1,
     flexDirection: "row",
@@ -4863,34 +5340,85 @@ const styles = StyleSheet.create({
     gap: 9,
   },
   cityPillText: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 14,
     fontWeight: "900",
   },
+  discoveryCard: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 22,
+    borderWidth: 1,
+    gap: 10,
+    minHeight: 176,
+    padding: 16,
+    width: 228,
+  },
+  discoveryCardDark: {
+    backgroundColor: "#111111",
+    borderColor: "#111111",
+  },
+  discoveryIcon: {
+    alignItems: "center",
+    backgroundColor: "#F5F5F7",
+    borderRadius: 14,
+    height: 42,
+    justifyContent: "center",
+    width: 42,
+  },
+  discoveryIconDark: {
+    backgroundColor: "#2C2C2E",
+  },
+  discoveryRail: {
+    gap: 12,
+    paddingRight: 20,
+  },
+  discoveryText: {
+    color: "#6E6E73",
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 20,
+  },
+  discoveryTextLight: {
+    color: "#D1D1D6",
+  },
+  discoveryTitle: {
+    color: "#111111",
+    fontSize: 22,
+    fontWeight: "900",
+    lineHeight: 26,
+  },
+  discoveryTitleLight: {
+    color: "#FFFFFF",
+  },
+  featuredBusinessRail: {
+    gap: 12,
+    paddingRight: 20,
+  },
   homeHero: {
-    backgroundColor: "#A78D78",
-    borderColor: "#6E473B",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 28,
     borderWidth: 1,
     gap: 13,
     padding: 20,
-    shadowColor: "#291C0E",
+    shadowColor: "#111111",
     shadowOffset: { height: 14, width: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 24,
+    shadowOpacity: 0.06,
+    shadowRadius: 20,
   },
   homeIntro: {
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 16,
     lineHeight: 23,
   },
   homeKicker: {
     alignSelf: "flex-start",
-    backgroundColor: "#291C0E",
-    borderColor: "#6E473B",
+    backgroundColor: "#111111",
+    borderColor: "#6E6E73",
     borderRadius: 8,
     borderWidth: 1,
-    color: "#E1D4C2",
+    color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "900",
     overflow: "hidden",
@@ -4899,8 +5427,8 @@ const styles = StyleSheet.create({
   },
   homeSearchButton: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 18,
     borderWidth: 1,
     flexDirection: "row",
@@ -4909,14 +5437,63 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   homeSearchText: {
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 14,
     fontWeight: "700",
   },
   homeSearchTitle: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 15,
     fontWeight: "900",
+  },
+  homeFeatureCard: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 24,
+    borderWidth: 1,
+    gap: 10,
+    minHeight: 230,
+    padding: 16,
+    width: 250,
+  },
+  homeFeatureLogo: {
+    borderRadius: 16,
+    height: 48,
+    width: 48,
+  },
+  homeFeatureLogoFallback: {
+    alignItems: "center",
+    backgroundColor: "#F5F5F7",
+    justifyContent: "center",
+  },
+  homeFeatureMeta: {
+    color: "#6E6E73",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  homeFeatureName: {
+    color: "#111111",
+    fontSize: 20,
+    fontWeight: "900",
+    lineHeight: 24,
+  },
+  homeFeatureSignal: {
+    alignSelf: "flex-start",
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 999,
+    borderWidth: 1,
+    color: "#111111",
+    fontSize: 12,
+    fontWeight: "900",
+    overflow: "hidden",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  homeFeatureTopRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   homeSectionHeader: {
     alignItems: "center",
@@ -4924,18 +5501,43 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 4,
   },
+  homeStatsRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  homeStatLabel: {
+    color: "#6E6E73",
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  homeStatPill: {
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 16,
+    borderWidth: 1,
+    flex: 1,
+    gap: 3,
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+  },
+  homeStatValue: {
+    color: "#111111",
+    fontSize: 19,
+    fontWeight: "900",
+  },
   homeTitle: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 31,
     fontWeight: "900",
     lineHeight: 36,
   },
   input: {
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 14,
     borderWidth: 1,
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 16,
     minHeight: 52,
     paddingHorizontal: 14,
@@ -4950,8 +5552,8 @@ const styles = StyleSheet.create({
   },
   iconActionButton: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 14,
     borderWidth: 1,
     height: 42,
@@ -4963,8 +5565,8 @@ const styles = StyleSheet.create({
   },
   locationOption: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
@@ -4975,22 +5577,22 @@ const styles = StyleSheet.create({
   },
   locationOptionIcon: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     height: 34,
     justifyContent: "center",
     width: 34,
   },
   locationOptionText: {
-    color: "#291C0E",
+    color: "#111111",
     flex: 1,
     fontSize: 16,
     fontWeight: "800",
   },
   locationPickerButton: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 14,
     borderWidth: 1,
     height: 52,
@@ -5011,8 +5613,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   locationPickerSheet: {
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 30,
     borderWidth: 1,
     elevation: 16,
@@ -5020,7 +5622,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginHorizontal: 10,
     overflow: "hidden",
-    shadowColor: "#291C0E",
+    shadowColor: "#111111",
     shadowOffset: { height: -8, width: 0 },
     shadowOpacity: 0.18,
     shadowRadius: 28,
@@ -5028,8 +5630,8 @@ const styles = StyleSheet.create({
   lockedContactNote: {
     alignItems: "center",
     alignSelf: "flex-start",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 999,
     borderWidth: 1,
     flexDirection: "row",
@@ -5038,7 +5640,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   lockedContactTitle: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 12,
     fontWeight: "900",
   },
@@ -5049,8 +5651,8 @@ const styles = StyleSheet.create({
   },
   logoUploadButton: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
@@ -5059,15 +5661,15 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   logoUploadHint: {
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 13,
     fontWeight: "700",
     lineHeight: 18,
   },
   logoUploadPreview: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 15,
     borderWidth: 1,
     height: 54,
@@ -5076,15 +5678,25 @@ const styles = StyleSheet.create({
     width: 54,
   },
   logoUploadTitle: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 15,
     fontWeight: "900",
   },
   cardOwnerAvatar: {
-    borderColor: "#A78D78",
+    borderColor: "#E5E5EA",
     borderRadius: 14,
     borderWidth: 1,
     height: 44,
+    width: 44,
+  },
+  saveIconButton: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 14,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: "center",
     width: 44,
   },
   metaRow: {
@@ -5099,14 +5711,14 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalBody: {
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 16,
     lineHeight: 24,
   },
   modalCloseButton: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 14,
     borderWidth: 1,
     height: 38,
@@ -5122,15 +5734,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   modalSheet: {
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     borderWidth: 1,
     elevation: 16,
     height: BUSINESS_SHEET_HEIGHT,
     overflow: "hidden",
-    shadowColor: "#291C0E",
+    shadowColor: "#111111",
     shadowOffset: { height: -8, width: 0 },
     shadowOpacity: 0.18,
     shadowRadius: 28,
@@ -5145,13 +5757,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalTitle: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 30,
     fontWeight: "900",
     lineHeight: 34,
   },
   mutedText: {
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 15,
     lineHeight: 22,
   },
@@ -5161,23 +5773,26 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
   },
   nativeDateTimeSheet: {
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 30,
     borderWidth: 1,
     elevation: 16,
     marginBottom: 10,
     marginHorizontal: 10,
     overflow: "hidden",
-    shadowColor: "#291C0E",
+    shadowColor: "#111111",
     shadowOffset: { height: -8, width: 0 },
     shadowOpacity: 0.18,
     shadowRadius: 28,
   },
   onlineBadge: {
-    backgroundColor: "#E1D4C2",
+    alignSelf: "flex-start",
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
     borderRadius: 8,
-    color: "#6E473B",
+    borderWidth: 1,
+    color: "#6E6E73",
     fontSize: 12,
     fontWeight: "900",
     overflow: "hidden",
@@ -5186,28 +5801,28 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     alignItems: "center",
-    backgroundColor: "#6E473B",
+    backgroundColor: "#6E6E73",
     borderRadius: 14,
     minHeight: 52,
     justifyContent: "center",
     paddingHorizontal: 18,
   },
   primaryButtonText: {
-    color: "#E1D4C2",
+    color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "900",
   },
   publicProfileCard: {
-    backgroundColor: "#A78D78",
-    borderColor: "#6E473B",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 24,
     borderWidth: 1,
     gap: 16,
     padding: 18,
-    shadowColor: "#291C0E",
+    shadowColor: "#111111",
     shadowOffset: { height: 14, width: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 24,
+    shadowOpacity: 0.06,
+    shadowRadius: 20,
   },
   pickerBackdrop: {
     backgroundColor: "transparent",
@@ -5216,7 +5831,7 @@ const styles = StyleSheet.create({
   },
   pickerHeader: {
     alignItems: "center",
-    borderBottomColor: "#A78D78",
+    borderBottomColor: "#E5E5EA",
     borderBottomWidth: 1,
     flexDirection: "row",
     justifyContent: "space-between",
@@ -5224,14 +5839,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   pickerTitle: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 18,
     fontWeight: "900",
   },
   profileCard: {
     alignItems: "center",
-    backgroundColor: "#A78D78",
-    borderColor: "#6E473B",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 22,
     borderWidth: 1,
     flexDirection: "row",
@@ -5240,8 +5855,8 @@ const styles = StyleSheet.create({
   },
   profileHero: {
     alignItems: "center",
-    backgroundColor: "#A78D78",
-    borderColor: "#6E473B",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 24,
     borderWidth: 1,
     flexDirection: "row",
@@ -5249,7 +5864,7 @@ const styles = StyleSheet.create({
     padding: 18,
   },
   profileName: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 19,
     fontWeight: "900",
   },
@@ -5259,9 +5874,9 @@ const styles = StyleSheet.create({
     width: 68,
   },
   resultCount: {
-    backgroundColor: "#6E473B",
+    backgroundColor: "#6E6E73",
     borderRadius: 8,
-    color: "#E1D4C2",
+    color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "900",
     overflow: "hidden",
@@ -5281,20 +5896,21 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   safeArea: {
-    backgroundColor: "#E1D4C2",
+    backgroundColor: "#F5F5F7",
     flex: 1,
   },
   screen: {
     flex: 1,
   },
   screenContent: {
+    flexGrow: 1,
     gap: 13,
     paddingBottom: 18,
     paddingTop: 4,
   },
   searchPanel: {
-    backgroundColor: "#A78D78",
-    borderColor: "#6E473B",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 24,
     borderWidth: 1,
     gap: 14,
@@ -5302,21 +5918,21 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     alignItems: "center",
-    borderColor: "#A78D78",
+    borderColor: "#E5E5EA",
     borderRadius: 14,
     borderWidth: 1,
     minHeight: 50,
     justifyContent: "center",
   },
   secondaryButtonText: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 16,
     fontWeight: "900",
   },
   selectableChip: {
     alignItems: "center",
-    backgroundColor: "#E1D4C2",
-    borderColor: "#A78D78",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 999,
     borderWidth: 1,
     minHeight: 42,
@@ -5324,19 +5940,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   selectableChipText: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 14,
     fontWeight: "900",
   },
   selectedChip: {
-    backgroundColor: "#291C0E",
-    borderColor: "#291C0E",
+    backgroundColor: "#111111",
+    borderColor: "#111111",
   },
   selectedChipText: {
-    color: "#E1D4C2",
+    color: "#FFFFFF",
   },
   sectionTitle: {
-    color: "#291C0E",
+    color: "#111111",
     fontSize: 24,
     fontWeight: "900",
   },
@@ -5346,15 +5962,15 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   settingMeta: {
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 13,
     fontWeight: "700",
     marginTop: 2,
   },
   settingsRow: {
     alignItems: "center",
-    backgroundColor: "#A78D78",
-    borderColor: "#6E473B",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
@@ -5364,19 +5980,19 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   successText: {
-    backgroundColor: "#E1D4C2",
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
-    color: "#6E473B",
+    color: "#6E6E73",
     fontSize: 14,
     fontWeight: "900",
     padding: 12,
   },
   statusPill: {
-    backgroundColor: "#E1D4C2",
-    borderColor: "#6E473B",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#6E6E73",
     borderRadius: 999,
     borderWidth: 1,
-    color: "#291C0E",
+    color: "#111111",
     flexShrink: 1,
     fontSize: 11,
     fontWeight: "900",
@@ -5385,14 +6001,14 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   switchLabel: {
-    color: "#291C0E",
+    color: "#111111",
     flex: 1,
     fontSize: 15,
     fontWeight: "900",
   },
   switchRow: {
     alignItems: "center",
-    backgroundColor: "#A78D78",
+    backgroundColor: "#F5F5F7",
     borderRadius: 14,
     flexDirection: "row",
     gap: 12,
@@ -5400,8 +6016,8 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   tabBar: {
-    backgroundColor: "#A78D78",
-    borderColor: "#6E473B",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
     borderRadius: 24,
     borderWidth: 1,
     flexDirection: "row",
@@ -5409,10 +6025,10 @@ const styles = StyleSheet.create({
     marginBottom: -14,
     marginTop: 8,
     padding: 5,
-    shadowColor: "#291C0E",
+    shadowColor: "#111111",
     shadowOffset: { height: 7, width: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
     width: "100%",
   },
   tabButton: {

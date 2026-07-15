@@ -65,5 +65,6 @@ export type Business = {
   tags: string[];
   contentItems?: BusinessContentItem[];
   distanceInKm?: number;
+  isSaved?: boolean;
   verifiedAt?: string;
 };

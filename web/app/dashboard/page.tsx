@@ -10,18 +10,21 @@ import {
 } from "lucide-react";
 
 import { signInWithGoogle } from "@/app/auth/actions";
+import { BusinessCard } from "@/components/business-card";
 import { DashboardBusinessEditor } from "@/components/dashboard-business-editor";
 import { DashboardProfileEditor } from "@/components/dashboard-profile-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { categories, cities } from "@/lib/data";
-import { localizeCategories, localizeCities } from "@/lib/i18n";
+import { getSavedDirectoryBusinesses } from "@/lib/directory-data";
+import { localizeBusinesses, localizeCategories, localizeCities } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/locale";
 import type { Database } from "@/lib/supabase/database.types";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import type { Business } from "@/lib/types";
 import type { Locale } from "@/lib/i18n";
 
 export const metadata: Metadata = {
@@ -61,6 +64,9 @@ const text = {
     pending: "На перевірці",
     pendingShort: "Перевірка",
     fallbackName: "Власник бізнесу",
+    savedTitle: "Збережені бізнеси",
+    savedIntro: "Швидкий доступ до бізнесів, які ви хочете переглянути пізніше.",
+    savedEmpty: "Поки що немає збережених бізнесів.",
   },
   en: {
     kicker: "Dashboard",
@@ -79,6 +85,9 @@ const text = {
     pending: "Pending",
     pendingShort: "Pending",
     fallbackName: "Business owner",
+    savedTitle: "Saved businesses",
+    savedIntro: "Quick access to businesses you want to revisit later.",
+    savedEmpty: "No saved businesses yet.",
   },
 } satisfies Record<Locale, Record<string, string>>;
 
@@ -92,21 +101,24 @@ export default async function DashboardPage() {
   let publishedBusinessesByRegistrationId = new Map<string, BusinessRow>();
   const contentItemsByRegistrationId = new Map<string, BusinessContentRow[]>();
   let profile: ProfileRow | null = null;
+  let savedBusinesses: Business[] = [];
   let errorMessage = "";
 
   if (isSupabaseConfigured() && user) {
     const supabase = await createClient();
-    const [{ data: profileData }, { data, error }] = await Promise.all([
+    const [{ data: profileData }, { data, error }, savedDirectoryBusinesses] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
       supabase
         .from("business_registrations")
         .select("*")
         .eq("owner_id", user.id)
         .order("created_at", { ascending: false }),
+      getSavedDirectoryBusinesses(user.id),
     ]);
 
     profile = profileData ?? null;
     registrations = data ?? [];
+    savedBusinesses = savedDirectoryBusinesses;
     errorMessage = error?.message ?? "";
 
     if (registrations.length > 0) {
@@ -182,24 +194,74 @@ export default async function DashboardPage() {
         </Card>
       ) : errorMessage ? (
         <EmptyState icon={<ClipboardList />} title={errorMessage} />
-      ) : registrations.length === 0 ? (
-        <EmptyState icon={<ClipboardList />} title={labels.empty} />
       ) : (
-        <div className="grid gap-4">
-          {registrations.map((registration) => (
-            <DashboardBusinessEditor
-              key={registration.id}
-              registration={registration}
-              publishedBusiness={publishedBusinessesByRegistrationId.get(
-                registration.id,
-              )}
-              contentItems={contentItemsByRegistrationId.get(registration.id) ?? []}
-              categories={localizedCategories}
-              cities={localizedCities}
+        <div className="grid gap-8">
+          {registrations.length === 0 ? (
+            <EmptyState icon={<ClipboardList />} title={labels.empty} />
+          ) : (
+            <div className="grid gap-4">
+              {registrations.map((registration) => (
+                <DashboardBusinessEditor
+                  key={registration.id}
+                  registration={registration}
+                  publishedBusiness={publishedBusinessesByRegistrationId.get(
+                    registration.id,
+                  )}
+                  contentItems={contentItemsByRegistrationId.get(registration.id) ?? []}
+                  categories={localizedCategories}
+                  cities={localizedCities}
+                  locale={locale}
+                />
+              ))}
+            </div>
+          )}
+          <SavedBusinessesSection
+            businesses={localizeBusinesses(savedBusinesses, locale)}
+            labels={labels}
+            locale={locale}
+          />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SavedBusinessesSection({
+  businesses,
+  labels,
+  locale,
+}: {
+  businesses: Business[];
+  labels: Record<string, string>;
+  locale: Locale;
+}) {
+  return (
+    <section className="grid gap-4">
+      <div>
+        <h2 className="text-2xl font-black tracking-normal">
+          {labels.savedTitle}
+        </h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+          {labels.savedIntro}
+        </p>
+      </div>
+      {businesses.length > 0 ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {businesses.map((business) => (
+            <BusinessCard
+              business={business}
+              canViewContacts
+              key={business.slug}
               locale={locale}
             />
           ))}
         </div>
+      ) : (
+        <Card className="border-dashed bg-card/70">
+          <CardContent className="p-6 text-sm font-semibold text-muted-foreground">
+            {labels.savedEmpty}
+          </CardContent>
+        </Card>
       )}
     </section>
   );

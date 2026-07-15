@@ -108,6 +108,23 @@ export async function signInWithEmailPassword(email: string, password: string) {
   return data.session;
 }
 
+export async function signUpWithEmailPassword(email: string, password: string) {
+  if (!isSupabaseConfigured) {
+    throw new Error("Supabase is not configured for the mobile app.");
+  }
+
+  const { data, error } = await supabase.auth.signUp({
+    email: email.trim(),
+    password,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data.session;
+}
+
 export async function signOut() {
   await supabase.auth.signOut();
 }

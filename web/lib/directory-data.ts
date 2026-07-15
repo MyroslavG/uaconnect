@@ -13,6 +13,8 @@ import type { Business, BusinessContentItem } from "@/lib/types";
 type PublishedBusiness = Database["public"]["Tables"]["businesses"]["Row"];
 type BusinessContentRow =
   Database["public"]["Tables"]["business_content_items"]["Row"];
+type SavedBusinessRow =
+  Database["public"]["Tables"]["saved_businesses"]["Row"];
 type PublicBusinessOwner =
   Database["public"]["Functions"]["get_public_business_owners"]["Returns"][number];
 
@@ -22,14 +24,15 @@ type SearchDirectoryBusinessesOptions = {
   categorySlug?: string;
   coordinates?: Coordinates;
   radiusInKm?: number;
+  currentUserId?: string;
 };
 
-export async function getDirectoryBusinesses() {
-  return getPublishedBusinesses();
+export async function getDirectoryBusinesses(currentUserId?: string) {
+  return getPublishedBusinesses(currentUserId);
 }
 
-export async function getDirectoryBusiness(slug: string) {
-  return (await getPublishedBusinesses()).find(
+export async function getDirectoryBusiness(slug: string, currentUserId?: string) {
+  return (await getPublishedBusinesses(currentUserId)).find(
     (business) => business.slug === slug,
   );
 }
@@ -37,8 +40,9 @@ export async function getDirectoryBusiness(slug: string) {
 export async function getDirectoryBusinessesByCityAndCategory(
   citySlug: string,
   categorySlug: string,
+  currentUserId?: string,
 ) {
-  const directoryBusinesses = await getDirectoryBusinesses();
+  const directoryBusinesses = await getDirectoryBusinesses(currentUserId);
 
   return directoryBusinesses.filter(
     (business) =>
@@ -70,8 +74,9 @@ export async function searchDirectoryBusinesses({
   categorySlug,
   coordinates,
   radiusInKm = 75,
+  currentUserId,
 }: SearchDirectoryBusinessesOptions) {
-  const directoryBusinesses = await getDirectoryBusinesses();
+  const directoryBusinesses = await getDirectoryBusinesses(currentUserId);
   const filteredBusinesses = directoryBusinesses
     .map((business) => {
       if (!coordinates || business.servesAllCanada) {
@@ -124,7 +129,13 @@ export async function searchDirectoryBusinesses({
   return searchBusinesses(filteredBusinesses, query);
 }
 
-async function getPublishedBusinesses(): Promise<Business[]> {
+export async function getSavedDirectoryBusinesses(currentUserId: string) {
+  const businesses = await getPublishedBusinesses(currentUserId);
+
+  return businesses.filter((business) => business.isSaved);
+}
+
+async function getPublishedBusinesses(currentUserId?: string): Promise<Business[]> {
   if (!isSupabaseConfigured()) {
     return [];
   }
@@ -155,6 +166,9 @@ async function getPublishedBusinesses(): Promise<Business[]> {
     );
   const contentItemsByRegistrationId =
     await getPublishedBusinessContentItems(registrationIds);
+  const savedBusinessIds = currentUserId
+    ? await getSavedBusinessIds(currentUserId)
+    : new Set<string>();
 
   if (ownerIds.length > 0) {
     const { data: owners, error: ownersError } = await supabase.rpc(
@@ -176,8 +190,23 @@ async function getPublishedBusinesses(): Promise<Business[]> {
       row.registration_id
         ? contentItemsByRegistrationId.get(row.registration_id)
         : undefined,
+      savedBusinessIds.has(row.id),
     ),
   );
+}
+
+async function getSavedBusinessIds(currentUserId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("saved_businesses")
+    .select("business_id")
+    .eq("user_id", currentUserId);
+
+  if (error || !data) {
+    return new Set<string>();
+  }
+
+  return new Set((data as SavedBusinessRow[]).map((row) => row.business_id));
 }
 
 async function getPublishedBusinessContentItems(registrationIds: string[]) {
@@ -212,6 +241,7 @@ function mapPublishedBusiness(
   row: PublishedBusiness,
   owner?: PublicBusinessOwner,
   contentItems: BusinessContentItem[] = [],
+  isSaved = false,
 ): Business {
   const category =
     categories.find((candidate) => candidate.slug === row.category_slug) ??
@@ -247,6 +277,7 @@ function mapPublishedBusiness(
     gallery: [],
     featured: false,
     hours: "See website",
+    isSaved,
     tags: [category.name],
     contentItems,
     verifiedAt: row.verified_at ?? undefined,

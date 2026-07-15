@@ -106,6 +106,7 @@ export default async function ExplorePage({
   const baseBusinesses = await getDirectoryBusinessesByCityAndCategory(
     city.slug,
     category.slug,
+    user?.id,
   );
   const localizedBaseBusinesses = localizeBusinesses(baseBusinesses, locale);
   const exploreBusinesses = searchBusinesses(localizedBaseBusinesses, query);

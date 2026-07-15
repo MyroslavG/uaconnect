@@ -19,6 +19,7 @@ import { BusinessLogo } from "@/components/business-logo";
 import { BusinessProfileActions } from "@/components/business-profile-actions";
 import { ContactAccessCard } from "@/components/contact-access-card";
 import { MapEmbed } from "@/components/map-embed";
+import { SaveBusinessButton } from "@/components/save-business-button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { getDirectoryBusiness } from "@/lib/directory-data";
@@ -78,10 +79,8 @@ export default async function BusinessProfilePage({
   const { slug } = await params;
   const locale = await getRequestLocale();
   const labels = copy[locale];
-  const [rawBusiness, user] = await Promise.all([
-    getDirectoryBusiness(slug),
-    getCurrentUser(),
-  ]);
+  const user = await getCurrentUser();
+  const rawBusiness = await getDirectoryBusiness(slug, user?.id);
 
   if (!rawBusiness) {
     notFound();
@@ -268,7 +267,16 @@ export default async function BusinessProfilePage({
 
         <aside className="lg:pt-16">
           <div className="sticky top-24 rounded-lg border bg-card p-5 shadow-sm">
-            <h2 className="text-lg font-bold">{labels.common.contact}</h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-lg font-bold">{labels.common.contact}</h2>
+              <SaveBusinessButton
+                businessId={rawBusiness.id}
+                canSave={canViewContacts}
+                isSaved={rawBusiness.isSaved}
+                locale={locale}
+                slug={rawBusiness.slug}
+              />
+            </div>
             {canViewContacts ? (
               <div className="mt-4 grid gap-3 text-sm">
                 {business.phone ? (
