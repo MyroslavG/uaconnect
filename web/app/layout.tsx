@@ -6,6 +6,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { getRequestLocale } from "@/lib/locale";
+import { Analytics } from "@vercel/analytics/next";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,7 @@ export default async function RootLayout({
             <SiteFooter locale={locale} />
           </div>
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );
