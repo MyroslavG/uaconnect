@@ -20,9 +20,9 @@ const text = {
       {
         title: "Які дані ми збираємо",
         items: [
-          "Дані акаунта, які ви надаєте через Google Sign-In, зокрема ім'я, email і фото профілю.",
+          "Дані акаунта, які ви надаєте через Google Sign-In або Sign in with Apple, зокрема ім'я, email і фото профілю, якщо вони доступні.",
           "Інформацію про бізнес, яку власник або адміністратор додає до профілю: назву, опис, категорію, місто, адресу, телефон, сайт, Instagram, логотип, послуги та події.",
-          "Контактний email власника, якщо він відрізняється від Google email.",
+          "Контактний email власника, якщо він відрізняється від email акаунта для входу.",
           "Дані, які ви вводите у пошук, наприклад місто, категорію або запит.",
           "Приблизну локацію лише тоді, коли ви самі дозволяєте браузеру або застосунку її використати для пошуку поруч.",
         ],
@@ -41,14 +41,14 @@ const text = {
         items: [
           "Опубліковані бізнес-профілі можуть містити назву бізнесу, опис, категорію, місто, адресу, сайт, Instagram, телефон, логотип, послуги та події.",
           "Контактну інформацію бізнесу можуть бачити лише користувачі, які увійшли в акаунт.",
-          "Особистий Google email власника не призначений для публічного показу як контакт бізнесу.",
+          "Особистий email акаунта власника не призначений для публічного показу як контакт бізнесу.",
         ],
       },
       {
         title: "Сервіси, які ми використовуємо",
         items: [
           "Supabase використовується для авторизації, бази даних і зберігання зображень.",
-          "Google використовується для входу через Google Sign-In.",
+          "Google і Apple використовуються для входу через Google Sign-In та Sign in with Apple.",
           "Хостинг-провайдер може обробляти технічні логи для безпеки, діагностики та роботи сайту.",
         ],
       },
@@ -73,9 +73,9 @@ const text = {
       {
         title: "Information We Collect",
         items: [
-          "Account details provided through Google Sign-In, including your name, email address, and profile photo.",
+          "Account details provided through Google Sign-In or Sign in with Apple, including your name, email address, and profile photo when available.",
           "Business information added by an owner or admin, including name, description, category, city, address, phone, website, Instagram, logo, services, and events.",
-          "Owner contact email when it is different from the Google account email.",
+          "Owner contact email when it is different from the sign-in account email.",
           "Search inputs such as city, category, and search terms.",
           "Approximate location only when you allow the browser or app to use it for nearby search.",
         ],
@@ -94,14 +94,14 @@ const text = {
         items: [
           "Published business profiles may show the business name, description, category, city, address, website, Instagram, phone, logo, services, and events.",
           "Business contact details are available only to signed-in users.",
-          "A business owner's personal Google email is not intended to be shown publicly as the business contact email.",
+          "A business owner's personal sign-in email is not intended to be shown publicly as the business contact email.",
         ],
       },
       {
         title: "Services We Use",
         items: [
           "Supabase is used for authentication, database records, and image storage.",
-          "Google is used for Google Sign-In.",
+          "Google and Apple are used for Google Sign-In and Sign in with Apple.",
           "The hosting provider may process technical logs for security, diagnostics, and site operation.",
         ],
       },

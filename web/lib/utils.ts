@@ -16,6 +16,20 @@ export function formatExternalUrl(url: string) {
   return url.replace(/^https?:\/\//, "").replace(/\/$/, "");
 }
 
+export function formatPriceWithCurrency(value: string | null | undefined) {
+  const trimmedValue = value?.trim() ?? "";
+
+  if (!trimmedValue) {
+    return "";
+  }
+
+  if (trimmedValue.includes("$")) {
+    return trimmedValue;
+  }
+
+  return trimmedValue.replace(/\d/, (digit) => `$${digit}`);
+}
+
 export function getSafeImageUrl(value: string | null | undefined) {
   if (!value) {
     return "";

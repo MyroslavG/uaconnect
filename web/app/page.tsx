@@ -19,6 +19,7 @@ import { getDirectoryBusinesses } from "@/lib/directory-data";
 import { copy, localizeCategories, localizeCities } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/locale";
 import type { Business } from "@/lib/types";
+import { formatPriceWithCurrency } from "@/lib/utils";
 
 export default async function HomePage() {
   const locale = await getRequestLocale();
@@ -184,7 +185,7 @@ export default async function HomePage() {
                       </span>
                     ) : item.price ? (
                       <span className="rounded-md border bg-background px-2.5 py-1 text-xs font-bold">
-                        {item.price}
+                        {formatPriceWithCurrency(item.price)}
                       </span>
                     ) : null}
                     {item.isOnline ? (

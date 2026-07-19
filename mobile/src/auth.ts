@@ -91,6 +91,23 @@ export async function signInWithGoogle() {
   throw new Error("Could not complete the Google sign-in callback.");
 }
 
+export async function signInWithApple(identityToken: string) {
+  if (!isSupabaseConfigured) {
+    throw new Error("Supabase is not configured for the mobile app.");
+  }
+
+  const { data, error } = await supabase.auth.signInWithIdToken({
+    provider: "apple",
+    token: identityToken,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data.session;
+}
+
 export async function signInWithEmailPassword(email: string, password: string) {
   if (!isSupabaseConfigured) {
     throw new Error("Supabase is not configured for the mobile app.");

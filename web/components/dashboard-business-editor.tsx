@@ -45,7 +45,11 @@ import type {
   Database,
 } from "@/lib/supabase/database.types";
 import type { Category, City } from "@/lib/types";
-import { formatExternalUrl, formatInstagramHandle } from "@/lib/utils";
+import {
+  formatExternalUrl,
+  formatInstagramHandle,
+  formatPriceWithCurrency,
+} from "@/lib/utils";
 
 type Registration =
   Database["public"]["Tables"]["business_registrations"]["Row"];
@@ -658,7 +662,9 @@ function ContentItemCard({
             {isEvent ? labels.events : labels.services}
           </Badge>
           <Badge variant="green">
-            {item.is_free ? labels.free : item.price || labels.emptyPrice}
+            {item.is_free
+              ? labels.free
+              : formatPriceWithCurrency(item.price) || labels.emptyPrice}
           </Badge>
           {isEvent && item.is_online ? (
             <Badge variant="secondary">

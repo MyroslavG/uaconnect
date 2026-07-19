@@ -30,6 +30,7 @@ import {
   formatExternalUrl,
   formatInstagramHandle,
   formatLocationParts,
+  formatPriceWithCurrency,
   getInstagramUrl,
 } from "@/lib/utils";
 import type { BusinessContentItem } from "@/lib/types";
@@ -380,7 +381,7 @@ function BusinessContentSection({
                   <Badge variant="green">{labels.free}</Badge>
                 ) : item.price ? (
                   <Badge variant="outline" className="bg-background">
-                    {item.price}
+                    {formatPriceWithCurrency(item.price)}
                   </Badge>
                 ) : null}
                 {item.isOnline ? (

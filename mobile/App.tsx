@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
+import * as AppleAuthentication from "expo-apple-authentication";
 import * as Linking from "expo-linking";
 import * as ImagePicker from "expo-image-picker";
 import {
@@ -52,6 +53,7 @@ import {
 } from "./src/data";
 import {
   completeAuthFromUrl,
+  signInWithApple,
   signInWithEmailPassword,
   signUpWithEmailPassword,
   signInWithGoogle,
@@ -221,6 +223,11 @@ const copy = {
     accountDeletionTitle: "Керування акаунтом",
     passwordTooShort: "Пароль має містити щонайменше 6 символів.",
     createAccountEmail: "Створити акаунт",
+    signIn: "Увійти",
+    signInAppleUnavailable:
+      "Вхід через Apple недоступний на цьому пристрої.",
+    signInAppleMissingToken:
+      "Apple не повернув токен для входу. Спробуйте ще раз.",
     signInEmail: "Увійти з email",
     signedInAs: "Ви увійшли як",
     submit: "Надіслати",
@@ -361,6 +368,11 @@ const copy = {
     accountDeletionTitle: "Account management",
     passwordTooShort: "Password must be at least 6 characters.",
     createAccountEmail: "Create account",
+    signIn: "Sign in",
+    signInAppleUnavailable:
+      "Sign in with Apple is not available on this device.",
+    signInAppleMissingToken:
+      "Apple did not return a sign-in token. Please try again.",
     signInEmail: "Sign in with email",
     signedInAs: "Signed in as",
     submit: "Submit",
@@ -469,10 +481,31 @@ export default function App() {
   const [authMessage, setAuthMessage] = useState("");
   const [dataMessage, setDataMessage] = useState("");
   const [isAuthBusy, setIsAuthBusy] = useState(false);
+  const [isAppleSignInAvailable, setIsAppleSignInAvailable] = useState(false);
   const [savedBusyBusinessId, setSavedBusyBusinessId] = useState<string | null>(
     null,
   );
   const labels = { ...copy[locale], ...connectionCopy[locale] };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    AppleAuthentication.isAvailableAsync()
+      .then((isAvailable) => {
+        if (isMounted) {
+          setIsAppleSignInAvailable(isAvailable);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setIsAppleSignInAvailable(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -744,6 +777,49 @@ export default function App() {
     } catch (error) {
       console.error("[kolo:mobile-auth]", error);
       setAuthMessage(getErrorMessage(error));
+    } finally {
+      setIsAuthBusy(false);
+    }
+  }
+
+  async function handleAppleSignIn() {
+    if (!isAppleSignInAvailable) {
+      setAuthMessage(labels.signInAppleUnavailable);
+      return;
+    }
+
+    try {
+      setAuthMessage("");
+      setIsAuthBusy(true);
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      if (!credential.identityToken) {
+        throw new Error(labels.signInAppleMissingToken);
+      }
+
+      const nextSession = await signInWithApple(credential.identityToken);
+      setSession(nextSession);
+
+      if (!nextSession) {
+        setAuthMessage("Signed in, but no mobile session was saved. Please try again.");
+      }
+    } catch (error) {
+      const errorCode =
+        typeof error === "object" && error && "code" in error
+          ? String(error.code)
+          : "";
+
+      if (errorCode === "ERR_REQUEST_CANCELED") {
+        setAuthMessage("");
+      } else {
+        console.error("[kolo:mobile-apple-auth]", error);
+        setAuthMessage(getErrorMessage(error));
+      }
     } finally {
       setIsAuthBusy(false);
     }
@@ -1082,10 +1158,12 @@ export default function App() {
             <ProfileScreen
               authMessage={authMessage}
               isDarkMode={isDarkMode}
+              isAppleSignInAvailable={isAppleSignInAvailable}
               isAuthBusy={isAuthBusy}
               isSupabaseConfigured={isSupabaseConfigured}
               labels={labels}
               locale={locale}
+              onAppleSignIn={handleAppleSignIn}
               onDeleteAccount={handleDeleteAccount}
               onEmailSignIn={handleEmailSignIn}
               onEmailSignUp={handleEmailSignUp}
@@ -3006,7 +3084,7 @@ function BusinessContentCard({
   onEdit: (item: BusinessContentItem) => void;
 }) {
   const metaItems = [
-    item.isFree ? labels.free : item.price,
+    item.isFree ? labels.free : formatPriceWithCurrency(item.price),
     item.isOnline ? labels.online : undefined,
     item.startsAt ? formatContentDate(item.startsAt) : undefined,
     item.location,
@@ -3087,10 +3165,12 @@ function BusinessContentCard({
 function ProfileScreen({
   authMessage,
   isDarkMode,
+  isAppleSignInAvailable,
   isAuthBusy,
   isSupabaseConfigured,
   labels,
   locale,
+  onAppleSignIn,
   onBusinessPress,
   onDeleteAccount,
   onEmailSignIn,
@@ -3105,10 +3185,12 @@ function ProfileScreen({
 }: {
   authMessage: string;
   isDarkMode: boolean;
+  isAppleSignInAvailable: boolean;
   isAuthBusy: boolean;
   isSupabaseConfigured: boolean;
   labels: Record<string, string>;
   locale: Locale;
+  onAppleSignIn: () => Promise<void>;
   onBusinessPress: (business: Business) => void;
   onDeleteAccount: () => Promise<void>;
   onEmailSignIn: (email: string, password: string) => Promise<void>;
@@ -3193,6 +3275,23 @@ function ProfileScreen({
           />
         ) : (
           <>
+            {isAppleSignInAvailable ? (
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonStyle={
+                  isDarkMode
+                    ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                    : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+                }
+                buttonType={
+                  AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN
+                }
+                cornerRadius={14}
+                onPress={() => {
+                  void onAppleSignIn();
+                }}
+                style={styles.appleSignInButton}
+              />
+            ) : null}
             <PrimaryButton
               disabled={isAuthBusy || !isSupabaseConfigured}
               label={labels.signInGoogle}
@@ -3523,7 +3622,7 @@ function PublicContentCard({
   showBusinessName?: boolean;
 }) {
   const metaItems = [
-    item.isFree ? labels.free : item.price,
+    item.isFree ? labels.free : formatPriceWithCurrency(item.price),
     item.isOnline ? labels.online : undefined,
     item.startsAt ? formatContentDate(item.startsAt) : undefined,
     item.location,
@@ -3821,7 +3920,7 @@ function ContactSignInPrompt({
           onPress={onPress}
           style={styles.contactSignInButton}
         >
-          <Text style={styles.contactSignInButtonText}>{labels.signInGoogle}</Text>
+          <Text style={styles.contactSignInButtonText}>{labels.signIn}</Text>
         </Pressable>
       </View>
     </View>
@@ -4451,6 +4550,20 @@ function formatContentDate(value: string) {
   });
 }
 
+function formatPriceWithCurrency(value?: string) {
+  const trimmedValue = value?.trim() ?? "";
+
+  if (!trimmedValue) {
+    return undefined;
+  }
+
+  if (trimmedValue.includes("$")) {
+    return trimmedValue;
+  }
+
+  return trimmedValue.replace(/\d/, (digit) => `$${digit}`);
+}
+
 function getContentTimestamp(item: BusinessContentItem) {
   const value = item.startsAt ?? item.createdAt ?? "";
   const parsedDate = new Date(value);
@@ -4730,6 +4843,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 8,
+  },
+  appleSignInButton: {
+    height: 52,
+    width: "100%",
   },
   avatar: {
     alignItems: "center",

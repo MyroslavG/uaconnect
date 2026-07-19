@@ -13,6 +13,7 @@ export function SiteFooter({ locale }: SiteFooterProps) {
   const localizedCities = localizeCities(cities, locale);
   const localizedCategories = localizeCategories(categories, locale);
   const privacyLabel = locale === "uk" ? "Політика конфіденційності" : "Privacy Policy";
+  const supportLabel = locale === "uk" ? "Підтримка" : "Support";
 
   return (
     <footer className="border-t bg-card/40">
@@ -33,12 +34,20 @@ export function SiteFooter({ locale }: SiteFooterProps) {
           <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">
             {labels.text}
           </p>
-          <Link
-            className="mt-4 inline-flex text-sm font-bold text-muted-foreground transition hover:text-foreground"
-            href="/privacy"
-          >
-            {privacyLabel}
-          </Link>
+          <div className="mt-4 flex flex-wrap gap-4">
+            <Link
+              className="inline-flex text-sm font-bold text-muted-foreground transition hover:text-foreground"
+              href="/support"
+            >
+              {supportLabel}
+            </Link>
+            <Link
+              className="inline-flex text-sm font-bold text-muted-foreground transition hover:text-foreground"
+              href="/privacy"
+            >
+              {privacyLabel}
+            </Link>
+          </div>
         </div>
         <div>
           <p className="text-sm font-semibold">{labels.cities}</p>
