@@ -31,6 +31,7 @@ type SearchPageProps = {
     lat?: string;
     lng?: string;
     radius?: string;
+    localOnly?: string;
   }>;
 };
 
@@ -82,6 +83,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const latitude = Number(resolvedSearchParams.lat);
   const longitude = Number(resolvedSearchParams.lng);
   const radiusInKm = Number(resolvedSearchParams.radius) || 75;
+  const localOnly = resolvedSearchParams.localOnly === "1";
   const coordinates =
     Number.isFinite(latitude) && Number.isFinite(longitude)
       ? { latitude, longitude }
@@ -120,6 +122,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     nextParams.set("radius", resolvedSearchParams.radius);
   }
 
+  if (localOnly) {
+    nextParams.set("localOnly", "1");
+  }
+
   const nextPath = `/search${nextParams.size ? `?${nextParams.toString()}` : ""}`;
   const localizedCities = localizeCities(cities, locale).map((cityOption) => ({
     ...cityOption,
@@ -136,6 +142,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     categorySlug: category?.slug,
     coordinates,
     currentUserId: user?.id,
+    localOnly,
     radiusInKm,
   });
   const localizedResults = localizeBusinesses(results, locale);
@@ -180,6 +187,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               defaultQuery={query}
               defaultLocation={near}
               defaultCoordinates={coordinates}
+              defaultLocalOnly={localOnly}
               variant="compact"
               locale={locale}
             />

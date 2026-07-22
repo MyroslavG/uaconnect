@@ -19,6 +19,7 @@ type SearchPanelProps = {
   variant?: "hero" | "compact";
   defaultCity?: string;
   defaultCategory?: string;
+  defaultLocalOnly?: boolean;
   defaultQuery?: string;
   defaultLocation?: string;
   defaultCoordinates?: Coordinates;
@@ -49,6 +50,7 @@ export function SearchPanel({
   variant = "hero",
   defaultCity,
   defaultCategory,
+  defaultLocalOnly = false,
   defaultQuery = "",
   defaultLocation,
   defaultCoordinates,
@@ -69,6 +71,7 @@ export function SearchPanel({
   const [categorySlug, setCategorySlug] = useState(
     defaultCategory ?? "all",
   );
+  const [localOnly, setLocalOnly] = useState(defaultLocalOnly);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -78,6 +81,10 @@ export function SearchPanel({
   useEffect(() => {
     setCategorySlug(defaultCategory ?? "all");
   }, [defaultCategory]);
+
+  useEffect(() => {
+    setLocalOnly(defaultLocalOnly);
+  }, [defaultLocalOnly]);
 
   useEffect(() => {
     const nextCitySlug = defaultCity ?? "";
@@ -122,6 +129,10 @@ export function SearchPanel({
         params.set("category", categorySlug);
       }
 
+      if (localOnly) {
+        params.set("localOnly", "1");
+      }
+
       router.push(`/search${params.size ? `?${params}` : ""}`);
     } finally {
       setIsSubmitting(false);
@@ -134,7 +145,7 @@ export function SearchPanel({
       className={
         variant === "hero"
           ? "premium-panel grid w-full max-w-full items-stretch gap-2 rounded-lg p-2 text-foreground md:grid-cols-2"
-          : "grid w-full max-w-full items-stretch gap-2 rounded-lg border bg-card/90 p-2 shadow-sm backdrop-blur md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_minmax(260px,1.1fr)_minmax(220px,0.9fr)_auto]"
+          : "grid w-full max-w-full items-stretch gap-2 rounded-lg border bg-card/90 p-2 shadow-sm backdrop-blur md:grid-cols-2 xl:grid-cols-[minmax(210px,1fr)_minmax(240px,1.05fr)_minmax(210px,0.9fr)_minmax(150px,0.62fr)_auto]"
       }
     >
       <label className={fieldShellClass}>
@@ -182,6 +193,15 @@ export function SearchPanel({
           triggerClassName={selectTriggerClass}
         />
       </div>
+      <label className="group flex h-16 cursor-pointer items-center gap-3 rounded-md border border-border/70 bg-background/90 px-4 py-3 text-sm font-black shadow-sm transition hover:border-hover-blue-border hover:bg-hover-blue/35">
+        <input
+          checked={localOnly}
+          className="h-4 w-4 accent-primary"
+          onChange={(event) => setLocalOnly(event.target.checked)}
+          type="checkbox"
+        />
+        <span className="leading-tight">{labels.search.localOnly}</span>
+      </label>
       <Button
         type="submit"
         size="lg"

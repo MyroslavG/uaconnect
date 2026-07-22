@@ -11,6 +11,7 @@ export type BusinessRegistrationStatus = "pending" | "approved" | "rejected";
 export type BusinessStatus = "published" | "hidden";
 export type BusinessContentType = "service" | "event";
 export type BusinessContentStatus = "draft" | "published";
+export type AppNotificationStatus = "draft" | "published";
 
 export type Database = {
   public: {
@@ -294,6 +295,78 @@ export type Database = {
         };
         Relationships: [];
       };
+      app_notifications: {
+        Row: {
+          id: string;
+          badge_uk: string;
+          badge_en: string;
+          title_uk: string;
+          title_en: string;
+          body_uk: string;
+          body_en: string;
+          href: string | null;
+          cta_uk: string | null;
+          cta_en: string | null;
+          status: AppNotificationStatus;
+          created_by: string | null;
+          published_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          badge_uk?: string;
+          badge_en?: string;
+          title_uk: string;
+          title_en: string;
+          body_uk: string;
+          body_en: string;
+          href?: string | null;
+          cta_uk?: string | null;
+          cta_en?: string | null;
+          status?: AppNotificationStatus;
+          created_by?: string | null;
+          published_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          badge_uk?: string;
+          badge_en?: string;
+          title_uk?: string;
+          title_en?: string;
+          body_uk?: string;
+          body_en?: string;
+          href?: string | null;
+          cta_uk?: string | null;
+          cta_en?: string | null;
+          status?: AppNotificationStatus;
+          created_by?: string | null;
+          published_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      notification_dismissals: {
+        Row: {
+          notification_id: string;
+          user_id: string;
+          dismissed_at: string;
+        };
+        Insert: {
+          notification_id: string;
+          user_id: string;
+          dismissed_at?: string;
+        };
+        Update: {
+          notification_id?: string;
+          user_id?: string;
+          dismissed_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -348,6 +421,7 @@ export type Database = {
       app_role: AppRole;
       business_registration_status: BusinessRegistrationStatus;
       business_content_type: BusinessContentType;
+      app_notification_status: AppNotificationStatus;
     };
     CompositeTypes: Record<string, never>;
   };

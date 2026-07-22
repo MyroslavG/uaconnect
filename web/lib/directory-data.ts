@@ -23,6 +23,7 @@ type SearchDirectoryBusinessesOptions = {
   citySlug?: string;
   categorySlug?: string;
   coordinates?: Coordinates;
+  localOnly?: boolean;
   radiusInKm?: number;
   currentUserId?: string;
 };
@@ -41,12 +42,14 @@ export async function getDirectoryBusinessesByCityAndCategory(
   citySlug: string,
   categorySlug: string,
   currentUserId?: string,
+  localOnly = false,
 ) {
   const directoryBusinesses = await getDirectoryBusinesses(currentUserId);
 
   return directoryBusinesses.filter(
     (business) =>
-      (business.citySlug === citySlug || business.servesAllCanada) &&
+      (business.citySlug === citySlug ||
+        (!localOnly && business.servesAllCanada)) &&
       business.categorySlug === categorySlug,
   );
 }
@@ -73,6 +76,7 @@ export async function searchDirectoryBusinesses({
   citySlug,
   categorySlug,
   coordinates,
+  localOnly = false,
   radiusInKm = 75,
   currentUserId,
 }: SearchDirectoryBusinessesOptions) {
@@ -102,18 +106,20 @@ export async function searchDirectoryBusinesses({
     .filter((business) => {
       const matchesCity =
         citySlug && !coordinates
-          ? business.citySlug === citySlug || business.servesAllCanada
+          ? business.citySlug === citySlug ||
+            (!localOnly && business.servesAllCanada)
           : true;
       const matchesCategory = categorySlug
         ? business.categorySlug === categorySlug
         : true;
       const matchesDistance =
-        business.servesAllCanada ||
+        (!localOnly && business.servesAllCanada) ||
         !coordinates ||
         typeof business.distanceInKm !== "number" ||
         business.distanceInKm <= radiusInKm;
+      const matchesOnline = !localOnly || !business.servesAllCanada;
 
-      return matchesCity && matchesCategory && matchesDistance;
+      return matchesCity && matchesCategory && matchesDistance && matchesOnline;
     })
     .sort((firstBusiness, secondBusiness) => {
       if (!coordinates) {
@@ -276,7 +282,7 @@ function mapPublishedBusiness(
     image: "",
     gallery: [],
     featured: false,
-    hours: "See website",
+    hours: "",
     isSaved,
     tags: [category.name],
     contentItems,

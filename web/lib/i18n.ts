@@ -33,6 +33,7 @@ export const copy = {
       dashboard: "Кабінет",
       admin: "Адмін",
       adminUsers: "Користувачі",
+      adminNotifications: "Оновлення",
       menu: "Відкрити меню",
       mobileMenuDescription: "Навігація, акаунт і налаштування",
       language: "Мова",
@@ -70,6 +71,7 @@ export const copy = {
       categoryNoResults: "Категорій не знайдено",
       filterCity: "Фільтр за локацією",
       filterCategory: "Фільтр за категорією",
+      localOnly: "Лише локальні",
     },
     home: {
       heroAlt: "Канадська міська вулиця з ресторанами та локальними бізнесами",
@@ -178,6 +180,7 @@ export const copy = {
       dashboard: "Dashboard",
       admin: "Admin",
       adminUsers: "Users",
+      adminNotifications: "Updates",
       menu: "Open menu",
       mobileMenuDescription: "Navigation, account, and settings",
       language: "Language",
@@ -215,6 +218,7 @@ export const copy = {
       categoryNoResults: "No categories found",
       filterCity: "Filter location",
       filterCategory: "Filter category",
+      localOnly: "Local only",
     },
     home: {
       heroAlt: "Canadian city street with restaurants and local businesses",
@@ -332,6 +336,11 @@ const categoryUk: Record<string, Pick<Category, "name" | "description">> = {
     name: "Рієлтори",
     description: "Купівля, продаж, оренда та переїзд у нове місто.",
   },
+  moving: {
+    name: "Переїзд",
+    description:
+      "Послуги переїзду, пакування, доставка, перевезення меблів і допомога з релокацією.",
+  },
   "insurance-brokers": {
     name: "Страховий брокер",
     description:
@@ -442,6 +451,10 @@ const cityUk: Record<string, Pick<City, "name" | "summary">> = {
   },
   winnipeg: {
     name: "Вінніпег",
+    summary: "",
+  },
+  saskatoon: {
+    name: "Саскатун",
     summary: "",
   },
   halifax: {

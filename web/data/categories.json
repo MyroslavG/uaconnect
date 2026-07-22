@@ -25,6 +25,11 @@
     "description": "Buying, selling, leasing, and relocation guidance."
   },
   {
+    "name": "Moving",
+    "slug": "moving",
+    "description": "Movers, packing help, delivery, furniture transport, and relocation support."
+  },
+  {
     "name": "Insurance Broker",
     "slug": "insurance-brokers",
     "description": "Insurance advice, policy comparison, claims guidance, and personal or business coverage."

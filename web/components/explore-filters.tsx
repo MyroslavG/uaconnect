@@ -21,6 +21,7 @@ type ExploreFiltersProps = {
   categories: Category[];
   currentCity: string;
   currentCategory: string;
+  currentLocalOnly?: boolean;
   query?: string;
   locale: Locale;
 };
@@ -45,6 +46,7 @@ export function ExploreFilters({
   categories,
   currentCity,
   currentCategory,
+  currentLocalOnly = false,
   query = "",
   locale,
 }: ExploreFiltersProps) {
@@ -59,6 +61,7 @@ export function ExploreFilters({
   >();
   const [categorySlug, setCategorySlug] = useState(currentCategory);
   const [searchQuery, setSearchQuery] = useState(query);
+  const [localOnly, setLocalOnly] = useState(currentLocalOnly);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -70,6 +73,10 @@ export function ExploreFilters({
     try {
       if (searchQuery.trim()) {
         params.set("q", searchQuery.trim());
+      }
+
+      if (localOnly) {
+        params.set("localOnly", "1");
       }
 
       const searchLocation = locationCoordinates
@@ -109,7 +116,7 @@ export function ExploreFilters({
   return (
     <form
       onSubmit={handleSubmit}
-      className="premium-panel grid items-stretch gap-2 rounded-lg p-2 md:grid-cols-2 xl:grid-cols-[minmax(250px,1fr)_minmax(320px,1.15fr)_minmax(250px,0.9fr)_auto]"
+      className="premium-panel grid items-stretch gap-2 rounded-lg p-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_minmax(280px,1.1fr)_minmax(220px,0.9fr)_minmax(150px,0.62fr)_auto]"
     >
       <label className={filterFieldClass}>
         <span className={filterLabelClass}>{labels.search.keyword}</span>
@@ -154,6 +161,15 @@ export function ExploreFilters({
           triggerClassName={filterSelectClass}
         />
       </div>
+      <label className="group flex h-16 cursor-pointer items-center gap-3 rounded-md border border-border/70 bg-background/90 px-4 py-3 text-sm font-black shadow-sm transition hover:border-hover-blue-border hover:bg-hover-blue/35">
+        <input
+          checked={localOnly}
+          className="h-4 w-4 accent-primary"
+          onChange={(event) => setLocalOnly(event.target.checked)}
+          type="checkbox"
+        />
+        <span className="leading-tight">{labels.search.localOnly}</span>
+      </label>
       <Button
         type="submit"
         size="lg"

@@ -80,6 +80,16 @@
     }
   },
   {
+    "name": "Saskatoon",
+    "slug": "saskatoon",
+    "province": "SK",
+    "summary": "",
+    "coordinates": {
+      "latitude": 52.1579,
+      "longitude": -106.6702
+    }
+  },
+  {
     "name": "Halifax",
     "slug": "halifax",
     "province": "NS",

@@ -20,6 +20,7 @@ import {
   Sparkles,
   ShoppingBasket,
   Store,
+  Truck,
   Utensils,
   Wrench,
 } from "lucide-react";
@@ -30,6 +31,7 @@ const iconMap = {
   restaurants: Utensils,
   lawyers: Scale,
   realtors: Home,
+  moving: Truck,
   "insurance-brokers": ShieldCheck,
   bookkeepers: Calculator,
   beauty: Scissors,

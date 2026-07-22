@@ -40,6 +40,7 @@ const cityNameAliases: Record<string, string[]> = {
   calgary: ["калгарі", "калгари"],
   edmonton: ["едмонтон"],
   winnipeg: ["вінніпег", "виннипег"],
+  saskatoon: ["саскатун"],
   halifax: ["галіфакс", "галифакс"],
   "st-johns": [
     "st johns",

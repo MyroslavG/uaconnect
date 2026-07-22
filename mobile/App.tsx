@@ -23,7 +23,9 @@ import {
   View,
 } from "react-native";
 import {
+  Bell,
   Bookmark,
+  CalendarDays,
   ExternalLink,
   Home,
   LayoutDashboard,
@@ -75,6 +77,12 @@ import {
   type BusinessRegistrationInput,
 } from "./src/directory";
 import { isSupabaseConfigured, supabase } from "./src/supabase";
+import {
+  dismissAnnouncement as dismissRemoteAnnouncement,
+  dismissAnnouncements as dismissRemoteAnnouncements,
+  fetchVisibleAnnouncements,
+  type AppAnnouncement,
+} from "./src/notifications";
 import type {
   Business,
   BusinessContentImageInput,
@@ -87,6 +95,10 @@ import type {
 
 type Tab = "home" | "search" | "register" | "dashboard" | "profile";
 type DashboardPanel = "profile" | "services" | "events";
+type ContentDetailEntry = {
+  business: Business;
+  item: BusinessContentItem;
+};
 
 const BUSINESS_SHEET_HEIGHT = Math.round(Dimensions.get("window").height * 0.76);
 const CATEGORY_PICKER_SHEET_HEIGHT = Math.round(
@@ -159,7 +171,14 @@ const copy = {
       "Знаходьте українські бізнеси, сервіси та спеціалістів у Канаді.",
     homeTitle: "Українські бізнеси поруч",
     latestUpdates: "Нові послуги та події",
-    liveNearby: "Живий пульс поруч",
+    localOnly: "Лише локальні",
+    loading: "Завантаження",
+    loadingBusinesses: "Завантажуємо актуальні бізнеси...",
+    notifications: "Оновлення",
+    notificationsEmpty: "Нових оновлень немає.",
+    dismiss: "Приховати",
+    dismissAll: "Приховати всі",
+    liveNearby: "Події та сервіси поруч",
     planToday: "Що хочете знайти сьогодні?",
     planFood: "Смачна зупинка",
     planFoodText: "Кухня, випічка, готова їжа та локальні продукти.",
@@ -304,6 +323,13 @@ const copy = {
       "Find Ukrainian-owned businesses, services, and specialists in Canada.",
     homeTitle: "Ukrainian businesses nearby",
     latestUpdates: "New services & events",
+    localOnly: "Local only",
+    loading: "Loading",
+    loadingBusinesses: "Loading current businesses...",
+    notifications: "Updates",
+    notificationsEmpty: "No new updates.",
+    dismiss: "Dismiss",
+    dismissAll: "Dismiss all",
     liveNearby: "Live nearby",
     planToday: "What do you want to find today?",
     planFood: "Something tasty",
@@ -413,6 +439,7 @@ const nearbyGroups = {
   toronto: ["toronto", "mississauga", "scarborough", "north york", "etobicoke"],
   montreal: ["montreal", "laval", "longueuil"],
   vancouver: ["vancouver", "burnaby", "richmond", "surrey"],
+  saskatoon: ["saskatoon", "regina"],
 };
 
 const locationAliases: Record<string, string[]> = {
@@ -449,6 +476,8 @@ const locationAliases: Record<string, string[]> = {
   "north york": ["north york", "north-york", "норт йорк", "норт-йорк"],
   ottawa: ["ottawa", "оттава", "отава"],
   richmond: ["richmond", "річмонд"],
+  regina: ["regina"],
+  saskatoon: ["saskatoon"],
   scarborough: ["scarborough", "скарборо"],
   stittsville: ["stittsville", "стітсвіл", "ститсвіл", "стітсвіль"],
   surrey: ["surrey", "суррей"],
@@ -468,9 +497,15 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [localOnly, setLocalOnly] = useState(false);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
-  const [directoryBusinesses, setDirectoryBusinesses] =
-    useState<Business[]>(initialBusinesses);
+  const [selectedContentEntry, setSelectedContentEntry] =
+    useState<ContentDetailEntry | null>(null);
+  const [directoryBusinesses, setDirectoryBusinesses] = useState<Business[]>(
+    isSupabaseConfigured ? [] : initialBusinesses,
+  );
+  const [isDirectoryLoading, setIsDirectoryLoading] =
+    useState(isSupabaseConfigured);
   const [ownedBusiness, setOwnedBusiness] = useState<Business | null>(
     isSupabaseConfigured ? null : defaultOwnedBusiness,
   );
@@ -482,10 +517,40 @@ export default function App() {
   const [dataMessage, setDataMessage] = useState("");
   const [isAuthBusy, setIsAuthBusy] = useState(false);
   const [isAppleSignInAvailable, setIsAppleSignInAvailable] = useState(false);
+  const [visibleAnnouncements, setVisibleAnnouncements] = useState<
+    AppAnnouncement[]
+  >([]);
   const [savedBusyBusinessId, setSavedBusyBusinessId] = useState<string | null>(
     null,
   );
   const labels = { ...copy[locale], ...connectionCopy[locale] };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!session?.user.id) {
+      setVisibleAnnouncements([]);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    fetchVisibleAnnouncements(session.user.id)
+      .then((announcements) => {
+        if (isMounted) {
+          setVisibleAnnouncements(announcements);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setVisibleAnnouncements([]);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [session?.user.id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -577,6 +642,7 @@ export default function App() {
   useEffect(() => {
     if (!isSupabaseConfigured) {
       setDirectoryBusinesses(initialBusinesses);
+      setIsDirectoryLoading(false);
       return;
     }
 
@@ -584,6 +650,7 @@ export default function App() {
 
     async function loadDirectory() {
       try {
+        setIsDirectoryLoading(true);
         setDataMessage("");
         const publishedBusinesses = await fetchPublishedBusinesses(
           session?.user.id,
@@ -603,6 +670,11 @@ export default function App() {
 
         if (isMounted) {
           setDataMessage(getErrorMessage(error));
+          setDirectoryBusinesses([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsDirectoryLoading(false);
         }
       }
     }
@@ -746,12 +818,13 @@ export default function App() {
           selectedCategory === "all" || business.categorySlug === selectedCategory;
         const matchesLocation =
           !location.trim() ||
-          business.servesAllCanada ||
+          (!localOnly && business.servesAllCanada) ||
           isNearLocation(business.city, location);
+        const matchesOnline = !localOnly || !business.servesAllCanada;
 
-        return matchesQuery && matchesCategory && matchesLocation;
+        return matchesQuery && matchesCategory && matchesLocation && matchesOnline;
       }),
-    [businesses, locale, location, query, selectedCategory],
+    [businesses, localOnly, locale, location, query, selectedCategory],
   );
 
   const profileName = getSessionName(session);
@@ -1073,21 +1146,55 @@ export default function App() {
     );
   }
 
+  function handleDismissAnnouncement(announcementId: string) {
+    setVisibleAnnouncements((currentAnnouncements) =>
+      currentAnnouncements.filter(
+        (announcement) => announcement.id !== announcementId,
+      ),
+    );
+
+    if (session?.user.id) {
+      void dismissRemoteAnnouncement(announcementId, session.user.id);
+    }
+  }
+
+  function handleDismissAllAnnouncements() {
+    const announcementIds = visibleAnnouncements.map(
+      (announcement) => announcement.id,
+    );
+
+    setVisibleAnnouncements([]);
+
+    if (session?.user.id) {
+      void dismissRemoteAnnouncements(announcementIds, session.user.id);
+    }
+  }
+
   const canViewContacts = Boolean(session);
 
   return (
     <SafeAreaView style={[styles.safeArea, isDarkMode ? styles.darkSafeArea : null]}>
       <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
       <View style={styles.appShell}>
+        <AnnouncementCenter
+          announcements={visibleAnnouncements}
+          isDarkMode={isDarkMode}
+          labels={labels}
+          locale={locale}
+          onDismiss={handleDismissAnnouncement}
+          onDismissAll={handleDismissAllAnnouncements}
+        />
         <View style={styles.contentArea}>
           {activeTab === "home" ? (
             <HomeScreen
               businesses={businesses}
               canViewContacts={canViewContacts}
+              isDataReady={!isDirectoryLoading}
               isDarkMode={isDarkMode}
               labels={labels}
               locale={locale}
               onBusinessPress={setSelectedBusiness}
+              onContentPress={setSelectedContentEntry}
               onCategoryPress={(categorySlug) => {
                 setSelectedCategory(categorySlug);
                 setQuery("");
@@ -1116,11 +1223,14 @@ export default function App() {
                 setQuery("");
                 setLocation("");
                 setSelectedCategory("all");
+                setLocalOnly(false);
               }}
+              localOnly={localOnly}
               query={query}
               results={results}
               selectedCategory={selectedCategory}
               setLocation={setLocation}
+              setLocalOnly={setLocalOnly}
               setQuery={setQuery}
               setSelectedBusiness={setSelectedBusiness}
               setSelectedCategory={setSelectedCategory}
@@ -1229,11 +1339,28 @@ export default function App() {
           setSelectedBusiness(null);
           setActiveTab("profile");
         }}
+        onContentPress={setSelectedContentEntry}
         onToggleSavedBusiness={handleToggleSavedBusiness}
         saveBusyBusinessId={savedBusyBusinessId}
         onManage={() => {
           setSelectedBusiness(null);
           setActiveTab("dashboard");
+        }}
+      />
+      <BusinessContentModal
+        canViewContacts={canViewContacts}
+        entry={selectedContentEntry}
+        isDarkMode={isDarkMode}
+        labels={labels}
+        onBusinessPress={(business) => {
+          setSelectedContentEntry(null);
+          setSelectedBusiness(business);
+        }}
+        onClose={() => setSelectedContentEntry(null)}
+        onRequireSignIn={() => {
+          setSelectedContentEntry(null);
+          setSelectedBusiness(null);
+          setActiveTab("profile");
         }}
       />
     </SafeAreaView>
@@ -1272,6 +1399,7 @@ function SearchScreen({
   labels,
   locale,
   location,
+  localOnly,
   onClearFilters,
   onToggleSavedBusiness,
   query,
@@ -1279,6 +1407,7 @@ function SearchScreen({
   savedBusyBusinessId,
   selectedCategory,
   setLocation,
+  setLocalOnly,
   setQuery,
   setSelectedBusiness,
   setSelectedCategory,
@@ -1290,6 +1419,7 @@ function SearchScreen({
   labels: Record<string, string>;
   locale: Locale;
   location: string;
+  localOnly: boolean;
   onClearFilters: () => void;
   onToggleSavedBusiness: (business: Business) => void;
   query: string;
@@ -1297,12 +1427,18 @@ function SearchScreen({
   savedBusyBusinessId: string | null;
   selectedCategory: string;
   setLocation: (value: string) => void;
+  setLocalOnly: (value: boolean) => void;
   setQuery: (value: string) => void;
   setSelectedBusiness: (value: Business) => void;
   setSelectedCategory: (value: string) => void;
   totalCount: number;
 }) {
-  const hasActiveFilters = hasSearchFilters(query, location, selectedCategory);
+  const hasActiveFilters = hasSearchFilters(
+    query,
+    location,
+    selectedCategory,
+    localOnly,
+  );
   const resultCountLabel =
     hasActiveFilters && totalCount > 0
       ? `${results.length}/${totalCount}`
@@ -1342,6 +1478,17 @@ function SearchScreen({
             selectedSlug={selectedCategory}
           />
         </Field>
+        <View style={[styles.localOnlyRow, isDarkMode ? styles.darkSettingRow : null]}>
+          <Text style={[styles.localOnlyTitle, isDarkMode ? styles.darkText : null]}>
+            {labels.localOnly}
+          </Text>
+          <Switch
+            onValueChange={setLocalOnly}
+            thumbColor={localOnly ? "#FFFFFF" : "#111111"}
+            trackColor={{ false: "#E5E5EA", true: "#111111" }}
+            value={localOnly}
+          />
+        </View>
       </View>
 
       <View style={styles.resultsHeader}>
@@ -1407,10 +1554,12 @@ function SearchScreen({
 function HomeScreen({
   businesses,
   canViewContacts,
+  isDataReady,
   isDarkMode,
   labels,
   locale,
   onBusinessPress,
+  onContentPress,
   onCategoryPress,
   onLocationPress,
   onSearchPress,
@@ -1419,16 +1568,45 @@ function HomeScreen({
 }: {
   businesses: Business[];
   canViewContacts: boolean;
+  isDataReady: boolean;
   isDarkMode: boolean;
   labels: Record<string, string>;
   locale: Locale;
   onBusinessPress: (business: Business) => void;
+  onContentPress: (entry: ContentDetailEntry) => void;
   onCategoryPress: (categorySlug: string) => void;
   onLocationPress: (location: string) => void;
   onSearchPress: () => void;
   onToggleSavedBusiness: (business: Business) => void;
   savedBusyBusinessId: string | null;
 }) {
+  if (!isDataReady) {
+    return (
+      <ScrollView
+        contentContainerStyle={styles.screenContent}
+        keyboardShouldPersistTaps="handled"
+        style={styles.screen}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[styles.homeHero, isDarkMode ? styles.darkCard : null]}>
+          <Text style={[styles.homeTitle, isDarkMode ? styles.darkText : null]}>
+            {labels.homeTitle}
+          </Text>
+          <Text style={[styles.homeIntro, isDarkMode ? styles.darkMutedText : null]}>
+            {labels.loadingBusinesses}
+          </Text>
+          <View style={[styles.loadingCard, isDarkMode ? styles.darkSettingRow : null]}>
+            <Text style={[styles.loadingTitle, isDarkMode ? styles.darkText : null]}>
+              {labels.loading}
+            </Text>
+            <Text style={[styles.loadingLine, isDarkMode ? styles.darkLoadingLine : null]} />
+            <Text style={[styles.loadingLineShort, isDarkMode ? styles.darkLoadingLine : null]} />
+          </View>
+        </View>
+      </ScrollView>
+    );
+  }
+
   const uniqueBusinesses = getUniqueBusinessesById(businesses);
   const contentFeedItems = uniqueBusinesses
     .flatMap((business) =>
@@ -1623,11 +1801,12 @@ function HomeScreen({
         contentFeedItems.map(({ business, item }) => (
           <PublicContentCard
             business={business}
+            canViewContacts={canViewContacts}
             isDarkMode={isDarkMode}
             item={item}
             key={item.id}
             labels={labels}
-            onPress={() => onBusinessPress(business)}
+            onPress={() => onContentPress({ business, item })}
             showBusinessName
           />
         ))
@@ -3140,7 +3319,10 @@ function BusinessContentCard({
           </Pressable>
         </View>
       </View>
-      <Text style={[styles.descriptionText, isDarkMode ? styles.darkMutedText : null]}>
+      <Text
+        numberOfLines={2}
+        style={[styles.descriptionText, isDarkMode ? styles.darkMutedText : null]}
+      >
         {item.description}
       </Text>
       {metaItems.length ? (
@@ -3608,6 +3790,7 @@ function BusinessCard({
 
 function PublicContentCard({
   business,
+  canViewContacts,
   isDarkMode,
   item,
   labels,
@@ -3615,6 +3798,7 @@ function PublicContentCard({
   showBusinessName,
 }: {
   business: Business;
+  canViewContacts: boolean;
   isDarkMode: boolean;
   item: BusinessContentItem;
   labels: Record<string, string>;
@@ -3625,8 +3809,12 @@ function PublicContentCard({
     item.isFree ? labels.free : formatPriceWithCurrency(item.price),
     item.isOnline ? labels.online : undefined,
     item.startsAt ? formatContentDate(item.startsAt) : undefined,
-    item.location,
+    canViewContacts ? item.location : undefined,
   ].filter((value): value is string => Boolean(value));
+  const contentLinkUrl =
+    canViewContacts && item.linkUrl ? getWebsiteUrl(item.linkUrl) : null;
+  const hasLockedContacts =
+    !canViewContacts && Boolean(item.location || item.linkUrl);
 
   return (
     <Pressable
@@ -3657,7 +3845,10 @@ function PublicContentCard({
           {item.type === "event" ? labels.events : labels.services}
         </Text>
       </View>
-      <Text style={[styles.descriptionText, isDarkMode ? styles.darkMutedText : null]}>
+      <Text
+        numberOfLines={2}
+        style={[styles.descriptionText, isDarkMode ? styles.darkMutedText : null]}
+      >
         {item.description}
       </Text>
       {metaItems.length ? (
@@ -3665,7 +3856,436 @@ function PublicContentCard({
           {metaItems.join(" | ")}
         </Text>
       ) : null}
+      {item.linkUrl && contentLinkUrl ? (
+        <Pressable
+          accessibilityLabel={`${labels.contentLink}: ${item.linkUrl}`}
+          accessibilityRole="link"
+          onPress={(event) => {
+            event.stopPropagation();
+            void openContactUrl(contentLinkUrl);
+          }}
+          style={[
+            styles.contentItemLinkButton,
+            isDarkMode ? styles.darkIconBox : null,
+          ]}
+        >
+          <ExternalLink
+            color={isDarkMode ? "#E5E5EA" : "#111111"}
+            size={15}
+            strokeWidth={2.7}
+          />
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.contentItemLinkText,
+              isDarkMode ? styles.darkText : null,
+            ]}
+          >
+            {item.linkUrl}
+          </Text>
+        </Pressable>
+      ) : null}
+      {hasLockedContacts ? (
+        <View style={[styles.lockedContactNote, isDarkMode ? styles.darkSettingRow : null]}>
+          <Lock
+            color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+            size={16}
+            strokeWidth={2.6}
+          />
+          <Text style={[styles.lockedContactTitle, isDarkMode ? styles.darkText : null]}>
+            {labels.contactSignInTitle}
+          </Text>
+        </View>
+      ) : null}
     </Pressable>
+  );
+}
+
+function AnnouncementCenter({
+  announcements,
+  isDarkMode,
+  labels,
+  locale,
+  onDismiss,
+  onDismissAll,
+}: {
+  announcements: AppAnnouncement[];
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  locale: Locale;
+  onDismiss: (announcementId: string) => void;
+  onDismissAll: () => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const latestAnnouncement = announcements[0];
+
+  useEffect(() => {
+    if (announcements.length === 0) {
+      setIsOpen(false);
+    }
+  }, [announcements.length]);
+
+  if (!latestAnnouncement) {
+    return null;
+  }
+
+  return (
+    <>
+      <Pressable
+        accessibilityLabel={labels.notifications}
+        accessibilityRole="button"
+        onPress={() => setIsOpen(true)}
+        style={[styles.announcementBanner, isDarkMode ? styles.darkCard : null]}
+      >
+        <View style={[styles.announcementIconBox, isDarkMode ? styles.darkIconBox : null]}>
+          <Bell
+            color={isDarkMode ? "#E5E5EA" : "#111111"}
+            size={17}
+            strokeWidth={2.7}
+          />
+        </View>
+        <View style={styles.flex}>
+          <Text style={[styles.announcementBadge, isDarkMode ? styles.darkMutedText : null]}>
+            {latestAnnouncement.badge[locale]}
+          </Text>
+          <Text style={[styles.announcementTitle, isDarkMode ? styles.darkText : null]}>
+            {latestAnnouncement.title[locale]}
+          </Text>
+        </View>
+        <Text style={[styles.announcementCount, isDarkMode ? styles.darkBadge : null]}>
+          {announcements.length}
+        </Text>
+      </Pressable>
+
+      <Modal
+        animationType="slide"
+        onRequestClose={() => setIsOpen(false)}
+        presentationStyle="overFullScreen"
+        transparent
+        visible={isOpen}
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setIsOpen(false)}
+            style={styles.modalDismissLayer}
+          />
+          <View
+            style={[
+              styles.announcementSheet,
+              isDarkMode ? styles.darkModalSheet : null,
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={[styles.modalTitle, isDarkMode ? styles.darkText : null]}>
+                  {labels.notifications}
+                </Text>
+                <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+                  {announcements.length} {labels.notifications.toLowerCase()}
+                </Text>
+              </View>
+              <Pressable
+                accessibilityLabel={labels.close}
+                accessibilityRole="button"
+                onPress={() => setIsOpen(false)}
+                style={[
+                  styles.modalCloseButton,
+                  isDarkMode ? styles.darkSettingRow : null,
+                ]}
+              >
+                <X
+                  color={isDarkMode ? "#E5E5EA" : "#111111"}
+                  size={19}
+                  strokeWidth={2.7}
+                />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              contentContainerStyle={styles.announcementList}
+              showsVerticalScrollIndicator={false}
+            >
+              {announcements.map((announcement) => (
+                <View
+                  key={announcement.id}
+                  style={[
+                    styles.announcementCard,
+                    isDarkMode ? styles.darkSettingRow : null,
+                  ]}
+                >
+                  <View style={styles.cardHeader}>
+                    <Text
+                      style={[
+                        styles.announcementBadge,
+                        isDarkMode ? styles.darkMutedText : null,
+                      ]}
+                    >
+                      {announcement.badge[locale]}
+                    </Text>
+                    <Pressable
+                      accessibilityLabel={labels.dismiss}
+                      accessibilityRole="button"
+                      onPress={() => onDismiss(announcement.id)}
+                      style={[
+                        styles.contentItemActionButton,
+                        isDarkMode ? styles.darkIconBox : null,
+                      ]}
+                    >
+                      <X
+                        color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+                        size={16}
+                        strokeWidth={2.6}
+                      />
+                    </Pressable>
+                  </View>
+                  <Text
+                    style={[
+                      styles.announcementCardTitle,
+                      isDarkMode ? styles.darkText : null,
+                    ]}
+                  >
+                    {announcement.title[locale]}
+                  </Text>
+                  <Text style={[styles.modalBody, isDarkMode ? styles.darkMutedText : null]}>
+                    {announcement.body[locale]}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+
+            {announcements.length > 1 ? (
+              <SecondaryButton
+                label={labels.dismissAll}
+                onPress={() => {
+                  onDismissAll();
+                  setIsOpen(false);
+                }}
+              />
+            ) : null}
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
+function BusinessContentModal({
+  canViewContacts,
+  entry,
+  isDarkMode,
+  labels,
+  onBusinessPress,
+  onClose,
+  onRequireSignIn,
+}: {
+  canViewContacts: boolean;
+  entry: ContentDetailEntry | null;
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  onBusinessPress: (business: Business) => void;
+  onClose: () => void;
+  onRequireSignIn: () => void;
+}) {
+  const item = entry?.item;
+  const contentLinkUrl =
+    canViewContacts && item?.linkUrl ? getWebsiteUrl(item.linkUrl) : null;
+  const locationUrl =
+    canViewContacts && item?.location && !item.isOnline
+      ? getAddressUrl(item.location, entry?.business.city)
+      : null;
+  const hasLockedContacts =
+    !canViewContacts && Boolean(item?.location || item?.linkUrl);
+  const hasMeta = Boolean(
+    item?.startsAt ||
+      (canViewContacts && item?.location) ||
+      contentLinkUrl ||
+      hasLockedContacts,
+  );
+
+  return (
+    <Modal
+      animationType="slide"
+      onRequestClose={onClose}
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
+      transparent
+      visible={Boolean(entry)}
+    >
+      <View style={styles.modalBackdrop}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onClose}
+          style={styles.modalDismissLayer}
+        />
+        <View style={[styles.modalSheet, isDarkMode ? styles.darkModalSheet : null]}>
+          {entry && item ? (
+            <ScrollView
+              bounces
+              contentInsetAdjustmentBehavior="automatic"
+              contentContainerStyle={styles.modalContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              style={styles.modalScroll}
+            >
+              <View style={styles.modalHeader}>
+                <View style={styles.flex}>
+                  <Text style={[styles.modalTitle, isDarkMode ? styles.darkText : null]}>
+                    {item.title}
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityLabel={labels.close}
+                  accessibilityRole="button"
+                  onPress={onClose}
+                  style={[
+                    styles.modalCloseButton,
+                    isDarkMode ? styles.darkSettingRow : null,
+                  ]}
+                >
+                  <X
+                    color={isDarkMode ? "#E5E5EA" : "#111111"}
+                    size={19}
+                    strokeWidth={2.7}
+                  />
+                </Pressable>
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => onBusinessPress(entry.business)}
+                style={[
+                  styles.contentBusinessButton,
+                  isDarkMode ? styles.darkSettingRow : null,
+                ]}
+              >
+                <Store
+                  color={isDarkMode ? "#E5E5EA" : "#111111"}
+                  size={17}
+                  strokeWidth={2.7}
+                />
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.contentBusinessButtonText,
+                    isDarkMode ? styles.darkText : null,
+                  ]}
+                >
+                  {entry.business.name}
+                </Text>
+                <ExternalLink
+                  color={isDarkMode ? "#A1A1A6" : "#6E6E73"}
+                  size={15}
+                  strokeWidth={2.6}
+                />
+              </Pressable>
+
+              {item.imageUrl ? (
+                <Image
+                  resizeMode="cover"
+                  source={{ uri: item.imageUrl }}
+                  style={styles.contentDetailImage}
+                />
+              ) : null}
+
+              <View style={styles.contentDetailPillRow}>
+                <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
+                  {item.type === "event" ? labels.events : labels.services}
+                </Text>
+                {item.isFree ? (
+                  <Text style={[styles.onlineBadge, isDarkMode ? styles.darkOnlineBadge : null]}>
+                    {labels.free}
+                  </Text>
+                ) : item.price ? (
+                  <Text style={[styles.onlineBadge, isDarkMode ? styles.darkOnlineBadge : null]}>
+                    {formatPriceWithCurrency(item.price)}
+                  </Text>
+                ) : null}
+                {item.isOnline ? (
+                  <Text style={[styles.onlineBadge, isDarkMode ? styles.darkOnlineBadge : null]}>
+                    {labels.online}
+                  </Text>
+                ) : null}
+              </View>
+
+              <Text style={[styles.modalBody, isDarkMode ? styles.darkMutedText : null]}>
+                {item.description}
+              </Text>
+
+              {hasMeta ? (
+                <View style={[styles.contactCard, isDarkMode ? styles.darkSettingRow : null]}>
+                  {item.startsAt ? (
+                    <View style={styles.contentDetailMetaRow}>
+                      <CalendarDays
+                        color={isDarkMode ? "#E5E5EA" : "#111111"}
+                        size={17}
+                        strokeWidth={2.6}
+                      />
+                      <Text style={[styles.contactLine, isDarkMode ? styles.darkMutedText : null]}>
+                        {formatContentDate(item.startsAt)}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {canViewContacts && item.location ? (
+                    <Pressable
+                      accessibilityRole={locationUrl ? "link" : undefined}
+                      disabled={!locationUrl}
+                      onPress={() => {
+                        if (locationUrl) {
+                          void openContactUrl(locationUrl);
+                        }
+                      }}
+                      style={styles.contentDetailMetaRow}
+                    >
+                      <MapPin
+                        color={isDarkMode ? "#E5E5EA" : "#111111"}
+                        size={17}
+                        strokeWidth={2.6}
+                      />
+                      <Text style={[styles.contactLine, isDarkMode ? styles.darkMutedText : null]}>
+                        {item.location}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  {item.linkUrl && contentLinkUrl ? (
+                    <Pressable
+                      accessibilityLabel={`${labels.contentLink}: ${item.linkUrl}`}
+                      accessibilityRole="link"
+                      onPress={() => {
+                        void openContactUrl(contentLinkUrl);
+                      }}
+                      style={styles.contentDetailMetaRow}
+                    >
+                      <ExternalLink
+                        color={isDarkMode ? "#E5E5EA" : "#111111"}
+                        size={17}
+                        strokeWidth={2.6}
+                      />
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.contentItemLinkText,
+                          isDarkMode ? styles.darkText : null,
+                        ]}
+                      >
+                        {item.linkUrl}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  {hasLockedContacts ? (
+                    <ContactSignInPrompt
+                      isDarkMode={isDarkMode}
+                      labels={labels}
+                      onPress={onRequireSignIn}
+                    />
+                  ) : null}
+                </View>
+              ) : null}
+            </ScrollView>
+          ) : null}
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -3676,6 +4296,7 @@ function BusinessModal({
   labels,
   locale,
   onClose,
+  onContentPress,
   onManage,
   onRequireSignIn,
   onToggleSavedBusiness,
@@ -3687,6 +4308,7 @@ function BusinessModal({
   labels: Record<string, string>;
   locale: Locale;
   onClose: () => void;
+  onContentPress: (entry: ContentDetailEntry) => void;
   onManage: () => void;
   onRequireSignIn: () => void;
   onToggleSavedBusiness: (business: Business) => void;
@@ -3845,10 +4467,12 @@ function BusinessModal({
                   serviceItems.map((item) => (
                     <PublicContentCard
                       business={business}
+                      canViewContacts={canViewContacts}
                       isDarkMode={isDarkMode}
                       item={item}
                       key={item.id}
                       labels={labels}
+                      onPress={() => onContentPress({ business, item })}
                     />
                   ))
                 ) : (
@@ -3863,10 +4487,12 @@ function BusinessModal({
                   eventItems.map((item) => (
                     <PublicContentCard
                       business={business}
+                      canViewContacts={canViewContacts}
                       isDarkMode={isDarkMode}
                       item={item}
                       key={item.id}
                       labels={labels}
+                      onPress={() => onContentPress({ business, item })}
                     />
                   ))
                 ) : (
@@ -4636,11 +5262,17 @@ function getEffectiveSearchQuery(query: string) {
   return allQueries.has(normalizedQuery) ? "" : trimmedQuery;
 }
 
-function hasSearchFilters(query: string, location: string, selectedCategory: string) {
+function hasSearchFilters(
+  query: string,
+  location: string,
+  selectedCategory: string,
+  localOnly: boolean,
+) {
   return Boolean(
     getEffectiveSearchQuery(query) ||
       location.trim() ||
-      selectedCategory !== "all",
+      selectedCategory !== "all" ||
+      localOnly,
   );
 }
 
@@ -4783,6 +5415,8 @@ function getSearchAliases(categorySlug: string) {
       "it tech software websites automation ai support technology сайти техпідтримка автоматизація",
     lawyers:
       "law lawyer legal attorney immigration юрист юридичні правова імміграція",
+    moving:
+      "moving movers relocation packing delivery furniture transport переїзд перевезення доставка пакування меблі",
     photographers:
       "photo video photography photographer фотo відео фотограф зйомка",
     realtors:
@@ -4838,6 +5472,89 @@ const styles = StyleSheet.create({
   activeSaveIconButton: {
     backgroundColor: "#111111",
     borderColor: "#111111",
+  },
+  announcementBadge: {
+    color: "#6E6E73",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  announcementBanner: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 10,
+    padding: 12,
+    shadowColor: "#111111",
+    shadowOffset: { height: 8, width: 0 },
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
+  },
+  announcementCard: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 10,
+    padding: 14,
+  },
+  announcementCardTitle: {
+    color: "#111111",
+    fontSize: 18,
+    fontWeight: "900",
+    lineHeight: 23,
+  },
+  announcementCount: {
+    backgroundColor: "#111111",
+    borderRadius: 999,
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+    minWidth: 26,
+    overflow: "hidden",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    textAlign: "center",
+  },
+  announcementIconBox: {
+    alignItems: "center",
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 14,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: "center",
+    width: 42,
+  },
+  announcementList: {
+    gap: 10,
+    paddingBottom: 14,
+  },
+  announcementSheet: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 30,
+    borderWidth: 1,
+    elevation: 16,
+    marginBottom: 10,
+    marginHorizontal: 10,
+    maxHeight: "76%",
+    padding: 18,
+    shadowColor: "#111111",
+    shadowOffset: { height: -8, width: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 28,
+  },
+  announcementTitle: {
+    color: "#111111",
+    fontSize: 15,
+    fontWeight: "900",
+    lineHeight: 19,
   },
   appShell: {
     flex: 1,
@@ -5114,6 +5831,23 @@ const styles = StyleSheet.create({
     marginBottom: 3,
     textTransform: "uppercase",
   },
+  contentBusinessButton: {
+    alignItems: "center",
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    minHeight: 46,
+    paddingHorizontal: 12,
+  },
+  contentBusinessButtonText: {
+    color: "#111111",
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "900",
+  },
   contentComposer: {
     backgroundColor: "#F5F5F7",
     borderColor: "#E5E5EA",
@@ -5170,6 +5904,42 @@ const styles = StyleSheet.create({
     aspectRatio: 1.8,
     borderRadius: 14,
     width: "100%",
+  },
+  contentDetailImage: {
+    aspectRatio: 1.7,
+    borderRadius: 18,
+    width: "100%",
+  },
+  contentDetailMetaRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    minHeight: 28,
+  },
+  contentDetailPillRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  contentItemLinkButton: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    maxWidth: "100%",
+    minHeight: 38,
+    paddingHorizontal: 10,
+  },
+  contentItemLinkText: {
+    color: "#111111",
+    flexShrink: 1,
+    fontSize: 13,
+    fontWeight: "900",
+    lineHeight: 18,
   },
   contentItemMeta: {
     color: "#6E6E73",
@@ -5257,6 +6027,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#1C1C1E",
     borderColor: "#3A3A3C",
     color: "#F5F5F7",
+  },
+  darkLoadingLine: {
+    backgroundColor: "#3A3A3C",
   },
   darkModalSheet: {
     backgroundColor: "#111111",
@@ -5398,6 +6171,23 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  localOnlyRow: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    minHeight: 58,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  localOnlyTitle: {
+    color: "#111111",
+    fontSize: 15,
+    fontWeight: "900",
   },
   googleLogoLarge: {
     alignItems: "center",
@@ -5759,6 +6549,34 @@ const styles = StyleSheet.create({
   lockedContactTitle: {
     color: "#111111",
     fontSize: 12,
+    fontWeight: "900",
+  },
+  loadingCard: {
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 10,
+    marginTop: 4,
+    padding: 14,
+  },
+  loadingLine: {
+    backgroundColor: "#E5E5EA",
+    borderRadius: 999,
+    height: 12,
+    overflow: "hidden",
+    width: "82%",
+  },
+  loadingLineShort: {
+    backgroundColor: "#E5E5EA",
+    borderRadius: 999,
+    height: 12,
+    overflow: "hidden",
+    width: "58%",
+  },
+  loadingTitle: {
+    color: "#111111",
+    fontSize: 15,
     fontWeight: "900",
   },
   logoPreviewImage: {

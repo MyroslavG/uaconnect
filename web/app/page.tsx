@@ -1,9 +1,7 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  CalendarDays,
   Compass,
-  Globe2,
   MapPin,
   Search,
   Sparkles,
@@ -11,6 +9,10 @@ import {
   Utensils,
 } from "lucide-react";
 
+import {
+  BusinessContentCards,
+  BusinessContentPulseList,
+} from "@/components/business-content-cards";
 import { CategoryGrid } from "@/components/category-grid";
 import { SearchPanel } from "@/components/search-panel";
 import { Badge } from "@/components/ui/badge";
@@ -18,11 +20,13 @@ import { categories, cities } from "@/lib/data";
 import { getDirectoryBusinesses } from "@/lib/directory-data";
 import { copy, localizeCategories, localizeCities } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/locale";
+import { getCurrentUser } from "@/lib/supabase/auth";
 import type { Business } from "@/lib/types";
-import { formatPriceWithCurrency } from "@/lib/utils";
 
 export default async function HomePage() {
   const locale = await getRequestLocale();
+  const user = await getCurrentUser();
+  const canViewContacts = Boolean(user);
   const labels = copy[locale].home;
   const contentLabels = getHomeContentLabels(locale);
   const localizedCities = localizeCities(cities, locale).map((city) => ({
@@ -91,6 +95,7 @@ export default async function HomePage() {
 
           <HomePulsePanel
             businesses={featuredBusinesses}
+            canViewContacts={canViewContacts}
             contentItems={featuredContentItems.slice(0, 3)}
             labels={contentLabels}
           />
@@ -157,65 +162,13 @@ export default async function HomePage() {
               {contentLabels.text}
             </p>
           </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {featuredContentItems.map(({ business, item }) => (
-              <Link
-                className="group overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm transition hover:-translate-y-1 hover:border-hover-blue-border hover:shadow-lift"
-                href={`/business/${business.slug}`}
-                key={item.id}
-              >
-                {item.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    alt=""
-                    className="h-44 w-full object-cover"
-                    src={item.imageUrl}
-                  />
-                ) : null}
-                <div className="grid gap-3 p-5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-md border bg-background px-2.5 py-1 text-xs font-bold">
-                      {item.type === "event"
-                        ? contentLabels.event
-                        : contentLabels.service}
-                    </span>
-                    {item.isFree ? (
-                      <span className="rounded-md border bg-background px-2.5 py-1 text-xs font-bold">
-                        {contentLabels.free}
-                      </span>
-                    ) : item.price ? (
-                      <span className="rounded-md border bg-background px-2.5 py-1 text-xs font-bold">
-                        {formatPriceWithCurrency(item.price)}
-                      </span>
-                    ) : null}
-                    {item.isOnline ? (
-                      <span className="inline-flex items-center gap-1 rounded-md border bg-background px-2.5 py-1 text-xs font-bold">
-                        <Globe2 className="h-3.5 w-3.5" />
-                        {contentLabels.online}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div>
-                    <h3 className="line-clamp-2 text-xl font-black leading-tight">
-                      {item.title}
-                    </h3>
-                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">
-                      {item.description}
-                    </p>
-                  </div>
-                  <div className="mt-1 grid gap-2 text-sm font-semibold text-muted-foreground">
-                    <span>{business.name}</span>
-                    {item.startsAt ? (
-                      <span className="flex items-center gap-2">
-                        <CalendarDays className="h-4 w-4 text-primary" />
-                        {formatContentDate(item.startsAt, locale)}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
+          <BusinessContentCards
+            canViewContacts={canViewContacts}
+            entries={featuredContentItems}
+            labels={contentLabels}
+            nextPath="/"
+            showBusinessName
+          />
         </section>
       ) : null}
 
@@ -262,10 +215,12 @@ export default async function HomePage() {
 
 function HomePulsePanel({
   businesses,
+  canViewContacts,
   contentItems,
   labels,
 }: {
   businesses: Business[];
+  canViewContacts: boolean;
   contentItems: Array<{ business: Business; item: NonNullable<Business["contentItems"]>[number] }>;
   labels: ReturnType<typeof getHomeContentLabels>;
 }) {
@@ -285,29 +240,16 @@ function HomePulsePanel({
         </span>
       </div>
 
-      <div className="mt-5 grid gap-3">
-        {contentItems.length > 0
-          ? contentItems.map(({ business, item }) => (
-              <Link
-                className="group rounded-md border bg-background p-4 transition hover:border-hover-blue-border hover:bg-hover-blue"
-                href={`/business/${business.slug}`}
-                key={item.id}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-bold uppercase text-muted-foreground">
-                      {item.type === "event" ? labels.event : labels.service}
-                    </p>
-                    <h3 className="mt-1 line-clamp-1 font-black">{item.title}</h3>
-                    <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">
-                      {business.name}
-                    </p>
-                  </div>
-                  <ArrowRight className="mt-1 h-4 w-4 shrink-0 opacity-50 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
-                </div>
-              </Link>
-            ))
-          : businesses.slice(0, 3).map((business) => (
+      {contentItems.length > 0 ? (
+        <BusinessContentPulseList
+          canViewContacts={canViewContacts}
+          entries={contentItems}
+          labels={labels}
+          nextPath="/"
+        />
+      ) : (
+        <div className="mt-5 grid gap-3">
+          {businesses.slice(0, 3).map((business) => (
               <Link
                 className="group rounded-md border bg-background p-4 transition hover:border-hover-blue-border hover:bg-hover-blue"
                 href={`/business/${business.slug}`}
@@ -326,7 +268,8 @@ function HomePulsePanel({
                 </div>
               </Link>
             ))}
-      </div>
+        </div>
+      )}
 
       <Link
         className="mt-4 flex items-center justify-center gap-2 rounded-md border bg-background px-4 py-3 text-sm font-black transition hover:border-hover-blue-border hover:bg-hover-blue"
@@ -436,37 +379,34 @@ function getHomeContentLabels(locale: "uk" | "en") {
         kicker: "Нове",
         title: "Послуги та події",
         text: "Актуальні пропозиції від українських бізнесів у Канаді.",
+        contactSignInText:
+          "Локацію та посилання видно лише після входу.",
+        contactSignInTitle: "Увійдіть, щоб побачити контакти",
         service: "Послуга",
         event: "Подія",
         free: "Безкоштовно",
+        link: "Посилання",
         online: "Онлайн",
         pulseKicker: "Живий пульс",
         pulseTitle: "Новинки від бізнесів",
         searchCta: "Відкрити пошук",
+        signIn: "Увійти",
       }
     : {
         kicker: "New",
         title: "Services and events",
         text: "Fresh offers and upcoming events from Ukrainian businesses in Canada.",
+        contactSignInText:
+          "Location and external links are visible after sign-in.",
+        contactSignInTitle: "Sign in to view contacts",
         service: "Service",
         event: "Event",
         free: "Free",
+        link: "Link",
         online: "Online",
         pulseKicker: "Live pulse",
         pulseTitle: "Fresh from owners",
         searchCta: "Open search",
+        signIn: "Sign in",
       };
-}
-
-function formatContentDate(value: string, locale: "uk" | "en") {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat(locale === "uk" ? "uk-CA" : "en-CA", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
 }

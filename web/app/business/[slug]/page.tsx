@@ -2,19 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  CalendarDays,
-  Clock,
   ExternalLink,
-  Globe,
   Globe2,
   Instagram,
   Languages,
-  LinkIcon,
   MapPin,
   Phone,
   ShieldCheck,
 } from "lucide-react";
 
+import { BusinessContentCards } from "@/components/business-content-cards";
 import { BusinessLogo } from "@/components/business-logo";
 import { BusinessProfileActions } from "@/components/business-profile-actions";
 import { ContactAccessCard } from "@/components/contact-access-card";
@@ -27,13 +24,11 @@ import { copy, localizeBusiness } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/locale";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import {
-  formatExternalUrl,
   formatInstagramHandle,
   formatLocationParts,
-  formatPriceWithCurrency,
   getInstagramUrl,
 } from "@/lib/utils";
-import type { BusinessContentItem } from "@/lib/types";
+import type { Business, BusinessContentItem } from "@/lib/types";
 
 type BusinessProfilePageProps = {
   params: Promise<{
@@ -105,6 +100,9 @@ export default async function BusinessProfilePage({
     business.neighborhood,
     business.city,
   );
+  const addressMapUrl = business.address
+    ? getGoogleMapsSearchUrl(formatLocationParts(business.address, business.city))
+    : "";
   const servesAllCanadaLabel =
     locale === "uk" ? "Онлайн · по всій Канаді" : "Online · Canada-wide";
   const categoryHref = rawBusiness.citySlug
@@ -180,10 +178,6 @@ export default async function BusinessProfilePage({
                   {locationLabel}
                 </span>
               ) : null}
-              <span className="flex items-center gap-1.5">
-                <Clock className="h-4 w-4 text-primary" />
-                {business.hours}
-              </span>
             </p>
           </div>
         </div>
@@ -200,15 +194,21 @@ export default async function BusinessProfilePage({
             </div>
             {serviceItems.length > 0 ? (
               <BusinessContentSection
+                business={business}
+                canViewContacts={canViewContacts}
                 items={serviceItems}
                 labels={contentLabels}
+                nextPath={nextPath}
                 title={contentLabels.services}
               />
             ) : null}
             {eventItems.length > 0 ? (
               <BusinessContentSection
+                business={business}
+                canViewContacts={canViewContacts}
                 items={eventItems}
                 labels={contentLabels}
+                nextPath={nextPath}
                 title={contentLabels.events}
               />
             ) : null}
@@ -239,9 +239,15 @@ export default async function BusinessProfilePage({
               <h2 className="text-2xl font-bold">{labels.business.location}</h2>
               {business.address && canViewContacts ? (
                 <>
-                  <p className="mt-2 text-sm text-muted-foreground">
+                  <a
+                    className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition hover:text-primary"
+                    href={addressMapUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
                     {business.address}
-                  </p>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
                   <div className="mt-4 overflow-hidden rounded-lg border bg-card">
                     <MapEmbed
                       query={rawBusiness.address}
@@ -289,20 +295,6 @@ export default async function BusinessProfilePage({
                     {business.phone}
                   </a>
                 ) : null}
-                {business.website ? (
-                  <a
-                    href={business.website}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-3 rounded-md border bg-background p-3 transition hover:border-hover-blue-border hover:bg-hover-blue/35"
-                  >
-                    <Globe className="h-4 w-4 text-primary" />
-                    <span className="truncate">
-                      {formatExternalUrl(business.website)}
-                    </span>
-                    <ExternalLink className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
-                  </a>
-                ) : null}
                 {business.instagram ? (
                   <a
                     href={instagramUrl}
@@ -316,10 +308,16 @@ export default async function BusinessProfilePage({
                   </a>
                 ) : null}
                 {business.address ? (
-                  <div className="flex items-start gap-3 rounded-md border bg-background p-3">
+                  <a
+                    className="flex items-start gap-3 rounded-md border bg-background p-3 transition hover:border-hover-blue-border hover:bg-hover-blue/35"
+                    href={addressMapUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
                     <MapPin className="mt-0.5 h-4 w-4 text-primary" />
                     <span>{business.address}</span>
-                  </div>
+                    <ExternalLink className="ml-auto mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
+                  </a>
                 ) : null}
               </div>
             ) : (
@@ -347,89 +345,30 @@ export default async function BusinessProfilePage({
 }
 
 function BusinessContentSection({
+  business,
+  canViewContacts,
   items,
   labels,
+  nextPath,
   title,
 }: {
+  business: Pick<Business, "name" | "slug">;
+  canViewContacts: boolean;
   items: BusinessContentItem[];
   labels: ReturnType<typeof getBusinessContentLabels>;
+  nextPath: string;
   title: string;
 }) {
   return (
     <section>
       <h2 className="text-2xl font-bold">{title}</h2>
-      <div className="mt-3 grid gap-4 md:grid-cols-2">
-        {items.map((item) => (
-          <article
-            className="overflow-hidden rounded-lg border bg-card shadow-sm"
-            key={item.id}
-          >
-            {item.imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                alt=""
-                className="h-48 w-full object-cover"
-                src={item.imageUrl}
-              />
-            ) : null}
-            <div className="grid gap-3 p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className="bg-background">
-                  {item.type === "event" ? labels.event : labels.service}
-                </Badge>
-                {item.isFree ? (
-                  <Badge variant="green">{labels.free}</Badge>
-                ) : item.price ? (
-                  <Badge variant="outline" className="bg-background">
-                    {formatPriceWithCurrency(item.price)}
-                  </Badge>
-                ) : null}
-                {item.isOnline ? (
-                  <Badge variant="secondary">
-                    <Globe2 className="mr-1.5 h-3.5 w-3.5" />
-                    {labels.online}
-                  </Badge>
-                ) : null}
-              </div>
-              <div>
-                <h3 className="text-xl font-black leading-tight">
-                  {item.title}
-                </h3>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  {item.description}
-                </p>
-              </div>
-              {item.type === "event" ? (
-                <div className="grid gap-2 text-sm font-semibold text-muted-foreground">
-                  {item.startsAt ? (
-                    <span className="flex items-center gap-2">
-                      <CalendarDays className="h-4 w-4 text-primary" />
-                      {formatContentDate(item.startsAt)}
-                    </span>
-                  ) : null}
-                  {item.location ? (
-                    <span className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-primary" />
-                      {item.location}
-                    </span>
-                  ) : null}
-                  {item.linkUrl ? (
-                    <a
-                      className="flex items-center gap-2 text-foreground hover:underline"
-                      href={formatContentLink(item.linkUrl)}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      <LinkIcon className="h-4 w-4 text-primary" />
-                      {formatExternalUrl(item.linkUrl)}
-                      <ExternalLink className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
-                    </a>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          </article>
-        ))}
+      <div className="mt-3">
+        <BusinessContentCards
+          canViewContacts={canViewContacts}
+          entries={items.map((item) => ({ business, item }))}
+          labels={labels}
+          nextPath={nextPath}
+        />
       </div>
     </section>
   );
@@ -440,34 +379,33 @@ function getBusinessContentLabels(locale: "uk" | "en") {
     ? {
         services: "Послуги",
         events: "Події",
+        contactSignInText:
+          "Локацію та посилання видно лише після входу.",
+        contactSignInTitle: "Увійдіть, щоб побачити контакти",
         service: "Послуга",
         event: "Подія",
         free: "Безкоштовно",
+        link: "Посилання",
         online: "Онлайн",
+        signIn: "Увійти",
       }
     : {
         services: "Services",
         events: "Events",
+        contactSignInText:
+          "Location and external links are visible after sign-in.",
+        contactSignInTitle: "Sign in to view contacts",
         service: "Service",
         event: "Event",
         free: "Free",
+        link: "Link",
         online: "Online",
+        signIn: "Sign in",
       };
 }
 
-function formatContentDate(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-}
-
-function formatContentLink(value: string) {
-  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+function getGoogleMapsSearchUrl(value: string) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    value,
+  )}`;
 }

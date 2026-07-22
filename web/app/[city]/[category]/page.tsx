@@ -35,6 +35,7 @@ type ExplorePageProps = {
   }>;
   searchParams?: Promise<{
     q?: string;
+    localOnly?: string;
   }>;
 };
 
@@ -80,6 +81,7 @@ export default async function ExplorePage({
   const { city: citySlug, category: categorySlug } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const query = resolvedSearchParams.q;
+  const localOnly = resolvedSearchParams.localOnly === "1";
   const locale = await getRequestLocale();
   const labels = copy[locale];
   const city = getCity(citySlug);
@@ -91,8 +93,18 @@ export default async function ExplorePage({
     notFound();
   }
 
+  const nextParams = new URLSearchParams();
+
+  if (query) {
+    nextParams.set("q", query);
+  }
+
+  if (localOnly) {
+    nextParams.set("localOnly", "1");
+  }
+
   const nextPath = `/${city.slug}/${category.slug}${
-    query ? `?q=${encodeURIComponent(query)}` : ""
+    nextParams.size ? `?${nextParams.toString()}` : ""
   }`;
 
   const localizedCity = localizeCity(city, locale);
@@ -107,6 +119,7 @@ export default async function ExplorePage({
     city.slug,
     category.slug,
     user?.id,
+    localOnly,
   );
   const localizedBaseBusinesses = localizeBusinesses(baseBusinesses, locale);
   const exploreBusinesses = searchBusinesses(localizedBaseBusinesses, query);
@@ -145,6 +158,7 @@ export default async function ExplorePage({
           categories={localizedCategories}
           currentCity={city.slug}
           currentCategory={category.slug}
+          currentLocalOnly={localOnly}
           query={query}
           locale={locale}
         />

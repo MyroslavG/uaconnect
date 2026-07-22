@@ -22,6 +22,13 @@ exception
   when duplicate_object then null;
 end $$;
 
+do $$
+begin
+  create type public.app_notification_status as enum ('draft', 'published');
+exception
+  when duplicate_object then null;
+end $$;
+
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
@@ -172,6 +179,37 @@ on public.saved_businesses (user_id, created_at desc);
 create index if not exists saved_businesses_business_idx
 on public.saved_businesses (business_id);
 
+create table if not exists public.app_notifications (
+  id uuid primary key default gen_random_uuid(),
+  badge_uk text not null default 'Нове',
+  badge_en text not null default 'New',
+  title_uk text not null,
+  title_en text not null,
+  body_uk text not null,
+  body_en text not null,
+  href text,
+  cta_uk text,
+  cta_en text,
+  status public.app_notification_status not null default 'published',
+  created_by uuid references auth.users(id) on delete set null,
+  published_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists app_notifications_status_published_idx
+on public.app_notifications (status, published_at desc);
+
+create table if not exists public.notification_dismissals (
+  notification_id uuid not null references public.app_notifications(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  dismissed_at timestamptz not null default now(),
+  primary key (notification_id, user_id)
+);
+
+create index if not exists notification_dismissals_user_idx
+on public.notification_dismissals (user_id, dismissed_at desc);
+
 insert into storage.buckets (
   id,
   name,
@@ -281,6 +319,11 @@ for each row execute function public.set_updated_at();
 drop trigger if exists business_content_items_set_updated_at on public.business_content_items;
 create trigger business_content_items_set_updated_at
 before update on public.business_content_items
+for each row execute function public.set_updated_at();
+
+drop trigger if exists app_notifications_set_updated_at on public.app_notifications;
+create trigger app_notifications_set_updated_at
+before update on public.app_notifications
 for each row execute function public.set_updated_at();
 
 create or replace function public.handle_new_user()
@@ -650,6 +693,8 @@ alter table public.businesses enable row level security;
 alter table public.business_claim_invites enable row level security;
 alter table public.business_content_items enable row level security;
 alter table public.saved_businesses enable row level security;
+alter table public.app_notifications enable row level security;
+alter table public.notification_dismissals enable row level security;
 
 drop policy if exists "Profiles are visible to owner and admins" on public.profiles;
 create policy "Profiles are visible to owner and admins"
@@ -803,6 +848,49 @@ drop policy if exists "Users can remove their saved businesses" on public.saved_
 create policy "Users can remove their saved businesses"
 on public.saved_businesses for delete
 using ((select auth.uid()) = user_id);
+
+drop policy if exists "Authenticated users can view published notifications" on public.app_notifications;
+create policy "Authenticated users can view published notifications"
+on public.app_notifications for select
+to authenticated
+using (status = 'published' or public.is_admin());
+
+drop policy if exists "Admins can create notifications" on public.app_notifications;
+create policy "Admins can create notifications"
+on public.app_notifications for insert
+to authenticated
+with check (public.is_admin());
+
+drop policy if exists "Admins can update notifications" on public.app_notifications;
+create policy "Admins can update notifications"
+on public.app_notifications for update
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "Admins can delete notifications" on public.app_notifications;
+create policy "Admins can delete notifications"
+on public.app_notifications for delete
+to authenticated
+using (public.is_admin());
+
+drop policy if exists "Users can view their notification dismissals" on public.notification_dismissals;
+create policy "Users can view their notification dismissals"
+on public.notification_dismissals for select
+to authenticated
+using ((select auth.uid()) = user_id or public.is_admin());
+
+drop policy if exists "Users can dismiss notifications" on public.notification_dismissals;
+create policy "Users can dismiss notifications"
+on public.notification_dismissals for insert
+to authenticated
+with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can remove their notification dismissals" on public.notification_dismissals;
+create policy "Users can remove their notification dismissals"
+on public.notification_dismissals for delete
+to authenticated
+using ((select auth.uid()) = user_id or public.is_admin());
 
 drop policy if exists "Anyone can view business logos" on storage.objects;
 create policy "Anyone can view business logos"

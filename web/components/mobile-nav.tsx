@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  Bell,
   BriefcaseBusiness,
   LayoutDashboard,
   LogIn,
@@ -126,6 +127,17 @@ export function MobileNav({
                       <UsersRound className="h-4 w-4" />
                     </span>
                     {labels.adminUsers}
+                  </Link>
+                </DialogClose>
+                <DialogClose asChild>
+                  <Link
+                    className="group flex min-h-12 items-center gap-3 rounded-md border border-border/70 bg-card px-4 text-sm font-black text-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:border-hover-blue-border hover:bg-hover-blue hover:text-hover-blue-foreground hover:shadow-soft"
+                    href="/admin/notifications"
+                  >
+                    <span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary transition-colors group-hover:bg-white/70 group-hover:text-hover-blue-foreground dark:group-hover:bg-white/10">
+                      <Bell className="h-4 w-4" />
+                    </span>
+                    {labels.adminNotifications}
                   </Link>
                 </DialogClose>
               </>
