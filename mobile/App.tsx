@@ -56,6 +56,7 @@ import {
   categories,
   citySuggestions,
 } from "./src/data";
+import { rankBusinesses } from "./src/ranking";
 import {
   completeAuthFromUrl,
   signInWithApple,
@@ -961,9 +962,9 @@ export default function App() {
   );
 
   const results = useMemo(
-    () =>
-      businesses.filter((business) => {
-        const searchQuery = getEffectiveSearchQuery(query);
+    () => {
+      const searchQuery = getEffectiveSearchQuery(query);
+      const filteredBusinesses = businesses.filter((business) => {
         const category = getCategoryName(business.categorySlug, locale);
         const aliases = getSearchAliases(business.categorySlug);
         const locationAliases = getLocationAliases(business.city);
@@ -984,7 +985,14 @@ export default function App() {
         const matchesOnline = !localOnly || !business.servesAllCanada;
 
         return matchesQuery && matchesCategory && matchesLocation && matchesOnline;
-      }),
+      });
+
+      return rankBusinesses(filteredBusinesses, {
+        categorySlug: selectedCategory === "all" ? undefined : selectedCategory,
+        location,
+        query: searchQuery,
+      });
+    },
     [businesses, localOnly, locale, location, query, selectedCategory],
   );
 
@@ -2048,23 +2056,11 @@ function HomeScreen({
   const feedBusinessKeys = new Set(
     contentFeedItems.map(({ business }) => getBusinessDedupeKey(business)),
   );
-  const featuredBusinesses = [
-    ...uniqueBusinesses.filter(
-      (business) => business.logoUrl || (business.contentItems ?? []).length > 0,
+  const featuredBusinesses = rankBusinesses(
+    uniqueBusinesses.filter(
+      (business) => !feedBusinessKeys.has(getBusinessDedupeKey(business)),
     ),
-    ...uniqueBusinesses,
-  ]
-    .filter(
-      (business, index, allBusinesses) => {
-        const businessKey = getBusinessDedupeKey(business);
-
-        return (
-          !feedBusinessKeys.has(businessKey) &&
-          allBusinesses.findIndex((item) => getBusinessDedupeKey(item) === businessKey) ===
-            index
-        );
-      },
-    )
+  )
     .slice(0, 4);
   const popularCategories = categories
     .map((category) => ({

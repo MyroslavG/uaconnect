@@ -44,6 +44,8 @@ type PublicBusinessRow = {
   serves_all_canada: boolean;
   description: string;
   status: string;
+  created_at: string;
+  updated_at: string;
 };
 
 type RegistrationRow = {
@@ -60,6 +62,8 @@ type RegistrationRow = {
   serves_all_canada: boolean;
   description: string;
   status: string;
+  created_at?: string;
+  updated_at?: string;
 };
 
 type OwnerProfileRow = {
@@ -85,6 +89,7 @@ type BusinessContentRow = {
   link_url: string | null;
   status: "draft" | "published";
   created_at: string;
+  updated_at?: string;
 };
 
 type SavedBusinessRow = {
@@ -797,6 +802,7 @@ function mapPublicBusiness(
     address: business.address ?? undefined,
     categorySlug: business.category_slug,
     city: business.city,
+    createdAt: business.created_at,
     description: business.description,
     id: business.id,
     instagram: business.instagram ?? undefined,
@@ -815,6 +821,7 @@ function mapPublicBusiness(
     slug: business.slug,
     website: business.website ?? "",
     contentItems,
+    updatedAt: business.updated_at,
   };
 }
 
@@ -823,6 +830,7 @@ function mapRegistration(registration: RegistrationRow): Business {
     address: registration.address ?? undefined,
     categorySlug: registration.category_slug,
     city: registration.city,
+    createdAt: registration.created_at,
     description: registration.description,
     id: registration.id,
     instagram: registration.instagram ?? undefined,
@@ -835,6 +843,7 @@ function mapRegistration(registration: RegistrationRow): Business {
     servesAllCanada: registration.serves_all_canada,
     website: registration.website ?? "",
     contentItems: [],
+    updatedAt: registration.updated_at,
   };
 }
 
@@ -858,6 +867,7 @@ function mapBusinessContentItem(row: BusinessContentRow): BusinessContentItem {
     status: row.status,
     title: row.title,
     type: row.content_type,
+    updatedAt: row.updated_at,
   };
 }
 

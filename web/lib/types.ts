@@ -37,6 +37,14 @@ export type BusinessContentItem = {
   updatedAt?: string;
 };
 
+export type BusinessRankingSignals = {
+  contentCount: number;
+  eventCount: number;
+  latestContentAt?: string;
+  serviceCount: number;
+  upcomingEventCount: number;
+};
+
 export type Business = {
   id: string;
   registrationId?: string;
@@ -68,4 +76,7 @@ export type Business = {
   distanceInKm?: number;
   isSaved?: boolean;
   verifiedAt?: string;
+  createdAt?: string;
+  rankingSignals?: BusinessRankingSignals;
+  updatedAt?: string;
 };

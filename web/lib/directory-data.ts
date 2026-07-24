@@ -5,14 +5,23 @@ import {
   resolveLocationCoordinates,
   type Coordinates,
 } from "@/lib/location";
+import { rankBusinesses } from "@/lib/business-ranking";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
-import type { Business, BusinessContentItem } from "@/lib/types";
+import type {
+  Business,
+  BusinessContentItem,
+  BusinessRankingSignals,
+} from "@/lib/types";
 
 type PublishedBusiness = Database["public"]["Tables"]["businesses"]["Row"];
 type BusinessContentRow =
   Database["public"]["Tables"]["business_content_items"]["Row"];
+type BusinessContentSignalRow = Pick<
+  BusinessContentRow,
+  "content_type" | "created_at" | "registration_id" | "starts_at" | "updated_at"
+>;
 type SavedBusinessRow =
   Database["public"]["Tables"]["saved_businesses"]["Row"];
 type PublicBusinessOwner =
@@ -141,18 +150,11 @@ export async function searchDirectoryBusinesses({
 
       return matchesCity && matchesCategory && matchesDistance && matchesOnline;
     })
-    .sort((firstBusiness, secondBusiness) => {
-      if (!coordinates) {
-        return 0;
-      }
-
-      return (
-        (firstBusiness.distanceInKm ?? Number.POSITIVE_INFINITY) -
-        (secondBusiness.distanceInKm ?? Number.POSITIVE_INFINITY)
-      );
-    });
-
-  return searchBusinesses(filteredBusinesses, query).map(stripContentItems);
+  return rankBusinesses(searchBusinesses(filteredBusinesses, query), {
+    categorySlug,
+    citySlug,
+    query,
+  }).map(stripListingSignals);
 }
 
 export async function getSavedDirectoryBusinesses(currentUserId: string) {
@@ -204,6 +206,8 @@ async function getPublishedBusinesses({
   const contentItemsByRegistrationId = includeContentItems
     ? await getPublishedBusinessContentItems(registrationIds, contentItemsLimit)
     : new Map<string, BusinessContentItem[]>();
+  const rankingSignalsByRegistrationId =
+    await getPublishedBusinessContentSignals(registrationIds);
   const savedBusinessIds = currentUserId
     ? await getSavedBusinessIds(currentUserId)
     : new Set<string>();
@@ -229,6 +233,9 @@ async function getPublishedBusinesses({
         ? contentItemsByRegistrationId.get(row.registration_id)
         : undefined,
       savedBusinessIds.has(row.id),
+      row.registration_id
+        ? rankingSignalsByRegistrationId.get(row.registration_id)
+        : undefined,
     ),
   );
 }
@@ -284,11 +291,82 @@ async function getPublishedBusinessContentItems(
   return itemsByRegistrationId;
 }
 
-function stripContentItems(business: Business): Business {
-  const businessWithoutContentItems = { ...business };
-  delete businessWithoutContentItems.contentItems;
+async function getPublishedBusinessContentSignals(registrationIds: string[]) {
+  const signalsByRegistrationId = new Map<string, BusinessRankingSignals>();
 
-  return businessWithoutContentItems;
+  if (registrationIds.length === 0) {
+    return signalsByRegistrationId;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("business_content_items")
+    .select("registration_id, content_type, starts_at, created_at, updated_at")
+    .in("registration_id", registrationIds)
+    .eq("status", "published");
+
+  if (error || !data) {
+    return signalsByRegistrationId;
+  }
+
+  const now = Date.now();
+
+  for (const row of data as BusinessContentSignalRow[]) {
+    const signals = signalsByRegistrationId.get(row.registration_id) ?? {
+      contentCount: 0,
+      eventCount: 0,
+      serviceCount: 0,
+      upcomingEventCount: 0,
+    };
+
+    signals.contentCount += 1;
+
+    if (row.content_type === "service") {
+      signals.serviceCount += 1;
+    }
+
+    if (row.content_type === "event") {
+      signals.eventCount += 1;
+
+      if (getTimestamp(row.starts_at) >= now) {
+        signals.upcomingEventCount += 1;
+      }
+    }
+
+    signals.latestContentAt = getLatestDate([
+      signals.latestContentAt,
+      row.updated_at,
+      row.created_at,
+    ]);
+
+    signalsByRegistrationId.set(row.registration_id, signals);
+  }
+
+  return signalsByRegistrationId;
+}
+
+function stripListingSignals(business: Business): Business {
+  const businessWithoutListingSignals = { ...business };
+  delete businessWithoutListingSignals.contentItems;
+  delete businessWithoutListingSignals.rankingSignals;
+
+  return businessWithoutListingSignals;
+}
+
+function getLatestDate(values: Array<string | undefined | null>) {
+  const latestTimestamp = Math.max(0, ...values.map(getTimestamp));
+
+  return latestTimestamp ? new Date(latestTimestamp).toISOString() : undefined;
+}
+
+function getTimestamp(value: string | undefined | null) {
+  if (!value) {
+    return 0;
+  }
+
+  const timestamp = new Date(value).getTime();
+
+  return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
 function mapPublishedBusiness(
@@ -296,6 +374,7 @@ function mapPublishedBusiness(
   owner?: PublicBusinessOwner,
   contentItems: BusinessContentItem[] = [],
   isSaved = false,
+  rankingSignals?: BusinessRankingSignals,
 ): Business {
   const category =
     categories.find((candidate) => candidate.slug === row.category_slug) ??
@@ -334,6 +413,9 @@ function mapPublishedBusiness(
     isSaved,
     tags: [category.name],
     contentItems,
+    createdAt: row.created_at,
+    rankingSignals,
+    updatedAt: row.updated_at,
     verifiedAt: row.verified_at ?? undefined,
   };
 }

@@ -25,6 +25,8 @@ export type Business = {
   ownedByCurrentUser?: boolean;
   isSaved?: boolean;
   contentItems?: BusinessContentItem[];
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type BusinessContentType = "service" | "event";
@@ -46,6 +48,7 @@ export type BusinessContentItem = {
   linkUrl?: string;
   status: "draft" | "published";
   createdAt?: string;
+  updatedAt?: string;
 };
 
 export type BusinessContentInput = {

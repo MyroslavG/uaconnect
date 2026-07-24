@@ -17,6 +17,7 @@ import { CategoryGrid } from "@/components/category-grid";
 import { SearchPanel } from "@/components/search-panel";
 import { Badge } from "@/components/ui/badge";
 import { categories, cities } from "@/lib/data";
+import { rankBusinesses } from "@/lib/business-ranking";
 import { getDirectoryBusinesses } from "@/lib/directory-data";
 import { copy, localizeCategories, localizeCities } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/locale";
@@ -299,17 +300,7 @@ function getFeaturedContentItems(businesses: Business[], limit: number) {
 }
 
 function getFeaturedBusinesses(businesses: Business[], limit: number) {
-  return [
-    ...businesses.filter(
-      (business) => business.logoUrl || (business.contentItems ?? []).length > 0,
-    ),
-    ...businesses,
-  ]
-    .filter(
-      (business, index, allBusinesses) =>
-        allBusinesses.findIndex((item) => item.id === business.id) === index,
-    )
-    .slice(0, limit);
+  return rankBusinesses(businesses).slice(0, limit);
 }
 
 function getHomeStats(

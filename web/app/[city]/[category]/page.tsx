@@ -16,6 +16,7 @@ import {
   getCity,
   searchBusinesses,
 } from "@/lib/data";
+import { rankBusinesses } from "@/lib/business-ranking";
 import { getDirectoryBusinessesByCityAndCategory } from "@/lib/directory-data";
 import {
   copy,
@@ -123,14 +124,20 @@ export default async function ExplorePage({
     Boolean(query?.trim()),
   );
   const localizedBaseBusinesses = localizeBusinesses(baseBusinesses, locale);
-  const exploreBusinesses = searchBusinesses(localizedBaseBusinesses, query).map(
-    (business) => {
-      const businessWithoutContentItems = { ...business };
-      delete businessWithoutContentItems.contentItems;
-
-      return businessWithoutContentItems;
+  const exploreBusinesses = rankBusinesses(
+    searchBusinesses(localizedBaseBusinesses, query),
+    {
+      categorySlug: category.slug,
+      citySlug: city.slug,
+      query,
     },
-  );
+  ).map((business) => {
+    const businessWithoutListingSignals = { ...business };
+    delete businessWithoutListingSignals.contentItems;
+    delete businessWithoutListingSignals.rankingSignals;
+
+    return businessWithoutListingSignals;
+  });
   const mapBusinesses = exploreBusinesses.map(({ address, name, slug }) => ({
     address,
     name,
