@@ -6,6 +6,7 @@ export const categories: Category[] = [
   { slug: "shops", name: { uk: "Магазин", en: "Shop" } },
   { slug: "lawyers", name: { uk: "Юридичні послуги", en: "Legal Services" } },
   { slug: "realtors", name: { uk: "Рієлтори", en: "Realtors" } },
+  { slug: "mortgage-brokers", name: { uk: "Іпотечні брокери", en: "Mortgage Brokers" } },
   { slug: "moving", name: { uk: "Переїзд", en: "Moving" } },
   { slug: "insurance-brokers", name: { uk: "Страховий брокер", en: "Insurance Broker" } },
   { slug: "bookkeepers", name: { uk: "Бухгалтери", en: "Bookkeepers" } },

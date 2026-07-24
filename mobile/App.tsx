@@ -15,6 +15,7 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
+  Share as NativeShare,
   StatusBar,
   StyleSheet,
   Switch,
@@ -26,9 +27,10 @@ import {
   Bell,
   Bookmark,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   ExternalLink,
   Home,
-  LayoutDashboard,
   Lock,
   MapPin,
   Moon,
@@ -36,6 +38,7 @@ import {
   Phone,
   Plus,
   Search,
+  Share2,
   Sparkles,
   Store,
   Sun,
@@ -61,7 +64,14 @@ import {
   signInWithGoogle,
   signOut,
 } from "./src/auth";
-import { deleteCurrentAccount } from "./src/account";
+import {
+  deleteCurrentAccount,
+  fetchCurrentProfile,
+  updateCurrentProfile,
+  type ProfileAvatarInput,
+  type ProfileUpdateInput,
+  type UserProfile,
+} from "./src/account";
 import {
   createBusinessContentItem,
   createBusinessRegistration,
@@ -93,8 +103,9 @@ import type {
   Locale,
 } from "./src/types";
 
-type Tab = "home" | "search" | "register" | "dashboard" | "profile";
+type Tab = "home" | "search" | "events" | "profile";
 type DashboardPanel = "profile" | "services" | "events";
+type ProfilePanel = "account" | "addBusiness" | "businessInfo";
 type ContentDetailEntry = {
   business: Business;
   item: BusinessContentItem;
@@ -107,6 +118,9 @@ const CATEGORY_PICKER_SHEET_HEIGHT = Math.round(
 const LOCATION_PICKER_SHEET_HEIGHT = Math.round(
   Dimensions.get("window").height * 0.58,
 );
+const PUBLIC_WEB_URL = (
+  process.env.EXPO_PUBLIC_WEB_URL ?? "https://koloapp.ca"
+).replace(/\/+$/, "");
 const copy = {
   uk: {
     addBusiness: "Додати",
@@ -138,6 +152,7 @@ const copy = {
     contentPhotoPermission:
       "Дозвольте доступ до фото, щоб вибрати зображення.",
     contentPhotoSelected: "Фото вибрано",
+    contentPhotosSelected: "фото вибрано",
     contentPhotoUpload: "Додати фото",
     contentDeleted: "Видалено",
     contentSaved: "Додано",
@@ -155,6 +170,7 @@ const copy = {
     description: "Опис",
     done: "Готово",
     edit: "Редагувати",
+    editPersonalProfile: "Редагувати особистий профіль",
     editProfile: "Редагувати профіль",
     email: "Email",
     emailPasswordRequired: "Введіть email і пароль.",
@@ -163,8 +179,11 @@ const copy = {
     eventLocation: "Місце або онлайн",
     eventTitle: "Назва події",
     events: "Події",
+    eventsNearYou: "Події поруч",
+    eventsIntro: "Дивіться події від українських бізнесів за містом або локацією поруч.",
     find: "Знайти",
     free: "Безкоштовно",
+    googleEmail: "Google email",
     hour: "Година",
     home: "Головна",
     homeIntro:
@@ -194,11 +213,20 @@ const copy = {
     myLocation: "Моя локація",
     name: "Назва бізнесу",
     noContentItems: "Поки що нічого не додано.",
+    noLogo: "Без лого",
     noResults: "Нічого не знайдено",
+    next: "Наступне",
     owner: "Власник",
     phone: "Телефон",
     password: "Пароль",
+    personalName: "Ім'я",
+    previous: "Попереднє",
     profile: "Профіль",
+    profilePhoto: "Фото профілю",
+    profilePhotoHint: "PNG, JPG, WebP або GIF до 2 MB.",
+    profilePhotoSelected: "Фото вибрано",
+    profilePhotoUpload: "Завантажити фото",
+    profileNameRequired: "Введіть ім'я.",
     profilePreview: "Так профіль бачать люди",
     profileIntro: "Особистий профіль, контактні дані та налаштування додатку.",
     popularCategories: "Популярні категорії",
@@ -224,6 +252,9 @@ const copy = {
     saveBusiness: "Зберегти",
     savedBusiness: "Збережено",
     savedBusinesses: "Збережені бізнеси",
+    shareBusiness: "Поділитися",
+    shareFailed: "Не вдалося відкрити поширення.",
+    profileSaved: "Профіль оновлено",
     removeSavedBusiness: "Прибрати",
     signInToSave: "Увійдіть, щоб зберегти бізнес.",
     noSavedBusinesses: "Поки що немає збережених бізнесів.",
@@ -240,6 +271,8 @@ const copy = {
     accountDeletionNote:
       "Видалення акаунта назавжди прибере ваш доступ і профіль користувача.",
     accountDeletionTitle: "Керування акаунтом",
+    account: "Акаунт",
+    businessInfo: "Бізнес",
     passwordTooShort: "Пароль має містити щонайменше 6 символів.",
     createAccountEmail: "Створити акаунт",
     signIn: "Увійти",
@@ -249,6 +282,7 @@ const copy = {
       "Apple не повернув токен для входу. Спробуйте ще раз.",
     signInEmail: "Увійти з email",
     signedInAs: "Ви увійшли як",
+    saving: "Зберігаємо...",
     submit: "Надіслати",
     submitted: "Заявку надіслано на перевірку.",
     theme: "Тема",
@@ -290,6 +324,7 @@ const copy = {
     contentPhotoHint: "PNG, JPG, WebP, or GIF up to 5 MB.",
     contentPhotoPermission: "Allow photo access to choose an image.",
     contentPhotoSelected: "Photo selected",
+    contentPhotosSelected: "photos selected",
     contentPhotoUpload: "Add photo",
     contentDeleted: "Deleted",
     contentSaved: "Added",
@@ -307,6 +342,7 @@ const copy = {
     description: "Description",
     done: "Done",
     edit: "Edit",
+    editPersonalProfile: "Edit personal profile",
     editProfile: "Edit profile",
     email: "Email",
     emailPasswordRequired: "Enter email and password.",
@@ -315,8 +351,11 @@ const copy = {
     eventLocation: "Place or online",
     eventTitle: "Event title",
     events: "Events",
+    eventsNearYou: "Events near you",
+    eventsIntro: "Browse events from Ukrainian businesses by city or nearby location.",
     find: "Search",
     free: "Free",
+    googleEmail: "Google email",
     hour: "Hour",
     home: "Home",
     homeIntro:
@@ -346,11 +385,20 @@ const copy = {
     myLocation: "My location",
     name: "Business name",
     noContentItems: "Nothing added yet.",
+    noLogo: "No logo",
     noResults: "No results found",
+    next: "Next",
     owner: "Owner",
     phone: "Phone",
     password: "Password",
+    personalName: "Name",
+    previous: "Previous",
     profile: "Profile",
+    profilePhoto: "Profile photo",
+    profilePhotoHint: "PNG, JPG, WebP, or GIF up to 2 MB.",
+    profilePhotoSelected: "Photo selected",
+    profilePhotoUpload: "Upload photo",
+    profileNameRequired: "Enter your name.",
     profilePreview: "This is how people see the profile",
     profileIntro: "Personal profile, contact details, and app settings.",
     popularCategories: "Popular categories",
@@ -376,6 +424,9 @@ const copy = {
     saveBusiness: "Save",
     savedBusiness: "Saved",
     savedBusinesses: "Saved businesses",
+    shareBusiness: "Share",
+    shareFailed: "Could not open sharing.",
+    profileSaved: "Profile updated",
     removeSavedBusiness: "Remove",
     signInToSave: "Sign in to save this business.",
     noSavedBusinesses: "No saved businesses yet.",
@@ -392,6 +443,8 @@ const copy = {
     accountDeletionNote:
       "Account deletion permanently removes your access and user profile.",
     accountDeletionTitle: "Account management",
+    account: "Account",
+    businessInfo: "Business",
     passwordTooShort: "Password must be at least 6 characters.",
     createAccountEmail: "Create account",
     signIn: "Sign in",
@@ -401,6 +454,7 @@ const copy = {
       "Apple did not return a sign-in token. Please try again.",
     signInEmail: "Sign in with email",
     signedInAs: "Signed in as",
+    saving: "Saving...",
     submit: "Submit",
     submitted: "Submitted for review.",
     theme: "Theme",
@@ -486,6 +540,49 @@ const locationAliases: Record<string, string[]> = {
   winnipeg: ["winnipeg", "вінніпег"],
 };
 
+function getBusinessShareUrl(business: Business) {
+  const slug = business.slug?.trim() ?? "";
+
+  if (slug) {
+    return `${PUBLIC_WEB_URL}/business/${encodeURIComponent(slug)}`;
+  }
+
+  return `${PUBLIC_WEB_URL}/search?query=${encodeURIComponent(business.name)}`;
+}
+
+function getBusinessShareMessage(
+  business: Business,
+  locale: Locale,
+  shareUrl: string,
+) {
+  const locationLabel = business.servesAllCanada
+    ? locale === "uk"
+      ? "вся Канада"
+      : "Canada-wide"
+    : business.city;
+
+  if (locale === "uk") {
+    return `Подивись ${business.name}${locationLabel ? ` (${locationLabel})` : ""} у Kolo: ${shareUrl}`;
+  }
+
+  return `Check out ${business.name}${locationLabel ? ` (${locationLabel})` : ""} on Kolo: ${shareUrl}`;
+}
+
+function getBusinessSlugFromLink(url: string) {
+  const pathOnly = url.split("#")[0]?.split("?")[0] ?? "";
+  const match = pathOnly.match(/\/(?:--\/)?business\/([^/?#]+)/i);
+
+  if (!match?.[1]) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
 const defaultOwnedBusiness =
   initialBusinesses.find((business) => business.ownedByCurrentUser) ??
   initialBusinesses[0];
@@ -493,6 +590,8 @@ const defaultOwnedBusiness =
 export default function App() {
   const [locale, setLocale] = useState<Locale>("uk");
   const [activeTab, setActiveTab] = useState<Tab>("home");
+  const [activeProfilePanel, setActiveProfilePanel] =
+    useState<ProfilePanel>("account");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState("");
@@ -501,6 +600,11 @@ export default function App() {
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [selectedContentEntry, setSelectedContentEntry] =
     useState<ContentDetailEntry | null>(null);
+  const [contentReturnBusiness, setContentReturnBusiness] =
+    useState<Business | null>(null);
+  const [pendingBusinessSlug, setPendingBusinessSlug] = useState<string | null>(
+    null,
+  );
   const [directoryBusinesses, setDirectoryBusinesses] = useState<Business[]>(
     isSupabaseConfigured ? [] : initialBusinesses,
   );
@@ -513,6 +617,7 @@ export default function App() {
     BusinessContentItem[]
   >([]);
   const [session, setSession] = useState<Session | null>(null);
+  const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
   const [authMessage, setAuthMessage] = useState("");
   const [dataMessage, setDataMessage] = useState("");
   const [isAuthBusy, setIsAuthBusy] = useState(false);
@@ -524,6 +629,39 @@ export default function App() {
     null,
   );
   const labels = { ...copy[locale], ...connectionCopy[locale] };
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !session?.user.id) {
+      setCurrentProfile(null);
+      return;
+    }
+
+    let isMounted = true;
+    const userId = session.user.id;
+
+    async function loadProfile() {
+      try {
+        const profile = await fetchCurrentProfile(userId);
+
+        if (isMounted) {
+          setCurrentProfile(profile);
+        }
+      } catch (error) {
+        console.error("[kolo:mobile-profile]", error);
+
+        if (isMounted) {
+          setAuthMessage(getErrorMessage(error));
+          setCurrentProfile(null);
+        }
+      }
+    }
+
+    void loadProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [session?.user.id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -599,38 +737,43 @@ export default function App() {
   }, [labels.notConfigured]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) {
-      return;
-    }
-
     let isMounted = true;
 
-    async function handleAuthUrl(url: string | null) {
+    async function handleIncomingUrl(url: string | null) {
       if (!url) {
         return;
       }
 
-      try {
-        const completed = await completeAuthFromUrl(url);
+      if (isSupabaseConfigured) {
+        try {
+          const completed = await completeAuthFromUrl(url);
 
-        if (completed && isMounted) {
-          setAuthMessage("");
-        }
-      } catch (error) {
-        console.error("[kolo:mobile-auth-callback]", error);
+          if (completed && isMounted) {
+            setAuthMessage("");
+            return;
+          }
+        } catch (error) {
+          console.error("[kolo:mobile-auth-callback]", error);
 
-        if (isMounted) {
-          setAuthMessage(getErrorMessage(error));
+          if (isMounted) {
+            setAuthMessage(getErrorMessage(error));
+          }
         }
+      }
+
+      const businessSlug = getBusinessSlugFromLink(url);
+
+      if (businessSlug && isMounted) {
+        setPendingBusinessSlug(businessSlug);
       }
     }
 
     Linking.getInitialURL().then((url) => {
-      void handleAuthUrl(url);
+      void handleIncomingUrl(url);
     });
 
     const subscription = Linking.addEventListener("url", ({ url }) => {
-      void handleAuthUrl(url);
+      void handleIncomingUrl(url);
     });
 
     return () => {
@@ -711,8 +854,14 @@ export default function App() {
             owned
               ? {
                   ...owned,
-                  ownerAvatarUrl: getSessionAvatarUrl(activeSession),
-                  ownerName: getSessionName(activeSession),
+                  ownerAvatarUrl: getProfileAvatarUrl(
+                    currentProfile,
+                    activeSession,
+                  ),
+                  ownerName: getProfileDisplayName(
+                    currentProfile,
+                    activeSession,
+                  ),
                 }
               : null,
           );
@@ -735,7 +884,7 @@ export default function App() {
     return () => {
       isMounted = false;
     };
-  }, [session]);
+  }, [currentProfile, session]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !session?.user.id || !ownedBusiness) {
@@ -827,7 +976,22 @@ export default function App() {
     [businesses, localOnly, locale, location, query, selectedCategory],
   );
 
-  const profileName = getSessionName(session);
+  const profileName = getProfileDisplayName(currentProfile, session);
+
+  useEffect(() => {
+    if (!pendingBusinessSlug || isDirectoryLoading) {
+      return;
+    }
+
+    const linkedBusiness = businesses.find(
+      (business) => business.slug === pendingBusinessSlug,
+    );
+
+    if (linkedBusiness) {
+      setSelectedBusiness(linkedBusiness);
+      setPendingBusinessSlug(null);
+    }
+  }, [businesses, isDirectoryLoading, pendingBusinessSlug]);
 
   async function handleGoogleSignIn() {
     try {
@@ -964,6 +1128,7 @@ export default function App() {
       setOwnedBusiness(null);
       setOwnedContentItems([]);
       setSelectedBusiness(null);
+      setActiveProfilePanel("account");
       setActiveTab("profile");
       setAuthMessage(labels.accountDeleted);
     } catch (error) {
@@ -994,6 +1159,7 @@ export default function App() {
     if (!isSupabaseConfigured || !session?.user.id) {
       setAuthMessage(labels.signInToSave);
       setSelectedBusiness(null);
+      setActiveProfilePanel("account");
       setActiveTab("profile");
       return;
     }
@@ -1056,10 +1222,11 @@ export default function App() {
     );
     setOwnedBusiness({
       ...createdBusiness,
-      ownerAvatarUrl: getSessionAvatarUrl(session),
+      ownerAvatarUrl: getProfileAvatarUrl(currentProfile, session),
       ownerName: profileName,
     });
-    setActiveTab("dashboard");
+    setActiveProfilePanel("businessInfo");
+    setActiveTab("profile");
   }
 
   async function handleBusinessSave(updatedBusiness: Business) {
@@ -1074,7 +1241,7 @@ export default function App() {
     );
     setOwnedBusiness({
       ...savedBusiness,
-      ownerAvatarUrl: getSessionAvatarUrl(session),
+      ownerAvatarUrl: getProfileAvatarUrl(currentProfile, session),
       ownerName: profileName,
     });
     setDirectoryBusinesses((currentBusinesses) =>
@@ -1092,13 +1259,66 @@ export default function App() {
     );
   }
 
+  function applyProfileToOwnedBusiness(
+    profile: UserProfile,
+    activeSession: Session | null,
+  ) {
+    const ownerId = activeSession?.user.id;
+
+    if (!ownerId) {
+      return;
+    }
+
+    const ownerName = getProfileDisplayName(profile, activeSession);
+    const ownerAvatarUrl = getProfileAvatarUrl(profile, activeSession);
+    const applyOwnerProfile = (business: Business) =>
+      business.ownerId === ownerId || business.ownedByCurrentUser
+        ? {
+            ...business,
+            ownerAvatarUrl,
+            ownerName,
+          }
+        : business;
+
+    setOwnedBusiness((currentBusiness) =>
+      currentBusiness ? applyOwnerProfile(currentBusiness) : currentBusiness,
+    );
+    setDirectoryBusinesses((currentBusinesses) =>
+      currentBusinesses.map(applyOwnerProfile),
+    );
+    setSelectedBusiness((currentBusiness) =>
+      currentBusiness ? applyOwnerProfile(currentBusiness) : currentBusiness,
+    );
+  }
+
+  async function handleProfileSave(input: ProfileUpdateInput) {
+    if (!isSupabaseConfigured || !session?.user.id) {
+      throw new Error(labels.signInRequired);
+    }
+
+    const updatedProfile = await updateCurrentProfile(
+      input,
+      session.user.id,
+      session.user.email ?? undefined,
+    );
+    const { data } = await supabase.auth.getSession();
+
+    setCurrentProfile(updatedProfile);
+    setSession(data.session);
+    applyProfileToOwnedBusiness(updatedProfile, data.session ?? session);
+
+    return updatedProfile;
+  }
+
   async function handleBusinessContentCreate(input: BusinessContentInput) {
     if (!isSupabaseConfigured || !session?.user.id) {
+      const imageUrls = getInputImageUris(input);
       const localContentItem: BusinessContentItem = {
         ...input,
         createdAt: new Date().toISOString(),
         id: `local-${Date.now()}`,
-        imageUrl: input.image?.uri,
+        imageUrl: imageUrls[0],
+        imageUrls,
         ownerId: "local",
         status: "published",
       };
@@ -1112,13 +1332,15 @@ export default function App() {
 
   async function handleBusinessContentUpdate(input: BusinessContentUpdateInput) {
     if (!isSupabaseConfigured || !session?.user.id) {
+      const nextImageUrls = getInputImageUris(input);
       setOwnedContentItems((currentItems) =>
         currentItems.map((item) =>
           item.id === input.id
             ? {
                 ...item,
                 ...input,
-                imageUrl: input.image?.uri ?? item.imageUrl,
+                imageUrl: nextImageUrls[0] ?? item.imageUrl,
+                imageUrls: nextImageUrls.length > 0 ? nextImageUrls : item.imageUrls,
               }
             : item,
         ),
@@ -1170,6 +1392,49 @@ export default function App() {
     }
   }
 
+  function handleStandaloneContentPress(entry: ContentDetailEntry) {
+    setContentReturnBusiness(null);
+    setSelectedContentEntry(entry);
+  }
+
+  function handleBusinessModalContentPress(entry: ContentDetailEntry) {
+    setContentReturnBusiness(entry.business);
+    setSelectedBusiness(null);
+    setSelectedContentEntry(null);
+
+    setTimeout(() => {
+      setSelectedContentEntry(entry);
+    }, 180);
+  }
+
+  function handleContentModalClose() {
+    setSelectedContentEntry(null);
+
+    if (contentReturnBusiness) {
+      const businessToRestore = contentReturnBusiness;
+      setContentReturnBusiness(null);
+
+      setTimeout(() => {
+        setSelectedBusiness(businessToRestore);
+      }, 180);
+    }
+  }
+
+  async function handleShareBusiness(business: Business) {
+    const shareUrl = getBusinessShareUrl(business);
+
+    try {
+      await NativeShare.share({
+        message: getBusinessShareMessage(business, locale, shareUrl),
+        title: business.name,
+        url: shareUrl,
+      });
+    } catch (error) {
+      console.error("[kolo:mobile-share]", error);
+      Alert.alert(labels.shareBusiness, labels.shareFailed);
+    }
+  }
+
   const canViewContacts = Boolean(session);
 
   return (
@@ -1194,7 +1459,7 @@ export default function App() {
               labels={labels}
               locale={locale}
               onBusinessPress={setSelectedBusiness}
-              onContentPress={setSelectedContentEntry}
+              onContentPress={handleStandaloneContentPress}
               onCategoryPress={(categorySlug) => {
                 setSelectedCategory(categorySlug);
                 setQuery("");
@@ -1205,6 +1470,7 @@ export default function App() {
                 setQuery("");
                 setActiveTab("search");
               }}
+              onShareBusiness={handleShareBusiness}
               onSearchPress={() => setActiveTab("search")}
               onToggleSavedBusiness={handleToggleSavedBusiness}
               savedBusyBusinessId={savedBusyBusinessId}
@@ -1234,39 +1500,32 @@ export default function App() {
               setQuery={setQuery}
               setSelectedBusiness={setSelectedBusiness}
               setSelectedCategory={setSelectedCategory}
+              onShareBusiness={handleShareBusiness}
               onToggleSavedBusiness={handleToggleSavedBusiness}
               savedBusyBusinessId={savedBusyBusinessId}
               totalCount={totalBusinessesCount}
             />
           ) : null}
 
-          {activeTab === "register" ? (
-            <RegisterScreen
-              isDarkMode={isDarkMode}
-              isSignedIn={Boolean(session)}
-              labels={labels}
-              locale={locale}
-              onSubmit={handleBusinessRegistration}
-            />
-          ) : null}
-
-          {activeTab === "dashboard" ? (
-            <DashboardScreen
-              business={ownedBusiness}
+          {activeTab === "events" ? (
+            <EventsScreen
+              businesses={businesses}
+              canViewContacts={canViewContacts}
+              isDataReady={!isDirectoryLoading}
               isDarkMode={isDarkMode}
               labels={labels}
-              locale={locale}
-              contentItems={ownedContentItems}
-              onCreateContent={handleBusinessContentCreate}
-              onDeleteContent={handleBusinessContentDelete}
-              onSave={handleBusinessSave}
-              onUpdateContent={handleBusinessContentUpdate}
+              location={location}
+              onContentPress={handleStandaloneContentPress}
+              setLocation={setLocation}
             />
           ) : null}
 
           {activeTab === "profile" ? (
             <ProfileScreen
+              activeProfilePanel={activeProfilePanel}
               authMessage={authMessage}
+              business={ownedBusiness}
+              contentItems={ownedContentItems}
               isDarkMode={isDarkMode}
               isAppleSignInAvailable={isAppleSignInAvailable}
               isAuthBusy={isAuthBusy}
@@ -1274,11 +1533,20 @@ export default function App() {
               labels={labels}
               locale={locale}
               onAppleSignIn={handleAppleSignIn}
+              onCreateContent={handleBusinessContentCreate}
               onDeleteAccount={handleDeleteAccount}
+              onDeleteContent={handleBusinessContentDelete}
               onEmailSignIn={handleEmailSignIn}
               onEmailSignUp={handleEmailSignUp}
               onBusinessPress={setSelectedBusiness}
+              onBusinessSave={handleBusinessSave}
+              onBusinessSubmit={handleBusinessRegistration}
+              onProfileSave={handleProfileSave}
+              onShareBusiness={handleShareBusiness}
+              onProfilePanelChange={setActiveProfilePanel}
               onToggleSavedBusiness={handleToggleSavedBusiness}
+              onUpdateContent={handleBusinessContentUpdate}
+              profile={currentProfile}
               savedBusinesses={savedBusinesses}
               savedBusyBusinessId={savedBusyBusinessId}
               onSignIn={handleGoogleSignIn}
@@ -1305,25 +1573,21 @@ export default function App() {
             onPress={() => setActiveTab("search")}
           />
           <TabButton
-            active={activeTab === "register"}
-            Icon={Plus}
+            active={activeTab === "events"}
+            Icon={CalendarDays}
             isDarkMode={isDarkMode}
-            label={labels.addBusiness}
-            onPress={() => setActiveTab("register")}
-          />
-          <TabButton
-            active={activeTab === "dashboard"}
-            Icon={LayoutDashboard}
-            isDarkMode={isDarkMode}
-            label={labels.dashboard}
-            onPress={() => setActiveTab("dashboard")}
+            label={labels.events}
+            onPress={() => setActiveTab("events")}
           />
           <TabButton
             active={activeTab === "profile"}
             Icon={UserRound}
             isDarkMode={isDarkMode}
             label={labels.profile}
-            onPress={() => setActiveTab("profile")}
+            onPress={() => {
+              setActiveProfilePanel("account");
+              setActiveTab("profile");
+            }}
           />
         </View>
       </View>
@@ -1337,14 +1601,17 @@ export default function App() {
         onClose={() => setSelectedBusiness(null)}
         onRequireSignIn={() => {
           setSelectedBusiness(null);
+          setActiveProfilePanel("account");
           setActiveTab("profile");
         }}
-        onContentPress={setSelectedContentEntry}
+        onContentPress={handleBusinessModalContentPress}
+        onShareBusiness={handleShareBusiness}
         onToggleSavedBusiness={handleToggleSavedBusiness}
         saveBusyBusinessId={savedBusyBusinessId}
         onManage={() => {
           setSelectedBusiness(null);
-          setActiveTab("dashboard");
+          setActiveProfilePanel("businessInfo");
+          setActiveTab("profile");
         }}
       />
       <BusinessContentModal
@@ -1354,12 +1621,15 @@ export default function App() {
         labels={labels}
         onBusinessPress={(business) => {
           setSelectedContentEntry(null);
+          setContentReturnBusiness(null);
           setSelectedBusiness(business);
         }}
-        onClose={() => setSelectedContentEntry(null)}
+        onClose={handleContentModalClose}
         onRequireSignIn={() => {
           setSelectedContentEntry(null);
           setSelectedBusiness(null);
+          setContentReturnBusiness(null);
+          setActiveProfilePanel("account");
           setActiveTab("profile");
         }}
       />
@@ -1401,6 +1671,7 @@ function SearchScreen({
   location,
   localOnly,
   onClearFilters,
+  onShareBusiness,
   onToggleSavedBusiness,
   query,
   results,
@@ -1421,6 +1692,7 @@ function SearchScreen({
   location: string;
   localOnly: boolean;
   onClearFilters: () => void;
+  onShareBusiness: (business: Business) => Promise<void>;
   onToggleSavedBusiness: (business: Business) => void;
   query: string;
   results: Business[];
@@ -1538,6 +1810,9 @@ function SearchScreen({
             labels={labels}
             locale={locale}
             onPress={() => setSelectedBusiness(business)}
+            onShare={() => {
+              void onShareBusiness(business);
+            }}
             onToggleSaved={() => onToggleSavedBusiness(business)}
             saveBusy={savedBusyBusinessId === business.id}
           />
@@ -1545,6 +1820,133 @@ function SearchScreen({
       ) : (
         <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
           {labels.noResults}
+        </Text>
+      )}
+    </KeyboardAwareScreen>
+  );
+}
+
+function EventsScreen({
+  businesses,
+  canViewContacts,
+  isDataReady,
+  isDarkMode,
+  labels,
+  location,
+  onContentPress,
+  setLocation,
+}: {
+  businesses: Business[];
+  canViewContacts: boolean;
+  isDataReady: boolean;
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  location: string;
+  onContentPress: (entry: ContentDetailEntry) => void;
+  setLocation: (value: string) => void;
+}) {
+  const selectedLocation = location.trim();
+
+  if (!isDataReady) {
+    return (
+      <ScrollView
+        contentContainerStyle={styles.screenContent}
+        keyboardShouldPersistTaps="handled"
+        style={styles.screen}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[styles.homeHero, isDarkMode ? styles.darkCard : null]}>
+          <Text style={[styles.homeTitle, isDarkMode ? styles.darkText : null]}>
+            {labels.eventsNearYou}
+          </Text>
+          <Text style={[styles.homeIntro, isDarkMode ? styles.darkMutedText : null]}>
+            {labels.loadingBusinesses}
+          </Text>
+        </View>
+      </ScrollView>
+    );
+  }
+
+  const eventEntries = getUniqueBusinessesById(businesses)
+    .flatMap((business) =>
+      (business.contentItems ?? [])
+        .filter((item) => item.type === "event")
+        .map((item) => ({ business, item })),
+    )
+    .filter(
+      ({ item }, index, allItems) =>
+        allItems.findIndex(({ item: otherItem }) => otherItem.id === item.id) ===
+        index,
+    )
+    .filter(({ business, item }) => {
+      if (!selectedLocation) {
+        return true;
+      }
+
+      const eventLocation = item.location ?? "";
+
+      return (
+        item.isOnline ||
+        business.servesAllCanada ||
+        isNearLocation(business.city, selectedLocation) ||
+        (eventLocation ? isNearLocation(eventLocation, selectedLocation) : false) ||
+        (eventLocation
+          ? normalize(eventLocation).includes(normalize(selectedLocation))
+          : false)
+      );
+    })
+    .sort(
+      (first, second) =>
+        getContentTimestamp(second.item) - getContentTimestamp(first.item),
+    );
+
+  return (
+    <KeyboardAwareScreen>
+      <View style={[styles.searchPanel, isDarkMode ? styles.darkCard : null]}>
+        <Text style={[styles.homeTitle, isDarkMode ? styles.darkText : null]}>
+          {labels.eventsNearYou}
+        </Text>
+        <Text style={[styles.homeIntro, isDarkMode ? styles.darkMutedText : null]}>
+          {labels.eventsIntro}
+        </Text>
+        <Field isDarkMode={isDarkMode} label={labels.location}>
+          <LocationPicker
+            allowAll
+            isDarkMode={isDarkMode}
+            labels={labels}
+            onChange={setLocation}
+            placeholder={labels.city}
+            showMyLocation
+            value={location}
+          />
+        </Field>
+      </View>
+
+      <View style={styles.resultsHeader}>
+        <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+          {selectedLocation || labels.allCanada}
+        </Text>
+        <Text style={[styles.resultCount, isDarkMode ? styles.darkBadge : null]}>
+          {eventEntries.length}
+        </Text>
+      </View>
+
+      {eventEntries.length ? (
+        eventEntries.map(({ business, item }) => (
+          <PublicContentCard
+            business={business}
+            canViewContacts={canViewContacts}
+            isDarkMode={isDarkMode}
+            item={item}
+            key={item.id}
+            labels={labels}
+            onPress={() => onContentPress({ business, item })}
+            showBusinessName
+          />
+        ))
+      ) : (
+        <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
+          {labels.noContentItems}
         </Text>
       )}
     </KeyboardAwareScreen>
@@ -1562,6 +1964,7 @@ function HomeScreen({
   onContentPress,
   onCategoryPress,
   onLocationPress,
+  onShareBusiness,
   onSearchPress,
   onToggleSavedBusiness,
   savedBusyBusinessId,
@@ -1576,6 +1979,7 @@ function HomeScreen({
   onContentPress: (entry: ContentDetailEntry) => void;
   onCategoryPress: (categorySlug: string) => void;
   onLocationPress: (location: string) => void;
+  onShareBusiness: (business: Business) => Promise<void>;
   onSearchPress: () => void;
   onToggleSavedBusiness: (business: Business) => void;
   savedBusyBusinessId: string | null;
@@ -1820,6 +2224,9 @@ function HomeScreen({
             labels={labels}
             locale={locale}
             onPress={() => onBusinessPress(business)}
+            onShare={() => {
+              void onShareBusiness(business);
+            }}
             onToggleSaved={() => onToggleSavedBusiness(business)}
             saveBusy={savedBusyBusinessId === business.id}
           />
@@ -1906,16 +2313,20 @@ function HomeScreen({
 }
 
 function RegisterScreen({
+  activeProfilePanel,
   isDarkMode,
   isSignedIn,
   labels,
   locale,
+  onProfilePanelChange,
   onSubmit,
 }: {
+  activeProfilePanel?: ProfilePanel;
   isDarkMode: boolean;
   isSignedIn: boolean;
   labels: Record<string, string>;
   locale: Locale;
+  onProfilePanelChange?: (panel: ProfilePanel) => void;
   onSubmit: (input: BusinessRegistrationInput) => Promise<void>;
 }) {
   const [name, setName] = useState("");
@@ -2006,6 +2417,14 @@ function RegisterScreen({
 
   return (
     <KeyboardAwareScreen>
+      {activeProfilePanel && onProfilePanelChange ? (
+        <ProfilePanelTabs
+          activePanel={activeProfilePanel}
+          isDarkMode={isDarkMode}
+          labels={labels}
+          onChange={onProfilePanelChange}
+        />
+      ) : null}
       <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
         <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
           {labels.addBusiness}
@@ -2164,6 +2583,7 @@ function RegisterScreen({
 }
 
 function DashboardScreen({
+  activeProfilePanel,
   business,
   contentItems,
   isDarkMode,
@@ -2171,9 +2591,11 @@ function DashboardScreen({
   locale,
   onCreateContent,
   onDeleteContent,
+  onProfilePanelChange,
   onSave,
   onUpdateContent,
 }: {
+  activeProfilePanel?: ProfilePanel;
   business: Business | null;
   contentItems: BusinessContentItem[];
   isDarkMode: boolean;
@@ -2181,6 +2603,7 @@ function DashboardScreen({
   locale: Locale;
   onCreateContent: (input: BusinessContentInput) => Promise<void> | void;
   onDeleteContent: (contentItemId: string) => Promise<void> | void;
+  onProfilePanelChange?: (panel: ProfilePanel) => void;
   onSave: (business: Business) => Promise<void> | void;
   onUpdateContent: (input: BusinessContentUpdateInput) => Promise<void> | void;
 }) {
@@ -2217,6 +2640,14 @@ function DashboardScreen({
   if (!business) {
     return (
       <KeyboardAwareScreen>
+        {activeProfilePanel && onProfilePanelChange ? (
+          <ProfilePanelTabs
+            activePanel={activeProfilePanel}
+            isDarkMode={isDarkMode}
+            labels={labels}
+            onChange={onProfilePanelChange}
+          />
+        ) : null}
         <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
           <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
             {labels.dashboard}
@@ -2234,6 +2665,14 @@ function DashboardScreen({
 
   return (
     <KeyboardAwareScreen>
+      {activeProfilePanel && onProfilePanelChange ? (
+        <ProfilePanelTabs
+          activePanel={activeProfilePanel}
+          isDarkMode={isDarkMode}
+          labels={labels}
+          onChange={onProfilePanelChange}
+        />
+      ) : null}
       <View style={[styles.dashboardTabs, isDarkMode ? styles.darkSettingRow : null]}>
         <DashboardPanelButton
           active={activePanel === "profile"}
@@ -2490,6 +2929,38 @@ function DashboardPanelButton({
   );
 }
 
+function ProfilePanelTabs({
+  activePanel,
+  isDarkMode,
+  labels,
+  onChange,
+}: {
+  activePanel: ProfilePanel;
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  onChange: (panel: ProfilePanel) => void;
+}) {
+  const panels: { label: string; value: ProfilePanel }[] = [
+    { label: labels.account, value: "account" },
+    { label: labels.addBusiness, value: "addBusiness" },
+    { label: labels.businessInfo, value: "businessInfo" },
+  ];
+
+  return (
+    <View style={[styles.dashboardTabs, isDarkMode ? styles.darkSettingRow : null]}>
+      {panels.map((panel) => (
+        <DashboardPanelButton
+          active={activePanel === panel.value}
+          isDarkMode={isDarkMode}
+          key={panel.value}
+          label={panel.label}
+          onPress={() => onChange(panel.value)}
+        />
+      ))}
+    </View>
+  );
+}
+
 function DashboardProfilePreview({
   business,
   isDarkMode,
@@ -2504,6 +2975,12 @@ function DashboardProfilePreview({
   onEdit: () => void;
 }) {
   const contacts = getBusinessContacts(business, labels);
+  const logoUrl = getRenderableImageUrl(business.logoUrl);
+  const [hasLogoImageError, setHasLogoImageError] = useState(false);
+
+  useEffect(() => {
+    setHasLogoImageError(false);
+  }, [logoUrl]);
 
   return (
     <View style={[styles.publicProfileCard, isDarkMode ? styles.darkCard : null]}>
@@ -2533,13 +3010,16 @@ function DashboardProfilePreview({
       </View>
 
       <View style={styles.dashboardPreviewHero}>
-        <View style={[styles.dashboardPreviewLogo, isDarkMode ? styles.darkIconBox : null]}>
-          {business.logoUrl ? (
-            <Image source={{ uri: business.logoUrl }} style={styles.logoPreviewImage} />
-          ) : (
-            <Text style={styles.avatarText}>{getInitials(business.name)}</Text>
-          )}
-        </View>
+        {logoUrl && !hasLogoImageError ? (
+          <View style={[styles.dashboardPreviewLogo, isDarkMode ? styles.darkIconBox : null]}>
+            <Image
+              onError={() => setHasLogoImageError(true)}
+              resizeMode="contain"
+              source={{ uri: logoUrl }}
+              style={styles.logoPreviewImage}
+            />
+          </View>
+        ) : null}
         <View style={[styles.flex, styles.dashboardPreviewMeta]}>
           <Text style={[styles.categoryBadge, isDarkMode ? styles.darkBadge : null]}>
             {getCategoryName(business.categorySlug, locale)}
@@ -2789,7 +3269,7 @@ function BusinessContentSection({
   const isEvent = contentType === "event";
   const [description, setDescription] = useState("");
   const [editingItem, setEditingItem] = useState<BusinessContentItem | null>(null);
-  const [image, setImage] = useState<BusinessContentImageInput | null>(null);
+  const [images, setImages] = useState<BusinessContentImageInput[]>([]);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [isFree, setIsFree] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
@@ -2813,34 +3293,35 @@ function BusinessContentSection({
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
+      allowsMultipleSelection: true,
       base64: true,
+      mediaTypes: ["images"],
+      orderedSelection: true,
       quality: 0.85,
+      selectionLimit: 8,
     });
 
     if (result.canceled) {
       return;
     }
 
-    const asset = result.assets[0];
+    const selectedImages = result.assets
+      .filter((asset) => asset.uri)
+      .map((asset) => ({
+        base64: asset.base64,
+        fileName: asset.fileName,
+        mimeType: asset.mimeType,
+        uri: asset.uri,
+      }));
 
-    if (!asset?.uri) {
-      return;
-    }
-
-    setImage({
-      base64: asset.base64,
-      fileName: asset.fileName,
-      mimeType: asset.mimeType,
-      uri: asset.uri,
-    });
+    setImages(selectedImages);
     setSuccessMessage("");
   }
 
   function resetComposer() {
     setDescription("");
     setEditingItem(null);
-    setImage(null);
+    setImages([]);
     setIsFree(false);
     setIsOnline(false);
     setLinkUrl("");
@@ -2854,7 +3335,7 @@ function BusinessContentSection({
     setDescription(item.description);
     setEditingItem(item);
     setErrorMessage("");
-    setImage(null);
+    setImages([]);
     setIsFree(item.isFree);
     setIsOnline(item.isOnline);
     setLinkUrl(item.linkUrl ?? "");
@@ -2886,7 +3367,7 @@ function BusinessContentSection({
       setIsSaving(true);
       const input: BusinessContentInput = {
         description,
-        image,
+        images,
         isFree,
         isOnline: isEvent && isOnline,
         linkUrl: isEvent ? linkUrl : undefined,
@@ -2950,7 +3431,17 @@ function BusinessContentSection({
     }
   }
 
-  const imagePreviewUri = image?.uri ?? editingItem?.imageUrl;
+  const existingImageUrls = getContentImageUrls(editingItem);
+  const imagePreviewUris =
+    images.length > 0 ? images.map((selectedImage) => selectedImage.uri) : existingImageUrls;
+  const imageUploadHint =
+    images.length > 0
+      ? `${images.length} ${labels.contentPhotosSelected}`
+      : existingImageUrls.length > 1
+        ? `${existingImageUrls.length} ${labels.contentPhotosSelected}`
+        : existingImageUrls.length === 1
+          ? labels.contentPhotoSelected
+          : labels.contentPhotoHint;
 
   return (
     <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
@@ -3144,9 +3635,17 @@ function BusinessContentSection({
               isDarkMode ? styles.darkSettingRow : null,
             ]}
           >
-            <View style={[styles.logoUploadPreview, isDarkMode ? styles.darkIconBox : null]}>
-              {imagePreviewUri ? (
-                <Image source={{ uri: imagePreviewUri }} style={styles.logoPreviewImage} />
+            <View style={[styles.contentUploadPreview, isDarkMode ? styles.darkIconBox : null]}>
+              {imagePreviewUris.length > 0 ? (
+                <View style={styles.contentUploadThumbGrid}>
+                  {imagePreviewUris.slice(0, 4).map((uri, index) => (
+                    <Image
+                      key={`${uri}-${index}`}
+                      source={{ uri }}
+                      style={styles.contentUploadThumb}
+                    />
+                  ))}
+                </View>
               ) : (
                 <Upload
                   color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
@@ -3157,13 +3656,12 @@ function BusinessContentSection({
             </View>
             <View style={styles.flex}>
               <Text style={[styles.logoUploadTitle, isDarkMode ? styles.darkText : null]}>
-                {imagePreviewUri ? labels.contentPhotoSelected : labels.contentPhotoUpload}
+                {imagePreviewUris.length > 0
+                  ? labels.contentPhotoSelected
+                  : labels.contentPhotoUpload}
               </Text>
               <Text style={[styles.logoUploadHint, isDarkMode ? styles.darkMutedText : null]}>
-                {image?.fileName ??
-                  (editingItem?.imageUrl
-                    ? labels.contentPhotoSelected
-                    : labels.contentPhotoHint)}
+                {imageUploadHint}
               </Text>
             </View>
           </Pressable>
@@ -3262,6 +3760,7 @@ function BusinessContentCard({
   onDelete: (item: BusinessContentItem) => void;
   onEdit: (item: BusinessContentItem) => void;
 }) {
+  const coverImageUrl = getContentImageUrls(item)[0];
   const metaItems = [
     item.isFree ? labels.free : formatPriceWithCurrency(item.price),
     item.isOnline ? labels.online : undefined,
@@ -3272,10 +3771,10 @@ function BusinessContentCard({
 
   return (
     <View style={[styles.contentItemCard, isDarkMode ? styles.darkSettingRow : null]}>
-      {item.imageUrl ? (
+      {coverImageUrl ? (
         <Image
           resizeMode="cover"
-          source={{ uri: item.imageUrl }}
+          source={{ uri: coverImageUrl }}
           style={styles.contentItemImage}
         />
       ) : null}
@@ -3345,7 +3844,10 @@ function BusinessContentCard({
 }
 
 function ProfileScreen({
+  activeProfilePanel,
   authMessage,
+  business,
+  contentItems,
   isDarkMode,
   isAppleSignInAvailable,
   isAuthBusy,
@@ -3354,18 +3856,30 @@ function ProfileScreen({
   locale,
   onAppleSignIn,
   onBusinessPress,
+  onBusinessSave,
+  onBusinessSubmit,
+  onCreateContent,
   onDeleteAccount,
+  onDeleteContent,
   onEmailSignIn,
   onEmailSignUp,
+  onProfileSave,
+  onProfilePanelChange,
+  onShareBusiness,
   onSignIn,
   onSignOut,
   onToggleSavedBusiness,
+  onUpdateContent,
+  profile,
   savedBusinesses,
   savedBusyBusinessId,
   session,
   setIsDarkMode,
 }: {
+  activeProfilePanel: ProfilePanel;
   authMessage: string;
+  business: Business | null;
+  contentItems: BusinessContentItem[];
   isDarkMode: boolean;
   isAppleSignInAvailable: boolean;
   isAuthBusy: boolean;
@@ -3374,12 +3888,21 @@ function ProfileScreen({
   locale: Locale;
   onAppleSignIn: () => Promise<void>;
   onBusinessPress: (business: Business) => void;
+  onBusinessSave: (business: Business) => Promise<void> | void;
+  onBusinessSubmit: (input: BusinessRegistrationInput) => Promise<void>;
+  onCreateContent: (input: BusinessContentInput) => Promise<void> | void;
   onDeleteAccount: () => Promise<void>;
+  onDeleteContent: (contentItemId: string) => Promise<void> | void;
   onEmailSignIn: (email: string, password: string) => Promise<void>;
   onEmailSignUp: (email: string, password: string) => Promise<void>;
+  onProfileSave: (input: ProfileUpdateInput) => Promise<UserProfile>;
+  onProfilePanelChange: (panel: ProfilePanel) => void;
+  onShareBusiness: (business: Business) => Promise<void>;
   onSignIn: () => Promise<void>;
   onSignOut: () => Promise<void>;
   onToggleSavedBusiness: (business: Business) => void;
+  onUpdateContent: (input: BusinessContentUpdateInput) => Promise<void> | void;
+  profile: UserProfile | null;
   savedBusinesses: Business[];
   savedBusyBusinessId: string | null;
   session: Session | null;
@@ -3387,9 +3910,28 @@ function ProfileScreen({
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const profileName = getSessionName(session);
-  const profileEmail = session?.user.email ?? "";
-  const profileAvatarUrl = getSessionAvatarUrl(session);
+  const profileName = getProfileDisplayName(profile, session);
+  const signInEmail = session?.user.email ?? profile?.email ?? "";
+  const contactEmail = getProfileContactEmail(profile, session);
+  const profileAvatarUrl = getProfileAvatarUrl(profile, session);
+  const [isEditingPersonalProfile, setIsEditingPersonalProfile] =
+    useState(false);
+  const [profileDraftName, setProfileDraftName] = useState(profileName);
+  const [profileDraftContactEmail, setProfileDraftContactEmail] =
+    useState(contactEmail);
+  const [profileDraftAvatar, setProfileDraftAvatar] =
+    useState<ProfileAvatarInput | null>(null);
+  const [profileSaveError, setProfileSaveError] = useState("");
+  const [profileSaveMessage, setProfileSaveMessage] = useState("");
+  const [isProfileSaving, setIsProfileSaving] = useState(false);
+
+  useEffect(() => {
+    if (!isEditingPersonalProfile) {
+      setProfileDraftName(profileName);
+      setProfileDraftContactEmail(contactEmail);
+      setProfileDraftAvatar(null);
+    }
+  }, [contactEmail, isEditingPersonalProfile, profileName]);
 
   async function handleEmailSubmit() {
     await onEmailSignIn(email, password);
@@ -3399,6 +3941,68 @@ function ProfileScreen({
   async function handleEmailCreate() {
     await onEmailSignUp(email, password);
     setPassword("");
+  }
+
+  async function handleProfileAvatarPick() {
+    setProfileSaveError("");
+    setProfileSaveMessage("");
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      setProfileSaveError(labels.logoPermission);
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      base64: true,
+      quality: 0.85,
+    });
+
+    if (result.canceled) {
+      return;
+    }
+
+    const asset = result.assets[0];
+
+    if (!asset?.uri) {
+      return;
+    }
+
+    setProfileDraftAvatar({
+      base64: asset.base64,
+      fileName: asset.fileName,
+      mimeType: asset.mimeType,
+      uri: asset.uri,
+    });
+  }
+
+  async function handleProfileSave() {
+    setProfileSaveError("");
+    setProfileSaveMessage("");
+
+    if (!profileDraftName.trim()) {
+      setProfileSaveError(labels.profileNameRequired);
+      return;
+    }
+
+    try {
+      setIsProfileSaving(true);
+      await onProfileSave({
+        avatar: profileDraftAvatar,
+        contactEmail: profileDraftContactEmail,
+        fullName: profileDraftName,
+      });
+      setProfileSaveMessage(labels.profileSaved);
+      setProfileDraftAvatar(null);
+      setIsEditingPersonalProfile(false);
+    } catch (error) {
+      console.error("[kolo:mobile-profile-save]", error);
+      setProfileSaveError(getErrorMessage(error));
+    } finally {
+      setIsProfileSaving(false);
+    }
   }
 
   function handleDeleteAccountPress() {
@@ -3417,8 +4021,46 @@ function ProfileScreen({
     ]);
   }
 
+  if (activeProfilePanel === "addBusiness") {
+    return (
+      <RegisterScreen
+        activeProfilePanel={activeProfilePanel}
+        isDarkMode={isDarkMode}
+        isSignedIn={Boolean(session)}
+        labels={labels}
+        locale={locale}
+        onProfilePanelChange={onProfilePanelChange}
+        onSubmit={onBusinessSubmit}
+      />
+    );
+  }
+
+  if (activeProfilePanel === "businessInfo") {
+    return (
+      <DashboardScreen
+        activeProfilePanel={activeProfilePanel}
+        business={business}
+        contentItems={contentItems}
+        isDarkMode={isDarkMode}
+        labels={labels}
+        locale={locale}
+        onCreateContent={onCreateContent}
+        onDeleteContent={onDeleteContent}
+        onProfilePanelChange={onProfilePanelChange}
+        onSave={onBusinessSave}
+        onUpdateContent={onUpdateContent}
+      />
+    );
+  }
+
   return (
     <KeyboardAwareScreen>
+      <ProfilePanelTabs
+        activePanel={activeProfilePanel}
+        isDarkMode={isDarkMode}
+        labels={labels}
+        onChange={onProfilePanelChange}
+      />
       {session ? (
         <View style={[styles.profileHero, isDarkMode ? styles.darkCard : null]}>
           {profileAvatarUrl ? (
@@ -3440,9 +4082,165 @@ function ProfileScreen({
             <Text
               style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}
             >
-              {profileEmail}
+              {contactEmail || signInEmail}
             </Text>
+            {signInEmail && signInEmail !== contactEmail ? (
+              <Text
+                style={[
+                  styles.settingMeta,
+                  isDarkMode ? styles.darkMutedText : null,
+                ]}
+              >
+                {labels.googleEmail}: {signInEmail}
+              </Text>
+            ) : null}
           </View>
+          <Pressable
+            accessibilityLabel={labels.editPersonalProfile}
+            accessibilityRole="button"
+            onPress={() => {
+              setProfileSaveError("");
+              setProfileSaveMessage("");
+              setIsEditingPersonalProfile(true);
+            }}
+            style={[styles.iconActionButton, isDarkMode ? styles.darkIconBox : null]}
+          >
+            <Pencil
+              color={isDarkMode ? "#E5E5EA" : "#111111"}
+              size={18}
+              strokeWidth={2.7}
+            />
+          </Pressable>
+        </View>
+      ) : null}
+
+      {session && profileSaveMessage ? (
+        <Text style={styles.successText}>{profileSaveMessage}</Text>
+      ) : null}
+
+      {session && isEditingPersonalProfile ? (
+        <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
+          <View style={styles.dashboardEditHeader}>
+            <View style={styles.flex}>
+              <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+                {labels.editPersonalProfile}
+              </Text>
+              <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+                {labels.googleEmail}: {signInEmail}
+              </Text>
+            </View>
+            <Pressable
+              accessibilityLabel={labels.close}
+              accessibilityRole="button"
+              onPress={() => {
+                setIsEditingPersonalProfile(false);
+                setProfileSaveError("");
+                setProfileSaveMessage("");
+                setProfileDraftName(profileName);
+                setProfileDraftContactEmail(contactEmail);
+                setProfileDraftAvatar(null);
+              }}
+              style={[styles.iconActionButton, isDarkMode ? styles.darkIconBox : null]}
+            >
+              <X
+                color={isDarkMode ? "#E5E5EA" : "#111111"}
+                size={19}
+                strokeWidth={2.7}
+              />
+            </Pressable>
+          </View>
+
+          <Field isDarkMode={isDarkMode} label={labels.personalName}>
+            <TextInput
+              onChangeText={(value) => {
+                setProfileDraftName(value);
+                setProfileSaveError("");
+                setProfileSaveMessage("");
+              }}
+              placeholder={labels.personalName}
+              placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
+              style={[styles.input, isDarkMode ? styles.darkInput : null]}
+              value={profileDraftName}
+            />
+          </Field>
+
+          <Field isDarkMode={isDarkMode} label={labels.contactEmail}>
+            <TextInput
+              autoCapitalize="none"
+              autoComplete="email"
+              keyboardType="email-address"
+              onChangeText={(value) => {
+                setProfileDraftContactEmail(value);
+                setProfileSaveError("");
+                setProfileSaveMessage("");
+              }}
+              placeholder="email@example.com"
+              placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
+              style={[styles.input, isDarkMode ? styles.darkInput : null]}
+              textContentType="emailAddress"
+              value={profileDraftContactEmail}
+            />
+          </Field>
+
+          <Field isDarkMode={isDarkMode} label={labels.profilePhoto}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                void handleProfileAvatarPick();
+              }}
+              style={[
+                styles.logoUploadButton,
+                isDarkMode ? styles.darkSettingRow : null,
+              ]}
+            >
+              <View style={[styles.logoUploadPreview, isDarkMode ? styles.darkIconBox : null]}>
+                {profileDraftAvatar?.uri || profileAvatarUrl ? (
+                  <Image
+                    source={{ uri: profileDraftAvatar?.uri ?? profileAvatarUrl ?? "" }}
+                    style={styles.logoPreviewImage}
+                  />
+                ) : (
+                  <Upload
+                    color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+                    size={24}
+                    strokeWidth={2.5}
+                  />
+                )}
+              </View>
+              <View style={styles.flex}>
+                <Text style={[styles.logoUploadTitle, isDarkMode ? styles.darkText : null]}>
+                  {profileDraftAvatar
+                    ? labels.profilePhotoSelected
+                    : labels.profilePhotoUpload}
+                </Text>
+                <Text style={[styles.logoUploadHint, isDarkMode ? styles.darkMutedText : null]}>
+                  {profileDraftAvatar?.fileName ?? labels.profilePhotoHint}
+                </Text>
+              </View>
+            </Pressable>
+          </Field>
+
+          <PrimaryButton
+            disabled={isProfileSaving || !isSupabaseConfigured}
+            label={isProfileSaving ? labels.saving : labels.saveChanges}
+            onPress={() => {
+              void handleProfileSave();
+            }}
+          />
+          <SecondaryButton
+            disabled={isProfileSaving}
+            label={labels.cancel}
+            onPress={() => {
+              setIsEditingPersonalProfile(false);
+              setProfileSaveError("");
+              setProfileDraftName(profileName);
+              setProfileDraftContactEmail(contactEmail);
+              setProfileDraftAvatar(null);
+            }}
+          />
+          {profileSaveError ? (
+            <Text style={styles.errorText}>{profileSaveError}</Text>
+          ) : null}
         </View>
       ) : null}
 
@@ -3552,6 +4350,9 @@ function ProfileScreen({
                   labels={labels}
                   locale={locale}
                   onPress={() => onBusinessPress(business)}
+                  onShare={() => {
+                    void onShareBusiness(business);
+                  }}
                   onToggleSaved={() => onToggleSavedBusiness(business)}
                   saveBusy={savedBusyBusinessId === business.id}
                 />
@@ -3639,6 +4440,12 @@ function HomeBusinessFeatureCard({
   onPress: () => void;
 }) {
   const contentCount = business.contentItems?.length ?? 0;
+  const logoUrl = getRenderableImageUrl(business.logoUrl);
+  const [hasLogoImageError, setHasLogoImageError] = useState(false);
+
+  useEffect(() => {
+    setHasLogoImageError(false);
+  }, [logoUrl]);
 
   return (
     <Pressable
@@ -3647,21 +4454,14 @@ function HomeBusinessFeatureCard({
       style={[styles.homeFeatureCard, isDarkMode ? styles.darkBusinessCard : null]}
     >
       <View style={styles.homeFeatureTopRow}>
-        {business.logoUrl ? (
+        {logoUrl && !hasLogoImageError ? (
           <Image
-            resizeMode="cover"
-            source={{ uri: business.logoUrl }}
+            onError={() => setHasLogoImageError(true)}
+            resizeMode="contain"
+            source={{ uri: logoUrl }}
             style={styles.homeFeatureLogo}
           />
-        ) : (
-          <View style={[styles.homeFeatureLogo, styles.homeFeatureLogoFallback]}>
-            <Store
-              color={isDarkMode ? "#E5E5EA" : "#111111"}
-              size={20}
-              strokeWidth={2.8}
-            />
-          </View>
-        )}
+        ) : null}
         <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
           {getCategoryName(business.categorySlug, locale)}
         </Text>
@@ -3697,6 +4497,7 @@ function BusinessCard({
   labels,
   locale,
   onPress,
+  onShare,
   onToggleSaved,
   saveBusy,
 }: {
@@ -3706,6 +4507,7 @@ function BusinessCard({
   labels: Record<string, string>;
   locale: Locale;
   onPress: () => void;
+  onShare: () => void;
   onToggleSaved: () => void;
   saveBusy: boolean;
 }) {
@@ -3723,12 +4525,29 @@ function BusinessCard({
           {getCategoryName(business.categorySlug, locale)}
         </Text>
         <View style={styles.cardHeaderActions}>
-          {hasBusinessOwnerInfo(business) && business.ownerAvatarUrl ? (
-            <Image
-              source={{ uri: business.ownerAvatarUrl }}
-              style={styles.cardOwnerAvatar}
+          <BusinessCardLogo
+            business={business}
+            isDarkMode={isDarkMode}
+            labels={labels}
+          />
+          <Pressable
+            accessibilityLabel={labels.shareBusiness}
+            accessibilityRole="button"
+            onPress={(event) => {
+              event.stopPropagation();
+              onShare();
+            }}
+            style={[
+              styles.saveIconButton,
+              isDarkMode ? styles.darkIconBox : null,
+            ]}
+          >
+            <Share2
+              color={isDarkMode ? "#E5E5EA" : "#111111"}
+              size={17}
+              strokeWidth={2.7}
             />
-          ) : null}
+          </Pressable>
           <Pressable
             accessibilityLabel={saveLabel}
             accessibilityRole="button"
@@ -3788,6 +4607,37 @@ function BusinessCard({
   );
 }
 
+function BusinessCardLogo({
+  business,
+  isDarkMode,
+  labels,
+}: {
+  business: Business;
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+}) {
+  const logoUrl = getRenderableImageUrl(business.logoUrl);
+  const [hasImageError, setHasImageError] = useState(false);
+
+  useEffect(() => {
+    setHasImageError(false);
+  }, [logoUrl]);
+
+  if (logoUrl && !hasImageError) {
+    return (
+      <Image
+        accessibilityLabel={`${business.name} ${labels.logo}`}
+        onError={() => setHasImageError(true)}
+        resizeMode="contain"
+        source={{ uri: logoUrl }}
+        style={styles.cardBusinessLogo}
+      />
+    );
+  }
+
+  return null;
+}
+
 function PublicContentCard({
   business,
   canViewContacts,
@@ -3805,6 +4655,7 @@ function PublicContentCard({
   onPress?: () => void;
   showBusinessName?: boolean;
 }) {
+  const coverImageUrl = getContentImageUrls(item)[0];
   const metaItems = [
     item.isFree ? labels.free : formatPriceWithCurrency(item.price),
     item.isOnline ? labels.online : undefined,
@@ -3823,10 +4674,10 @@ function PublicContentCard({
       onPress={onPress}
       style={[styles.contentItemCard, isDarkMode ? styles.darkSettingRow : null]}
     >
-      {item.imageUrl ? (
+      {coverImageUrl ? (
         <Image
           resizeMode="cover"
-          source={{ uri: item.imageUrl }}
+          source={{ uri: coverImageUrl }}
           style={styles.contentItemImage}
         />
       ) : null}
@@ -4088,6 +4939,7 @@ function BusinessContentModal({
   onRequireSignIn: () => void;
 }) {
   const item = entry?.item;
+  const imageUrls = getContentImageUrls(item);
   const contentLinkUrl =
     canViewContacts && item?.linkUrl ? getWebsiteUrl(item.linkUrl) : null;
   const locationUrl =
@@ -4180,13 +5032,11 @@ function BusinessContentModal({
                 />
               </Pressable>
 
-              {item.imageUrl ? (
-                <Image
-                  resizeMode="cover"
-                  source={{ uri: item.imageUrl }}
-                  style={styles.contentDetailImage}
-                />
-              ) : null}
+              <ContentImageCarousel
+                imageUrls={imageUrls}
+                isDarkMode={isDarkMode}
+                labels={labels}
+              />
 
               <View style={styles.contentDetailPillRow}>
                 <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
@@ -4289,6 +5139,89 @@ function BusinessContentModal({
   );
 }
 
+function ContentImageCarousel({
+  imageUrls,
+  isDarkMode,
+  labels,
+}: {
+  imageUrls: string[];
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+}) {
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const hasMultipleImages = imageUrls.length > 1;
+  const activeImageUrl = imageUrls[activeImageIndex];
+
+  useEffect(() => {
+    setActiveImageIndex(0);
+  }, [imageUrls.join("|")]);
+
+  if (!activeImageUrl) {
+    return null;
+  }
+
+  function showPreviousImage() {
+    setActiveImageIndex((currentIndex) =>
+      currentIndex === 0 ? imageUrls.length - 1 : currentIndex - 1,
+    );
+  }
+
+  function showNextImage() {
+    setActiveImageIndex((currentIndex) =>
+      currentIndex === imageUrls.length - 1 ? 0 : currentIndex + 1,
+    );
+  }
+
+  return (
+    <View style={styles.contentDetailImageFrame}>
+      <Image
+        resizeMode="cover"
+        source={{ uri: activeImageUrl }}
+        style={styles.contentDetailImage}
+      />
+      {hasMultipleImages ? (
+        <>
+          <Pressable
+            accessibilityLabel={labels.previous}
+            accessibilityRole="button"
+            onPress={showPreviousImage}
+            style={[
+              styles.contentImageArrow,
+              styles.contentImageArrowLeft,
+              isDarkMode ? styles.darkFloatingControl : null,
+            ]}
+          >
+            <ChevronLeft
+              color={isDarkMode ? "#FFFFFF" : "#111111"}
+              size={21}
+              strokeWidth={3}
+            />
+          </Pressable>
+          <Pressable
+            accessibilityLabel={labels.next}
+            accessibilityRole="button"
+            onPress={showNextImage}
+            style={[
+              styles.contentImageArrow,
+              styles.contentImageArrowRight,
+              isDarkMode ? styles.darkFloatingControl : null,
+            ]}
+          >
+            <ChevronRight
+              color={isDarkMode ? "#FFFFFF" : "#111111"}
+              size={21}
+              strokeWidth={3}
+            />
+          </Pressable>
+          <Text style={styles.contentImageCounter}>
+            {activeImageIndex + 1}/{imageUrls.length}
+          </Text>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
 function BusinessModal({
   business,
   canViewContacts,
@@ -4299,6 +5232,7 @@ function BusinessModal({
   onContentPress,
   onManage,
   onRequireSignIn,
+  onShareBusiness,
   onToggleSavedBusiness,
   saveBusyBusinessId,
 }: {
@@ -4311,6 +5245,7 @@ function BusinessModal({
   onContentPress: (entry: ContentDetailEntry) => void;
   onManage: () => void;
   onRequireSignIn: () => void;
+  onShareBusiness: (business: Business) => Promise<void>;
   onToggleSavedBusiness: (business: Business) => void;
   saveBusyBusinessId: string | null;
 }) {
@@ -4321,10 +5256,16 @@ function BusinessModal({
   const contentItems = business?.contentItems ?? [];
   const serviceItems = contentItems.filter((item) => item.type === "service");
   const eventItems = contentItems.filter((item) => item.type === "event");
+  const modalLogoUrl = getRenderableImageUrl(business?.logoUrl);
+  const [hasModalLogoImageError, setHasModalLogoImageError] = useState(false);
 
   useEffect(() => {
     setActiveModalTab("about");
   }, [business?.id]);
+
+  useEffect(() => {
+    setHasModalLogoImageError(false);
+  }, [modalLogoUrl]);
 
   return (
     <Modal
@@ -4357,6 +5298,23 @@ function BusinessModal({
                   {getCategoryName(business.categorySlug, locale)}
                 </Text>
                 <View style={styles.cardHeaderActions}>
+                  <Pressable
+                    accessibilityLabel={labels.shareBusiness}
+                    accessibilityRole="button"
+                    onPress={() => {
+                      void onShareBusiness(business);
+                    }}
+                    style={[
+                      styles.saveIconButton,
+                      isDarkMode ? styles.darkIconBox : null,
+                    ]}
+                  >
+                    <Share2
+                      color={isDarkMode ? "#E5E5EA" : "#111111"}
+                      size={17}
+                      strokeWidth={2.7}
+                    />
+                  </Pressable>
                   <Pressable
                     accessibilityLabel={
                       business.isSaved ? labels.savedBusiness : labels.saveBusiness
@@ -4394,18 +5352,39 @@ function BusinessModal({
                   </Pressable>
                 </View>
               </View>
-              <Text style={[styles.modalTitle, isDarkMode ? styles.darkText : null]}>
-                {business.name}
-              </Text>
-              {business.servesAllCanada ? (
-                <Text style={[styles.onlineBadge, isDarkMode ? styles.darkOnlineBadge : null]}>
-                  {labels.canadaWide}
-                </Text>
-              ) : (
-                <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
-                  {business.city}
-                </Text>
-              )}
+
+              <View style={styles.modalBusinessHeader}>
+                {modalLogoUrl && !hasModalLogoImageError ? (
+                  <View
+                    accessibilityLabel={`${business.name} ${labels.logo}`}
+                    style={[
+                      styles.modalBusinessLogo,
+                      isDarkMode ? styles.darkIconBox : null,
+                    ]}
+                  >
+                    <Image
+                      onError={() => setHasModalLogoImageError(true)}
+                      resizeMode="contain"
+                      source={{ uri: modalLogoUrl }}
+                      style={styles.modalBusinessLogoImage}
+                    />
+                  </View>
+                ) : null}
+                <View style={styles.flex}>
+                  <Text style={[styles.modalTitle, isDarkMode ? styles.darkText : null]}>
+                    {business.name}
+                  </Text>
+                  {business.servesAllCanada ? (
+                    <Text style={[styles.onlineBadge, isDarkMode ? styles.darkOnlineBadge : null]}>
+                      {labels.canadaWide}
+                    </Text>
+                  ) : (
+                    <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+                      {business.city}
+                    </Text>
+                  )}
+                </View>
+              </View>
               <View style={[styles.dashboardTabs, isDarkMode ? styles.darkSettingRow : null]}>
                 <DashboardPanelButton
                   active={activeModalTab === "about"}
@@ -5286,6 +6265,84 @@ function getPickerDate(value: string) {
   return new Date();
 }
 
+function getRenderableImageUrl(value?: string | null) {
+  const trimmedValue = value?.trim() ?? "";
+  const normalizedValue = trimmedValue.toLowerCase();
+
+  if (
+    !trimmedValue ||
+    normalizedValue === "null" ||
+    normalizedValue === "undefined"
+  ) {
+    return "";
+  }
+
+  if (/^(https?:|file:|content:|data:image\/)/i.test(trimmedValue)) {
+    return trimmedValue;
+  }
+
+  return "";
+}
+
+function getContentImageUrls(item?: BusinessContentItem | null) {
+  if (!item) {
+    return [];
+  }
+
+  const imageUrls =
+    item.imageUrls
+      ?.map((url) => getRenderableImageUrl(url))
+      .filter((url): url is string => Boolean(url)) ?? [];
+  const coverImageUrl = getRenderableImageUrl(item.imageUrl);
+
+  if (coverImageUrl && !imageUrls.includes(coverImageUrl)) {
+    return [coverImageUrl, ...imageUrls];
+  }
+
+  return imageUrls;
+}
+
+function getInputImageUris(input: BusinessContentInput) {
+  const imageUris =
+    input.images
+      ?.map((image) => image.uri)
+      .filter((uri): uri is string => Boolean(uri)) ?? [];
+
+  if (imageUris.length > 0) {
+    return imageUris;
+  }
+
+  return input.image?.uri ? [input.image.uri] : [];
+}
+
+function getProfileDisplayName(
+  profile: UserProfile | null | undefined,
+  session: Session | null,
+) {
+  const profileName = profile?.fullName?.trim();
+
+  return profileName || getSessionName(session);
+}
+
+function getProfileContactEmail(
+  profile: UserProfile | null | undefined,
+  session: Session | null,
+) {
+  return (
+    profile?.contactEmail?.trim() ||
+    profile?.email?.trim() ||
+    session?.user.email ||
+    ""
+  );
+}
+
+function getProfileAvatarUrl(
+  profile: UserProfile | null | undefined,
+  session: Session | null,
+) {
+  return profile?.avatarUrl?.trim() || getSessionAvatarUrl(session);
+}
+
 function getSessionName(session: Session | null) {
   const metadata = session?.user.user_metadata as
     | Record<string, unknown>
@@ -5415,6 +6472,8 @@ function getSearchAliases(categorySlug: string) {
       "it tech software websites automation ai support technology сайти техпідтримка автоматизація",
     lawyers:
       "law lawyer legal attorney immigration юрист юридичні правова імміграція",
+    "mortgage-brokers":
+      "mortgage broker financing refinance renewal pre approval home loan іпотека іпотечний брокер кредит фінансування рефінансування житло",
     moving:
       "moving movers relocation packing delivery furniture transport переїзд перевезення доставка пакування меблі",
     photographers:
@@ -5905,10 +6964,48 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     width: "100%",
   },
+  contentDetailImageFrame: {
+    alignSelf: "center",
+    backgroundColor: "#111111",
+    height: Math.round(Dimensions.get("window").height * 0.48),
+    marginHorizontal: -22,
+    overflow: "hidden",
+    width: Dimensions.get("window").width,
+  },
   contentDetailImage: {
-    aspectRatio: 1.7,
-    borderRadius: 18,
+    height: "100%",
     width: "100%",
+  },
+  contentImageArrow: {
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    borderColor: "rgba(17, 17, 17, 0.08)",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: "center",
+    position: "absolute",
+    top: "46%",
+    width: 42,
+  },
+  contentImageArrowLeft: {
+    left: 14,
+  },
+  contentImageArrowRight: {
+    right: 14,
+  },
+  contentImageCounter: {
+    alignSelf: "center",
+    backgroundColor: "rgba(17, 17, 17, 0.72)",
+    borderRadius: 999,
+    bottom: 14,
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+    overflow: "hidden",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    position: "absolute",
   },
   contentDetailMetaRow: {
     alignItems: "center",
@@ -5920,6 +7017,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
+  },
+  contentUploadPreview: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 15,
+    borderWidth: 1,
+    height: 68,
+    justifyContent: "center",
+    overflow: "hidden",
+    width: 68,
+  },
+  contentUploadThumb: {
+    borderRadius: 8,
+    height: 29,
+    width: 29,
+  },
+  contentUploadThumbGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    padding: 4,
   },
   contentItemLinkButton: {
     alignItems: "center",
@@ -6022,6 +7141,10 @@ const styles = StyleSheet.create({
   darkIconBox: {
     backgroundColor: "#2C2C2E",
     borderColor: "#3A3A3C",
+  },
+  darkFloatingControl: {
+    backgroundColor: "rgba(28, 28, 30, 0.86)",
+    borderColor: "rgba(255, 255, 255, 0.12)",
   },
   darkInput: {
     backgroundColor: "#1C1C1E",
@@ -6366,12 +7489,8 @@ const styles = StyleSheet.create({
   homeFeatureLogo: {
     borderRadius: 16,
     height: 48,
+    overflow: "hidden",
     width: 48,
-  },
-  homeFeatureLogoFallback: {
-    alignItems: "center",
-    backgroundColor: "#F5F5F7",
-    justifyContent: "center",
   },
   homeFeatureMeta: {
     color: "#6E6E73",
@@ -6617,11 +7736,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "900",
   },
-  cardOwnerAvatar: {
+  cardBusinessLogo: {
     borderColor: "#E5E5EA",
     borderRadius: 14,
     borderWidth: 1,
     height: 44,
+    overflow: "hidden",
     width: 44,
   },
   saveIconButton: {
@@ -6667,6 +7787,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
+  },
+  modalBusinessHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 14,
+  },
+  modalBusinessLogo: {
+    alignItems: "center",
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 4,
+    height: 76,
+    justifyContent: "center",
+    overflow: "hidden",
+    width: 76,
+  },
+  modalBusinessLogoImage: {
+    height: "100%",
+    width: "100%",
   },
   modalSheet: {
     backgroundColor: "#FFFFFF",

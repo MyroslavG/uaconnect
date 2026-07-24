@@ -76,6 +76,7 @@ type BusinessContentRow = {
   title: string;
   description: string;
   image_url: string | null;
+  image_urls?: string[] | null;
   is_free: boolean | null;
   is_online: boolean | null;
   price: string | null;
@@ -300,17 +301,22 @@ export async function createBusinessContentItem(
 
   let contentItem = data as BusinessContentRow;
 
-  if (input.image) {
+  const images = getBusinessContentInputImages(input);
+
+  if (images.length > 0) {
     try {
-      const imageUrl = await uploadBusinessContentImage(
-        input.image,
+      const imageUrls = await uploadBusinessContentImages(
+        images,
         ownerId,
         input.registrationId,
         contentItem.id,
       );
       const { data: updatedData, error: updateError } = await supabase
         .from("business_content_items")
-        .update({ image_url: imageUrl })
+        .update({
+          image_url: imageUrls[0] ?? null,
+          image_urls: imageUrls,
+        })
         .eq("id", contentItem.id)
         .eq("owner_id", ownerId)
         .select("*")
@@ -342,11 +348,12 @@ export async function updateBusinessContentItem(
     throw new Error("Supabase is not configured for the mobile app.");
   }
 
-  let nextImageUrl: string | undefined;
+  const images = getBusinessContentInputImages(input);
+  let nextImageUrls: string[] | undefined;
 
-  if (input.image) {
-    nextImageUrl = await uploadBusinessContentImage(
-      input.image,
+  if (images.length > 0) {
+    nextImageUrls = await uploadBusinessContentImages(
+      images,
       ownerId,
       input.registrationId,
       input.id,
@@ -365,8 +372,9 @@ export async function updateBusinessContentItem(
     title: input.title.trim(),
   };
 
-  if (nextImageUrl) {
-    payload.image_url = nextImageUrl;
+  if (nextImageUrls) {
+    payload.image_url = nextImageUrls[0] ?? null;
+    payload.image_urls = nextImageUrls;
   }
 
   const { data, error } = await supabase
@@ -617,15 +625,39 @@ async function uploadBusinessContentImage(
   ownerId: string,
   registrationId: string,
   contentItemId: string,
+  imageIndex = 0,
 ) {
   return uploadImageToBucket({
     bucket: contentImageBucket,
     image,
     maxSize: maxContentImageSize,
-    path: `${ownerId}/${registrationId}/${contentItemId}/${Date.now()}`,
+    path: `${ownerId}/${registrationId}/${contentItemId}/${Date.now()}-${imageIndex}`,
     sizeError: "Image must be smaller than 5 MB.",
     typeError: "Image must be a PNG, JPG, WebP, or GIF image.",
   });
+}
+
+async function uploadBusinessContentImages(
+  images: BusinessContentImageInput[],
+  ownerId: string,
+  registrationId: string,
+  contentItemId: string,
+) {
+  const imageUrls: string[] = [];
+
+  for (let index = 0; index < images.length; index += 1) {
+    imageUrls.push(
+      await uploadBusinessContentImage(
+        images[index],
+        ownerId,
+        registrationId,
+        contentItemId,
+        index,
+      ),
+    );
+  }
+
+  return imageUrls;
 }
 
 async function uploadImageToBucket({
@@ -807,11 +839,14 @@ function mapRegistration(registration: RegistrationRow): Business {
 }
 
 function mapBusinessContentItem(row: BusinessContentRow): BusinessContentItem {
+  const imageUrls = getBusinessContentImageUrls(row);
+
   return {
     createdAt: row.created_at,
     description: row.description,
     id: row.id,
-    imageUrl: row.image_url ?? undefined,
+    imageUrl: imageUrls[0],
+    imageUrls,
     isFree: Boolean(row.is_free),
     isOnline: Boolean(row.is_online),
     linkUrl: row.link_url ?? undefined,
@@ -824,6 +859,29 @@ function mapBusinessContentItem(row: BusinessContentRow): BusinessContentItem {
     title: row.title,
     type: row.content_type,
   };
+}
+
+function getBusinessContentInputImages(input: BusinessContentInput) {
+  const images = input.images?.filter((image) => Boolean(image.uri)) ?? [];
+
+  if (images.length > 0) {
+    return images;
+  }
+
+  return input.image?.uri ? [input.image] : [];
+}
+
+function getBusinessContentImageUrls(row: BusinessContentRow) {
+  const imageUrls = Array.isArray(row.image_urls)
+    ? row.image_urls.filter((url): url is string => typeof url === "string" && Boolean(url.trim()))
+    : [];
+  const coverImageUrl = row.image_url?.trim();
+
+  if (coverImageUrl && !imageUrls.includes(coverImageUrl)) {
+    return [coverImageUrl, ...imageUrls];
+  }
+
+  return imageUrls;
 }
 
 function isMissingSavedBusinessesTableError(error: { code?: string; message?: string }) {

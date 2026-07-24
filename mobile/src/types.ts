@@ -37,6 +37,7 @@ export type BusinessContentItem = {
   title: string;
   description: string;
   imageUrl?: string;
+  imageUrls?: string[];
   isFree: boolean;
   isOnline: boolean;
   price?: string;
@@ -53,6 +54,7 @@ export type BusinessContentInput = {
   title: string;
   description: string;
   image?: BusinessContentImageInput | null;
+  images?: BusinessContentImageInput[];
   isFree: boolean;
   isOnline: boolean;
   price?: string;

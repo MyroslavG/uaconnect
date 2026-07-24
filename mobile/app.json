@@ -2,7 +2,7 @@
   "expo": {
     "name": "Kolo",
     "slug": "kolo",
-    "version": "1.0.2",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/kolo-logo.png",
     "userInterfaceStyle": "automatic",
@@ -10,6 +10,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.kolo.mobile",
+      "associatedDomains": [
+        "applinks:koloapp.ca"
+      ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -19,7 +22,24 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/kolo-logo.png",
         "backgroundColor": "#291C0E"
-      }
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "koloapp.ca",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "splash": {
       "image": "./assets/kolo-logo.png",
