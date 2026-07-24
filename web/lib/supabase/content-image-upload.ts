@@ -52,3 +52,29 @@ export async function uploadBusinessContentImage(
 
   return data.publicUrl;
 }
+
+export async function uploadBusinessContentImages(
+  supabase: SupabaseClient<Database>,
+  values: FormDataEntryValue[],
+  ownerId: string,
+  registrationId: string,
+  contentItemId: string,
+) {
+  const imageUrls: string[] = [];
+
+  for (const value of values) {
+    const imageUrl = await uploadBusinessContentImage(
+      supabase,
+      value,
+      ownerId,
+      registrationId,
+      contentItemId,
+    );
+
+    if (imageUrl) {
+      imageUrls.push(imageUrl);
+    }
+  }
+
+  return imageUrls;
+}

@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { logServerError, logServerEvent } from "@/lib/diagnostics";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { uploadProfileAvatar } from "@/lib/supabase/avatar-upload";
-import { uploadBusinessContentImage } from "@/lib/supabase/content-image-upload";
+import { uploadBusinessContentImages } from "@/lib/supabase/content-image-upload";
 import { uploadBusinessLogo } from "@/lib/supabase/logo-upload";
 import { createClient } from "@/lib/supabase/server";
 import type {
@@ -444,6 +444,7 @@ export async function createBusinessContentItem(
     content_type: input.type,
     description: input.description,
     image_url: null,
+    image_urls: [],
     is_free: input.isFree,
     is_online: input.type === "event" && input.isOnline,
     link_url: input.type === "event" ? input.linkUrl : null,
@@ -476,18 +477,21 @@ export async function createBusinessContentItem(
   }
 
   try {
-    const imageUrl = await uploadBusinessContentImage(
+    const imageUrls = await uploadBusinessContentImages(
       supabase,
-      formData.get("imageFile"),
+      formData.getAll("imageFile"),
       user.id,
       input.registrationId,
       createdItem.id,
     );
 
-    if (imageUrl) {
+    if (imageUrls.length > 0) {
       const { error: imageUpdateError } = await supabase
         .from("business_content_items")
-        .update({ image_url: imageUrl })
+        .update({
+          image_url: imageUrls[0] ?? null,
+          image_urls: imageUrls,
+        })
         .eq("id", createdItem.id)
         .eq("owner_id", user.id);
 
@@ -600,16 +604,17 @@ export async function updateBusinessContentItem(
   };
 
   try {
-    const imageUrl = await uploadBusinessContentImage(
+    const imageUrls = await uploadBusinessContentImages(
       supabase,
-      formData.get("imageFile"),
+      formData.getAll("imageFile"),
       user.id,
       input.registrationId,
       id,
     );
 
-    if (imageUrl) {
-      updates.image_url = imageUrl;
+    if (imageUrls.length > 0) {
+      updates.image_url = imageUrls[0] ?? null;
+      updates.image_urls = imageUrls;
     }
   } catch (imageError) {
     logServerError("business_content.update_image_failed", imageError, {

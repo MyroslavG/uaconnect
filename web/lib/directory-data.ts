@@ -291,6 +291,8 @@ function mapPublishedBusiness(
 }
 
 function mapBusinessContentItem(row: BusinessContentRow): BusinessContentItem {
+  const imageUrls = getBusinessContentImageUrls(row);
+
   return {
     id: row.id,
     registrationId: row.registration_id,
@@ -298,7 +300,8 @@ function mapBusinessContentItem(row: BusinessContentRow): BusinessContentItem {
     type: row.content_type,
     title: row.title,
     description: row.description,
-    imageUrl: row.image_url ?? undefined,
+    imageUrl: imageUrls[0],
+    imageUrls,
     isFree: row.is_free,
     isOnline: row.is_online,
     price: row.price ?? undefined,
@@ -309,4 +312,17 @@ function mapBusinessContentItem(row: BusinessContentRow): BusinessContentItem {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function getBusinessContentImageUrls(row: BusinessContentRow) {
+  const imageUrls = Array.isArray(row.image_urls)
+    ? row.image_urls.filter((url): url is string => typeof url === "string" && Boolean(url.trim()))
+    : [];
+  const coverImageUrl = row.image_url?.trim();
+
+  if (coverImageUrl && !imageUrls.includes(coverImageUrl)) {
+    return [coverImageUrl, ...imageUrls];
+  }
+
+  return imageUrls;
 }

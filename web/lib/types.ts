@@ -25,6 +25,7 @@ export type BusinessContentItem = {
   title: string;
   description: string;
   imageUrl?: string;
+  imageUrls?: string[];
   isFree: boolean;
   isOnline: boolean;
   price?: string;

@@ -141,6 +141,7 @@ create table if not exists public.business_content_items (
   title text not null,
   description text not null,
   image_url text,
+  image_urls jsonb not null default '[]'::jsonb,
   is_free boolean not null default false,
   is_online boolean not null default false,
   price text,
@@ -163,6 +164,7 @@ on public.business_content_items (content_type, status, created_at desc);
 
 alter table public.business_content_items
   add column if not exists image_url text,
+  add column if not exists image_urls jsonb not null default '[]'::jsonb,
   add column if not exists is_free boolean not null default false,
   add column if not exists is_online boolean not null default false;
 

@@ -1,0 +1,13 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "V47U3G85D9.app.kolo.mobile",
+        "paths": [
+          "/business/*"
+        ]
+      }
+    ]
+  }
+}

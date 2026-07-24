@@ -252,7 +252,6 @@ export function DashboardBusinessEditor({
             </div>
             <BusinessLogo
               className="h-16 w-16 bg-background/85"
-              iconClassName="h-7 w-7"
               logoUrl={logoUrl}
               name={registration.business_name}
             />
@@ -639,6 +638,8 @@ function ContentItemCard({
     initialState,
   );
   const isEvent = item.content_type === "event";
+  const imageUrls = getContentImageUrls(item);
+  const coverImageUrl = imageUrls[0];
 
   useEffect(() => {
     if (updateState.ok || deleteState.ok) {
@@ -648,12 +649,12 @@ function ContentItemCard({
 
   return (
     <article className="overflow-hidden rounded-lg border bg-background">
-      {item.image_url ? (
+      {coverImageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           alt=""
           className="h-40 w-full object-cover"
-          src={item.image_url}
+          src={coverImageUrl}
         />
       ) : null}
       <div className="grid gap-3 p-4">
@@ -816,6 +817,7 @@ function ContentFormFields({
         <Input
           accept="image/png,image/jpeg,image/webp,image/gif"
           id={`${idPrefix}-image`}
+          multiple
           name="imageFile"
           type="file"
         />
@@ -958,6 +960,19 @@ function toDateTimeLocal(value?: string | null) {
   const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
 
   return localDate.toISOString().slice(0, 16);
+}
+
+function getContentImageUrls(item: BusinessContentRow) {
+  const imageUrls = Array.isArray(item.image_urls)
+    ? item.image_urls.filter((url): url is string => typeof url === "string" && Boolean(url.trim()))
+    : [];
+  const coverImageUrl = item.image_url?.trim();
+
+  if (coverImageUrl && !imageUrls.includes(coverImageUrl)) {
+    return [coverImageUrl, ...imageUrls];
+  }
+
+  return imageUrls;
 }
 
 function StatusBadge({

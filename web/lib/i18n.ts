@@ -336,6 +336,11 @@ const categoryUk: Record<string, Pick<Category, "name" | "description">> = {
     name: "Рієлтори",
     description: "Купівля, продаж, оренда та переїзд у нове місто.",
   },
+  "mortgage-brokers": {
+    name: "Іпотечні брокери",
+    description:
+      "Консультації щодо іпотеки, попереднє схвалення, рефінансування, поновлення та фінансування житла.",
+  },
   moving: {
     name: "Переїзд",
     description:

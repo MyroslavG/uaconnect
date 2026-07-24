@@ -229,6 +229,7 @@ export type Database = {
           title: string;
           description: string;
           image_url: string | null;
+          image_urls: string[] | null;
           is_free: boolean;
           is_online: boolean;
           price: string | null;
@@ -247,6 +248,7 @@ export type Database = {
           title: string;
           description: string;
           image_url?: string | null;
+          image_urls?: string[] | null;
           is_free?: boolean;
           is_online?: boolean;
           price?: string | null;
@@ -265,6 +267,7 @@ export type Database = {
           title?: string;
           description?: string;
           image_url?: string | null;
+          image_urls?: string[] | null;
           is_free?: boolean;
           is_online?: boolean;
           price?: string | null;

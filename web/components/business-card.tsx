@@ -2,8 +2,8 @@ import Link from "next/link";
 import { ExternalLink, Globe2, Lock, MapPin, Phone } from "lucide-react";
 
 import { BusinessLogo } from "@/components/business-logo";
-import { BusinessOwnerChip } from "@/components/business-owner-chip";
 import { SaveBusinessButton } from "@/components/save-business-button";
+import { ShareBusinessButton } from "@/components/share-business-button";
 import type { Business } from "@/lib/types";
 import { formatExternalUrl, formatLocationParts } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +46,12 @@ export function BusinessCard({
         className="absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         aria-label={business.name}
       />
-      <div className="absolute right-4 top-4 z-20">
+      <div className="absolute right-4 top-4 z-20 flex items-center gap-2">
+        <ShareBusinessButton
+          businessName={business.name}
+          href={`/business/${business.slug}`}
+          locale={locale}
+        />
         <SaveBusinessButton
           businessId={business.id}
           canSave={canViewContacts}
@@ -55,7 +60,7 @@ export function BusinessCard({
           slug={business.slug}
         />
       </div>
-      <CardContent className="pointer-events-none relative z-10 grid gap-4 p-4 pr-16">
+      <CardContent className="pointer-events-none relative z-10 grid gap-4 p-4 pr-28">
         <div className="flex items-start justify-between gap-3">
           <Badge variant="accent">{business.category}</Badge>
           <BusinessLogo
@@ -89,11 +94,6 @@ export function BusinessCard({
               </span>
             ) : null}
           </p>
-          <BusinessOwnerChip
-            avatarUrl={business.ownerAvatarUrl}
-            className="mt-3"
-            name={business.ownerName}
-          />
           <p
             className="mt-3 line-clamp-2 text-sm leading-6 text-muted-foreground"
             title={business.description}

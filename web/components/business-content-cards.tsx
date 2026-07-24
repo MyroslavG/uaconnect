@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import {
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   ExternalLink,
   Globe2,
   Link as LinkIcon,
@@ -199,12 +201,13 @@ function ContentCardBody({
   showBusinessName: boolean;
 }) {
   const { business, item } = entry;
+  const coverImageUrl = getContentImageUrls(item)[0];
 
   return (
     <>
-      {item.imageUrl ? (
+      {coverImageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img alt="" className="h-44 w-full object-cover" src={item.imageUrl} />
+        <img alt="" className="h-44 w-full object-cover" src={coverImageUrl} />
       ) : null}
       <div className="grid gap-3 p-5">
         <ContentBadges item={item} labels={labels} />
@@ -245,17 +248,11 @@ function ContentDetail({
 }) {
   const { business, item } = entry;
   const hasLockedContacts = !canViewContacts && Boolean(item.location || item.linkUrl);
+  const imageUrls = getContentImageUrls(item);
 
   return (
     <div className="grid gap-5">
-      {item.imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          alt=""
-          className="max-h-[22rem] w-full rounded-md object-cover"
-          src={item.imageUrl}
-        />
-      ) : null}
+      <ContentImageGallery imageUrls={imageUrls} />
       <DialogHeader>
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <ContentBadges item={item} labels={labels} />
@@ -286,6 +283,60 @@ function ContentDetail({
       {hasLockedContacts ? (
         <LockedContentContacts labels={labels} nextPath={nextPath} />
       ) : null}
+    </div>
+  );
+}
+
+function ContentImageGallery({ imageUrls }: { imageUrls: string[] }) {
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const activeImageUrl = imageUrls[activeImageIndex];
+  const hasMultipleImages = imageUrls.length > 1;
+
+  if (!activeImageUrl) {
+    return null;
+  }
+
+  return (
+    <div className="-mx-6 -mt-6 overflow-hidden bg-black sm:-mx-6">
+      <div className="relative h-[62vh] min-h-[22rem] w-full">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          alt=""
+          className="h-full w-full object-cover"
+          src={activeImageUrl}
+        />
+        {hasMultipleImages ? (
+          <>
+            <button
+              aria-label="Previous"
+              className="absolute left-4 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-white/90 text-foreground shadow-sm transition hover:bg-white"
+              onClick={() =>
+                setActiveImageIndex((currentIndex) =>
+                  currentIndex === 0 ? imageUrls.length - 1 : currentIndex - 1,
+                )
+              }
+              type="button"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <button
+              aria-label="Next"
+              className="absolute right-4 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-white/90 text-foreground shadow-sm transition hover:bg-white"
+              onClick={() =>
+                setActiveImageIndex((currentIndex) =>
+                  currentIndex === imageUrls.length - 1 ? 0 : currentIndex + 1,
+                )
+              }
+              type="button"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+            <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/70 px-3 py-1 text-xs font-black text-white">
+              {activeImageIndex + 1}/{imageUrls.length}
+            </span>
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -458,4 +509,18 @@ function formatMapLink(value: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     value,
   )}`;
+}
+
+function getContentImageUrls(item: BusinessContentItem) {
+  const imageUrls =
+    item.imageUrls
+      ?.map((url) => url.trim())
+      .filter((url): url is string => Boolean(url)) ?? [];
+  const coverImageUrl = item.imageUrl?.trim();
+
+  if (coverImageUrl && !imageUrls.includes(coverImageUrl)) {
+    return [coverImageUrl, ...imageUrls];
+  }
+
+  return imageUrls;
 }

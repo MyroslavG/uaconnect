@@ -17,6 +17,7 @@ import { BusinessProfileActions } from "@/components/business-profile-actions";
 import { ContactAccessCard } from "@/components/contact-access-card";
 import { MapEmbed } from "@/components/map-embed";
 import { SaveBusinessButton } from "@/components/save-business-button";
+import { ShareBusinessButton } from "@/components/share-business-button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { getDirectoryBusiness } from "@/lib/directory-data";
@@ -143,7 +144,6 @@ export default async function BusinessProfilePage({
             <div className="flex flex-wrap items-center gap-3">
               <BusinessLogo
                 className="h-14 w-14 bg-background/85"
-                iconClassName="h-6 w-6"
                 logoUrl={business.logoUrl}
                 name={business.name}
               />
@@ -276,13 +276,20 @@ export default async function BusinessProfilePage({
           <div className="sticky top-24 rounded-lg border bg-card p-5 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-bold">{labels.common.contact}</h2>
-              <SaveBusinessButton
-                businessId={rawBusiness.id}
-                canSave={canViewContacts}
-                isSaved={rawBusiness.isSaved}
-                locale={locale}
-                slug={rawBusiness.slug}
-              />
+              <div className="flex items-center gap-2">
+                <ShareBusinessButton
+                  businessName={business.name}
+                  href={nextPath}
+                  locale={locale}
+                />
+                <SaveBusinessButton
+                  businessId={rawBusiness.id}
+                  canSave={canViewContacts}
+                  isSaved={rawBusiness.isSaved}
+                  locale={locale}
+                  slug={rawBusiness.slug}
+                />
+              </div>
             </div>
             {canViewContacts ? (
               <div className="mt-4 grid gap-3 text-sm">

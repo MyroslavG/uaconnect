@@ -11,7 +11,7 @@ import { Analytics } from "@vercel/analytics/next";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://uaconnect.vercel.app"),
+  metadataBase: new URL("https://koloapp.ca"),
   title: {
     default: "Kolo | Українські бізнеси в Канаді",
     template: "%s | Kolo",
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     title: "Kolo",
     description:
       "Гарний і зручний спосіб знайти українські бізнеси в Канаді.",
-    url: "https://uaconnect.vercel.app",
+    url: "https://koloapp.ca",
     siteName: "Kolo",
     type: "website",
   },
