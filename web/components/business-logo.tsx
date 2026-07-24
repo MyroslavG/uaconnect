@@ -6,12 +6,14 @@ import { cn, getSafeImageUrl } from "@/lib/utils";
 
 type BusinessLogoProps = {
   className?: string;
+  loading?: "eager" | "lazy";
   logoUrl?: string | null;
   name: string;
 };
 
 export function BusinessLogo({
   className,
+  loading = "lazy",
   logoUrl,
   name,
 }: BusinessLogoProps) {
@@ -40,6 +42,8 @@ export function BusinessLogo({
       <img
         alt=""
         className="h-full w-full object-contain"
+        decoding="async"
+        loading={loading}
         onError={() => setHasImageError(true)}
         src={safeLogoUrl}
       />

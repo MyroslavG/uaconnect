@@ -146,6 +146,11 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     radiusInKm,
   });
   const localizedResults = localizeBusinesses(results, locale);
+  const mapResults = localizedResults.map(({ address, name, slug }) => ({
+    address,
+    name,
+    slug,
+  }));
   const summary = labels.summary as (
     count: number,
     city: string,
@@ -228,7 +233,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           <div className="sticky top-24 overflow-hidden rounded-lg border border-white/70 bg-card shadow-lift dark:border-white/10">
             {canViewContacts ? (
               <ResultsMap
-                businesses={localizedResults}
+                businesses={mapResults}
                 title={commonLabels.explore.mapPreview}
                 labels={{
                   mapPreview: commonLabels.explore.mapPreview,

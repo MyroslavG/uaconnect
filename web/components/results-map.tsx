@@ -7,8 +7,10 @@ import { ExternalLink, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Business } from "@/lib/types";
 
+type ResultsMapBusiness = Pick<Business, "address" | "name" | "slug">;
+
 type ResultsMapProps = {
-  businesses: Business[];
+  businesses: ResultsMapBusiness[];
   title: string;
   labels: {
     mapPreview: string;

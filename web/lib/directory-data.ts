@@ -28,12 +28,24 @@ type SearchDirectoryBusinessesOptions = {
   currentUserId?: string;
 };
 
-export async function getDirectoryBusinesses(currentUserId?: string) {
-  return getPublishedBusinesses(currentUserId);
+type GetDirectoryBusinessesOptions = {
+  contentItemsLimit?: number;
+  includeContentItems?: boolean;
+};
+
+export async function getDirectoryBusinesses(
+  currentUserId?: string,
+  options: GetDirectoryBusinessesOptions = {},
+) {
+  return getPublishedBusinesses({
+    contentItemsLimit: options.contentItemsLimit,
+    currentUserId,
+    includeContentItems: options.includeContentItems ?? true,
+  });
 }
 
 export async function getDirectoryBusiness(slug: string, currentUserId?: string) {
-  return (await getPublishedBusinesses(currentUserId)).find(
+  return (await getPublishedBusinesses({ currentUserId })).find(
     (business) => business.slug === slug,
   );
 }
@@ -43,8 +55,11 @@ export async function getDirectoryBusinessesByCityAndCategory(
   categorySlug: string,
   currentUserId?: string,
   localOnly = false,
+  includeContentItems = false,
 ) {
-  const directoryBusinesses = await getDirectoryBusinesses(currentUserId);
+  const directoryBusinesses = await getDirectoryBusinesses(currentUserId, {
+    includeContentItems,
+  });
 
   return directoryBusinesses.filter(
     (business) =>
@@ -58,7 +73,9 @@ export async function getRelatedDirectoryBusinesses(
   business: Business,
   limit = 3,
 ) {
-  const directoryBusinesses = await getDirectoryBusinesses();
+  const directoryBusinesses = await getDirectoryBusinesses(undefined, {
+    includeContentItems: false,
+  });
 
   return directoryBusinesses
     .filter(
@@ -80,7 +97,10 @@ export async function searchDirectoryBusinesses({
   radiusInKm = 75,
   currentUserId,
 }: SearchDirectoryBusinessesOptions) {
-  const directoryBusinesses = await getDirectoryBusinesses(currentUserId);
+  const hasContentSearch = Boolean(query?.trim());
+  const directoryBusinesses = await getDirectoryBusinesses(currentUserId, {
+    includeContentItems: hasContentSearch,
+  });
   const filteredBusinesses = directoryBusinesses
     .map((business) => {
       if (!coordinates || business.servesAllCanada) {
@@ -132,16 +152,27 @@ export async function searchDirectoryBusinesses({
       );
     });
 
-  return searchBusinesses(filteredBusinesses, query);
+  return searchBusinesses(filteredBusinesses, query).map(stripContentItems);
 }
 
 export async function getSavedDirectoryBusinesses(currentUserId: string) {
-  const businesses = await getPublishedBusinesses(currentUserId);
+  const businesses = await getPublishedBusinesses({
+    currentUserId,
+    includeContentItems: false,
+  });
 
   return businesses.filter((business) => business.isSaved);
 }
 
-async function getPublishedBusinesses(currentUserId?: string): Promise<Business[]> {
+async function getPublishedBusinesses({
+  contentItemsLimit,
+  currentUserId,
+  includeContentItems = true,
+}: {
+  contentItemsLimit?: number;
+  currentUserId?: string;
+  includeContentItems?: boolean;
+} = {}): Promise<Business[]> {
   if (!isSupabaseConfigured()) {
     return [];
   }
@@ -170,8 +201,9 @@ async function getPublishedBusinesses(currentUserId?: string): Promise<Business[
     .filter((registrationId): registrationId is string =>
       Boolean(registrationId),
     );
-  const contentItemsByRegistrationId =
-    await getPublishedBusinessContentItems(registrationIds);
+  const contentItemsByRegistrationId = includeContentItems
+    ? await getPublishedBusinessContentItems(registrationIds, contentItemsLimit)
+    : new Map<string, BusinessContentItem[]>();
   const savedBusinessIds = currentUserId
     ? await getSavedBusinessIds(currentUserId)
     : new Set<string>();
@@ -215,7 +247,10 @@ async function getSavedBusinessIds(currentUserId: string) {
   return new Set((data as SavedBusinessRow[]).map((row) => row.business_id));
 }
 
-async function getPublishedBusinessContentItems(registrationIds: string[]) {
+async function getPublishedBusinessContentItems(
+  registrationIds: string[],
+  limit?: number,
+) {
   const itemsByRegistrationId = new Map<string, BusinessContentItem[]>();
 
   if (registrationIds.length === 0) {
@@ -223,12 +258,18 @@ async function getPublishedBusinessContentItems(registrationIds: string[]) {
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("business_content_items")
     .select("*")
     .in("registration_id", registrationIds)
     .eq("status", "published")
     .order("created_at", { ascending: false });
+
+  if (typeof limit === "number" && Number.isFinite(limit) && limit > 0) {
+    query = query.limit(limit);
+  }
+
+  const { data, error } = await query;
 
   if (error || !data) {
     return itemsByRegistrationId;
@@ -241,6 +282,13 @@ async function getPublishedBusinessContentItems(registrationIds: string[]) {
   }
 
   return itemsByRegistrationId;
+}
+
+function stripContentItems(business: Business): Business {
+  const businessWithoutContentItems = { ...business };
+  delete businessWithoutContentItems.contentItems;
+
+  return businessWithoutContentItems;
 }
 
 function mapPublishedBusiness(

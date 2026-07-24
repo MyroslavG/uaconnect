@@ -21,6 +21,7 @@ export function BusinessCard({
   business,
   canViewContacts,
   locale,
+  priority = false,
 }: BusinessCardProps) {
   const hasContactPreview = Boolean(business.phone || business.website);
   const distanceLabel =
@@ -65,6 +66,7 @@ export function BusinessCard({
           <Badge variant="accent">{business.category}</Badge>
           <BusinessLogo
             className="h-11 w-11 transition group-hover:border-hover-blue-border group-hover:bg-hover-blue/40"
+            loading={priority ? "eager" : "lazy"}
             logoUrl={business.logoUrl}
             name={business.name}
           />

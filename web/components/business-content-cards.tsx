@@ -207,7 +207,13 @@ function ContentCardBody({
     <>
       {coverImageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img alt="" className="h-44 w-full object-cover" src={coverImageUrl} />
+        <img
+          alt=""
+          className="h-44 w-full object-cover"
+          decoding="async"
+          loading="lazy"
+          src={coverImageUrl}
+        />
       ) : null}
       <div className="grid gap-3 p-5">
         <ContentBadges item={item} labels={labels} />
@@ -303,6 +309,7 @@ function ContentImageGallery({ imageUrls }: { imageUrls: string[] }) {
         <img
           alt=""
           className="h-full w-full object-cover"
+          decoding="async"
           src={activeImageUrl}
         />
         {hasMultipleImages ? (

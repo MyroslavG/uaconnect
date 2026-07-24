@@ -120,9 +120,22 @@ export default async function ExplorePage({
     category.slug,
     user?.id,
     localOnly,
+    Boolean(query?.trim()),
   );
   const localizedBaseBusinesses = localizeBusinesses(baseBusinesses, locale);
-  const exploreBusinesses = searchBusinesses(localizedBaseBusinesses, query);
+  const exploreBusinesses = searchBusinesses(localizedBaseBusinesses, query).map(
+    (business) => {
+      const businessWithoutContentItems = { ...business };
+      delete businessWithoutContentItems.contentItems;
+
+      return businessWithoutContentItems;
+    },
+  );
+  const mapBusinesses = exploreBusinesses.map(({ address, name, slug }) => ({
+    address,
+    name,
+    slug,
+  }));
 
   return (
     <div className="bg-background">
@@ -207,7 +220,7 @@ export default async function ExplorePage({
             </div>
             {canViewContacts ? (
               <ResultsMap
-                businesses={exploreBusinesses}
+                businesses={mapBusinesses}
                 title={labels.explore.mapTitle(
                   localizedCategory.name,
                   localizedCity.name,

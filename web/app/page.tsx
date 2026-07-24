@@ -34,7 +34,9 @@ export default async function HomePage() {
     summary: "",
   }));
   const localizedCategories = localizeCategories(categories, locale);
-  const directoryBusinesses = await getDirectoryBusinesses();
+  const directoryBusinesses = await getDirectoryBusinesses(undefined, {
+    contentItemsLimit: 12,
+  });
   const featuredContentItems = getFeaturedContentItems(directoryBusinesses, 6);
   const featuredBusinesses = getFeaturedBusinesses(directoryBusinesses, 5);
   const homeStats = getHomeStats(

@@ -118,6 +118,18 @@ const CATEGORY_PICKER_SHEET_HEIGHT = Math.round(
 const LOCATION_PICKER_SHEET_HEIGHT = Math.round(
   Dimensions.get("window").height * 0.58,
 );
+const ANDROID_BOTTOM_NAVIGATION_INSET =
+  Platform.OS === "android"
+    ? Math.min(
+        64,
+        Math.max(
+          16,
+          Dimensions.get("screen").height -
+            Dimensions.get("window").height -
+            (StatusBar.currentHeight ?? 0),
+        ),
+      )
+    : 0;
 const PUBLIC_WEB_URL = (
   process.env.EXPO_PUBLIC_WEB_URL ?? "https://koloapp.ca"
 ).replace(/\/+$/, "");
@@ -1440,7 +1452,14 @@ export default function App() {
   return (
     <SafeAreaView style={[styles.safeArea, isDarkMode ? styles.darkSafeArea : null]}>
       <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
-      <View style={styles.appShell}>
+      <View
+        style={[
+          styles.appShell,
+          ANDROID_BOTTOM_NAVIGATION_INSET
+            ? { paddingBottom: ANDROID_BOTTOM_NAVIGATION_INSET }
+            : null,
+        ]}
+      >
         <AnnouncementCenter
           announcements={visibleAnnouncements}
           isDarkMode={isDarkMode}
@@ -8098,7 +8117,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     gap: 4,
-    marginBottom: -14,
     marginTop: 8,
     padding: 5,
     shadowColor: "#111111",
