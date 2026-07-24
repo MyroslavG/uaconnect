@@ -791,6 +791,16 @@ function getMimeTypeFromName(value: string) {
   return null;
 }
 
+function normalizeCategorySlug(value: string | null | undefined) {
+  const normalizedSlug = value?.trim().toLowerCase();
+
+  if (!normalizedSlug || normalizedSlug === "others") {
+    return "other";
+  }
+
+  return normalizedSlug;
+}
+
 function mapPublicBusiness(
   business: PublicBusinessRow,
   owner?: OwnerProfileRow,
@@ -800,7 +810,7 @@ function mapPublicBusiness(
 ): Business {
   return {
     address: business.address ?? undefined,
-    categorySlug: business.category_slug,
+    categorySlug: normalizeCategorySlug(business.category_slug),
     city: business.city,
     createdAt: business.created_at,
     description: business.description,
@@ -828,7 +838,7 @@ function mapPublicBusiness(
 function mapRegistration(registration: RegistrationRow): Business {
   return {
     address: registration.address ?? undefined,
-    categorySlug: registration.category_slug,
+    categorySlug: normalizeCategorySlug(registration.category_slug),
     city: registration.city,
     createdAt: registration.created_at,
     description: registration.description,

@@ -58,6 +58,12 @@
         {
           "photosPermission": "Choose a business logo for your Kolo profile."
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Kolo to use your location to show nearby businesses and events."
+        }
       ]
     ],
     "extra": {

@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Linking from "expo-linking";
 import * as ImagePicker from "expo-image-picker";
+import * as ExpoLocation from "expo-location";
 import {
   Alert,
   Dimensions,
@@ -122,18 +124,20 @@ const LOCATION_PICKER_SHEET_HEIGHT = Math.round(
 const ANDROID_BOTTOM_NAVIGATION_INSET =
   Platform.OS === "android"
     ? Math.min(
-        64,
+        96,
         Math.max(
-          16,
+          36,
           Dimensions.get("screen").height -
             Dimensions.get("window").height -
-            (StatusBar.currentHeight ?? 0),
+            (StatusBar.currentHeight ?? 0) +
+            24,
         ),
       )
     : 0;
 const PUBLIC_WEB_URL = (
   process.env.EXPO_PUBLIC_WEB_URL ?? "https://koloapp.ca"
 ).replace(/\/+$/, "");
+const THEME_STORAGE_KEY = "kolo-theme";
 const copy = {
   uk: {
     addBusiness: "Додати",
@@ -206,6 +210,8 @@ const copy = {
     localOnly: "Лише локальні",
     loading: "Завантаження",
     loadingBusinesses: "Завантажуємо актуальні бізнеси...",
+    detectingLocation: "Підбираємо бізнеси поруч...",
+    locationUnavailable: "Не вдалося визначити локацію.",
     notifications: "Оновлення",
     notificationsEmpty: "Нових оновлень немає.",
     dismiss: "Приховати",
@@ -378,6 +384,8 @@ const copy = {
     localOnly: "Local only",
     loading: "Loading",
     loadingBusinesses: "Loading current businesses...",
+    detectingLocation: "Finding businesses near you...",
+    locationUnavailable: "Could not detect your location.",
     notifications: "Updates",
     notificationsEmpty: "No new updates.",
     dismiss: "Dismiss",
@@ -606,10 +614,16 @@ export default function App() {
   const [activeProfilePanel, setActiveProfilePanel] =
     useState<ProfilePanel>("account");
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [hasLoadedTheme, setHasLoadedTheme] = useState(false);
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState("");
+  const hasAppliedInitialLocation = useRef(false);
+  const [hasResolvedInitialLocation, setHasResolvedInitialLocation] =
+    useState(false);
+  const [isResolvingCurrentLocation, setIsResolvingCurrentLocation] =
+    useState(false);
   const [selectedCategory, setSelectedCategory] = useState("all");
-  const [localOnly, setLocalOnly] = useState(false);
+  const [localOnly, setLocalOnly] = useState(true);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [selectedContentEntry, setSelectedContentEntry] =
     useState<ContentDetailEntry | null>(null);
@@ -642,6 +656,87 @@ export default function App() {
     null,
   );
   const labels = { ...copy[locale], ...connectionCopy[locale] };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    AsyncStorage.getItem(THEME_STORAGE_KEY)
+      .then((savedTheme) => {
+        if (isMounted && savedTheme) {
+          setIsDarkMode(savedTheme === "dark");
+        }
+      })
+      .catch((error) => {
+        console.error("[kolo:mobile-theme-load]", error);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setHasLoadedTheme(true);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedTheme) {
+      return;
+    }
+
+    AsyncStorage.setItem(THEME_STORAGE_KEY, isDarkMode ? "dark" : "light").catch(
+      (error) => {
+        console.error("[kolo:mobile-theme-save]", error);
+      },
+    );
+  }, [hasLoadedTheme, isDarkMode]);
+
+  async function applyCurrentLocation(silent = false) {
+    if (isResolvingCurrentLocation) {
+      return undefined;
+    }
+
+    try {
+      setIsResolvingCurrentLocation(true);
+      const currentLocation = await getCurrentMobileLocationLabel();
+
+      if (currentLocation) {
+        setLocation(currentLocation);
+        return currentLocation;
+      }
+
+      if (!silent) {
+        Alert.alert(labels.location, labels.locationUnavailable);
+      }
+    } catch (error) {
+      console.error("[kolo:mobile-location]", error);
+
+      if (!silent) {
+        Alert.alert(labels.location, labels.locationUnavailable);
+      }
+    } finally {
+      setIsResolvingCurrentLocation(false);
+    }
+
+    return undefined;
+  }
+
+  useEffect(() => {
+    if (hasAppliedInitialLocation.current) {
+      return;
+    }
+
+    if (location.trim()) {
+      setHasResolvedInitialLocation(true);
+      return;
+    }
+
+    hasAppliedInitialLocation.current = true;
+    void applyCurrentLocation(true).finally(() => {
+      setHasResolvedInitialLocation(true);
+    });
+  }, []);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !session?.user.id) {
@@ -1508,7 +1603,9 @@ export default function App() {
             <SearchScreen
               canViewContacts={canViewContacts}
               dataMessage={dataMessage}
+              isDataReady={!isDirectoryLoading && hasResolvedInitialLocation}
               isDarkMode={isDarkMode}
+              isResolvingCurrentLocation={isResolvingCurrentLocation}
               labels={labels}
               locale={locale}
               location={location}
@@ -1518,6 +1615,7 @@ export default function App() {
                 setSelectedCategory("all");
                 setLocalOnly(false);
               }}
+              onUseCurrentLocation={applyCurrentLocation}
               localOnly={localOnly}
               query={query}
               results={results}
@@ -1538,12 +1636,16 @@ export default function App() {
             <EventsScreen
               businesses={businesses}
               canViewContacts={canViewContacts}
-              isDataReady={!isDirectoryLoading}
+              isDataReady={!isDirectoryLoading && hasResolvedInitialLocation}
               isDarkMode={isDarkMode}
+              isResolvingCurrentLocation={isResolvingCurrentLocation}
               labels={labels}
+              localOnly={localOnly}
               location={location}
               onContentPress={handleStandaloneContentPress}
+              onUseCurrentLocation={applyCurrentLocation}
               setLocation={setLocation}
+              setLocalOnly={setLocalOnly}
             />
           ) : null}
 
@@ -1692,7 +1794,9 @@ function KeyboardAwareScreen({ children }: { children: React.ReactNode }) {
 function SearchScreen({
   canViewContacts,
   dataMessage,
+  isDataReady,
   isDarkMode,
+  isResolvingCurrentLocation,
   labels,
   locale,
   location,
@@ -1700,6 +1804,7 @@ function SearchScreen({
   onClearFilters,
   onShareBusiness,
   onToggleSavedBusiness,
+  onUseCurrentLocation,
   query,
   results,
   savedBusyBusinessId,
@@ -1713,7 +1818,9 @@ function SearchScreen({
 }: {
   canViewContacts: boolean;
   dataMessage: string;
+  isDataReady: boolean;
   isDarkMode: boolean;
+  isResolvingCurrentLocation: boolean;
   labels: Record<string, string>;
   locale: Locale;
   location: string;
@@ -1721,6 +1828,7 @@ function SearchScreen({
   onClearFilters: () => void;
   onShareBusiness: (business: Business) => Promise<void>;
   onToggleSavedBusiness: (business: Business) => void;
+  onUseCurrentLocation: (silent?: boolean) => Promise<string | undefined>;
   query: string;
   results: Business[];
   savedBusyBusinessId: string | null;
@@ -1739,9 +1847,14 @@ function SearchScreen({
     localOnly,
   );
   const resultCountLabel =
-    hasActiveFilters && totalCount > 0
+    !isDataReady
+      ? labels.loading
+      : hasActiveFilters && totalCount > 0
       ? `${results.length}/${totalCount}`
       : `${results.length}`;
+  const loadingText = isResolvingCurrentLocation
+    ? labels.detectingLocation
+    : labels.loadingBusinesses;
 
   return (
     <KeyboardAwareScreen>
@@ -1760,8 +1873,10 @@ function SearchScreen({
           <LocationPicker
             allowAll
             isDarkMode={isDarkMode}
+            isResolvingCurrentLocation={isResolvingCurrentLocation}
             labels={labels}
             onChange={setLocation}
+            onUseCurrentLocation={onUseCurrentLocation}
             placeholder={labels.city}
             showMyLocation
             value={location}
@@ -1827,7 +1942,15 @@ function SearchScreen({
 
       {dataMessage ? <Text style={styles.errorText}>{dataMessage}</Text> : null}
 
-      {results.length > 0 ? (
+      {!isDataReady ? (
+        <View style={[styles.loadingCard, isDarkMode ? styles.darkSettingRow : null]}>
+          <Text style={[styles.loadingTitle, isDarkMode ? styles.darkText : null]}>
+            {loadingText}
+          </Text>
+          <Text style={[styles.loadingLine, isDarkMode ? styles.darkLoadingLine : null]} />
+          <Text style={[styles.loadingLineShort, isDarkMode ? styles.darkLoadingLine : null]} />
+        </View>
+      ) : results.length > 0 ? (
         results.map((business) => (
           <BusinessCard
             business={business}
@@ -1858,19 +1981,27 @@ function EventsScreen({
   canViewContacts,
   isDataReady,
   isDarkMode,
+  isResolvingCurrentLocation,
   labels,
+  localOnly,
   location,
   onContentPress,
+  onUseCurrentLocation,
   setLocation,
+  setLocalOnly,
 }: {
   businesses: Business[];
   canViewContacts: boolean;
   isDataReady: boolean;
   isDarkMode: boolean;
+  isResolvingCurrentLocation: boolean;
   labels: Record<string, string>;
+  localOnly: boolean;
   location: string;
   onContentPress: (entry: ContentDetailEntry) => void;
+  onUseCurrentLocation: (silent?: boolean) => Promise<string | undefined>;
   setLocation: (value: string) => void;
+  setLocalOnly: (value: boolean) => void;
 }) {
   const selectedLocation = location.trim();
 
@@ -1887,7 +2018,9 @@ function EventsScreen({
             {labels.eventsNearYou}
           </Text>
           <Text style={[styles.homeIntro, isDarkMode ? styles.darkMutedText : null]}>
-            {labels.loadingBusinesses}
+            {isResolvingCurrentLocation
+              ? labels.detectingLocation
+              : labels.loadingBusinesses}
           </Text>
         </View>
       </ScrollView>
@@ -1906,6 +2039,13 @@ function EventsScreen({
         index,
     )
     .filter(({ business, item }) => {
+      const matchesOnline =
+        !localOnly || (!item.isOnline && !business.servesAllCanada);
+
+      if (!matchesOnline) {
+        return false;
+      }
+
       if (!selectedLocation) {
         return true;
       }
@@ -1913,8 +2053,7 @@ function EventsScreen({
       const eventLocation = item.location ?? "";
 
       return (
-        item.isOnline ||
-        business.servesAllCanada ||
+        (!localOnly && (item.isOnline || business.servesAllCanada)) ||
         isNearLocation(business.city, selectedLocation) ||
         (eventLocation ? isNearLocation(eventLocation, selectedLocation) : false) ||
         (eventLocation
@@ -1940,13 +2079,26 @@ function EventsScreen({
           <LocationPicker
             allowAll
             isDarkMode={isDarkMode}
+            isResolvingCurrentLocation={isResolvingCurrentLocation}
             labels={labels}
             onChange={setLocation}
+            onUseCurrentLocation={onUseCurrentLocation}
             placeholder={labels.city}
             showMyLocation
             value={location}
           />
         </Field>
+        <View style={[styles.localOnlyRow, isDarkMode ? styles.darkSettingRow : null]}>
+          <Text style={[styles.localOnlyTitle, isDarkMode ? styles.darkText : null]}>
+            {labels.localOnly}
+          </Text>
+          <Switch
+            onValueChange={setLocalOnly}
+            thumbColor={localOnly ? "#FFFFFF" : "#111111"}
+            trackColor={{ false: "#E5E5EA", true: "#111111" }}
+            value={localOnly}
+          />
+        </View>
       </View>
 
       <View style={styles.resultsHeader}>
@@ -5769,16 +5921,20 @@ function CategoryPicker({
 function LocationPicker({
   allowAll,
   isDarkMode,
+  isResolvingCurrentLocation = false,
   labels,
   onChange,
+  onUseCurrentLocation,
   placeholder,
   showMyLocation,
   value,
 }: {
   allowAll?: boolean;
   isDarkMode: boolean;
+  isResolvingCurrentLocation?: boolean;
   labels: Record<string, string>;
   onChange: (value: string) => void;
+  onUseCurrentLocation?: (silent?: boolean) => Promise<string | undefined>;
   placeholder: string;
   showMyLocation?: boolean;
   value: string;
@@ -5790,11 +5946,23 @@ function LocationPicker({
     ...citySuggestions,
   ];
 
-  function handleSelect(location: string) {
-    if (location === labels.allCanada) {
+  async function handleSelect(nextLocation: string) {
+    if (nextLocation === labels.allCanada) {
       onChange("");
+      setIsOpen(false);
+      return;
+    }
+
+    if (nextLocation === labels.myLocation) {
+      const currentLocation = await onUseCurrentLocation?.();
+
+      if (currentLocation) {
+        setIsOpen(false);
+      }
+
+      return;
     } else {
-      onChange(location === labels.myLocation ? "Stittsville" : location);
+      onChange(nextLocation);
     }
 
     setIsOpen(false);
@@ -5873,20 +6041,29 @@ function LocationPicker({
               showsVerticalScrollIndicator
             >
               {options.map((location) => {
+                const isCurrentLocationOption = location === labels.myLocation;
                 const selectedValue =
                   location === labels.allCanada
                     ? ""
-                    : location === labels.myLocation
-                      ? "Stittsville"
-                      : location;
+                    : location;
                 const isSelected =
+                  !isCurrentLocationOption &&
                   normalize(value) === normalize(selectedValue);
+                const optionLabel =
+                  isCurrentLocationOption && isResolvingCurrentLocation
+                    ? labels.loading
+                    : location;
 
                 return (
                   <Pressable
                     accessibilityRole="button"
+                    disabled={
+                      isCurrentLocationOption && isResolvingCurrentLocation
+                    }
                     key={location}
-                    onPress={() => handleSelect(location)}
+                    onPress={() => {
+                      void handleSelect(location);
+                    }}
                     style={[
                       styles.locationOption,
                       isDarkMode ? styles.darkPickerOption : null,
@@ -5914,7 +6091,7 @@ function LocationPicker({
                         isDarkMode && isSelected ? styles.darkActiveOptionText : null,
                       ]}
                     >
-                      {location}
+                      {optionLabel}
                     </Text>
                     {isSelected ? (
                       <Text style={styles.categoryOptionCheck}>
@@ -6014,8 +6191,82 @@ function DangerButton({
   );
 }
 
+async function getCurrentMobileLocationLabel() {
+  const permissions = await ExpoLocation.requestForegroundPermissionsAsync();
+
+  if (permissions.status !== ExpoLocation.PermissionStatus.GRANTED) {
+    return "";
+  }
+
+  const position = await ExpoLocation.getCurrentPositionAsync({
+    accuracy: ExpoLocation.Accuracy.Balanced,
+  });
+  const [address] = await ExpoLocation.reverseGeocodeAsync({
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+  });
+
+  return getMobileLocationLabel(address);
+}
+
+function getMobileLocationLabel(
+  address: ExpoLocation.LocationGeocodedAddress | undefined,
+) {
+  if (!address) {
+    return "";
+  }
+
+  const primaryLocation =
+    address.district?.trim() ||
+    address.city?.trim() ||
+    address.subregion?.trim() ||
+    address.region?.trim() ||
+    "";
+  const city = address.city?.trim() ?? "";
+  const region = address.region?.trim() ?? "";
+  const secondaryLocation =
+    city && normalize(city) !== normalize(primaryLocation)
+      ? city
+      : region && normalize(region) !== normalize(primaryLocation)
+        ? region
+        : "";
+
+  return [primaryLocation, secondaryLocation].filter(Boolean).join(", ");
+}
+
 function getCategoryName(slug: string, locale: Locale) {
-  return categories.find((category) => category.slug === slug)?.name[locale] ?? slug;
+  const normalizedSlug = normalizeCategorySlug(slug);
+  const categoryName = categories.find(
+    (category) => category.slug === normalizedSlug,
+  )?.name[locale];
+
+  if (categoryName) {
+    return categoryName;
+  }
+
+  if (normalizedSlug === "other") {
+    return locale === "uk" ? "Інше" : "Other";
+  }
+
+  return titleizeSlug(normalizedSlug);
+}
+
+function normalizeCategorySlug(slug: string | undefined | null) {
+  const normalizedSlug = slug?.trim().toLowerCase();
+
+  if (!normalizedSlug || normalizedSlug === "others") {
+    return "other";
+  }
+
+  return normalizedSlug;
+}
+
+function titleizeSlug(slug: string) {
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function hasBusinessOwnerInfo(business: Business) {

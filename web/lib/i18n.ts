@@ -423,6 +423,10 @@ const categoryUk: Record<string, Pick<Category, "name" | "description">> = {
     description:
       "Брендинг, дизайн, друк, соцмережі, реклама, контент і локальне просування.",
   },
+  other: {
+    name: "Інше",
+    description: "Категорія буде уточнена після перевірки.",
+  },
 };
 
 const cityUk: Record<string, Pick<City, "name" | "summary">> = {
@@ -521,9 +525,15 @@ export function localizeBusiness(business: Business, locale: Locale): Business {
     return business;
   }
 
+  const translation = businessUk[business.slug];
+
   return {
     ...business,
-    ...businessUk[business.slug],
+    ...translation,
+    category:
+      translation?.category ??
+      categoryUk[business.categorySlug]?.name ??
+      business.category,
   };
 }
 

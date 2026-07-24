@@ -369,6 +369,28 @@ function getTimestamp(value: string | undefined | null) {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
+function normalizeCategorySlug(value: string | null | undefined) {
+  const normalizedSlug = value?.trim().toLowerCase();
+
+  if (!normalizedSlug || normalizedSlug === "others") {
+    return "other";
+  }
+
+  return normalizedSlug;
+}
+
+function getFallbackCategoryName(slug: string) {
+  if (slug === "other") {
+    return "Other";
+  }
+
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 function mapPublishedBusiness(
   row: PublishedBusiness,
   owner?: PublicBusinessOwner,
@@ -376,9 +398,13 @@ function mapPublishedBusiness(
   isSaved = false,
   rankingSignals?: BusinessRankingSignals,
 ): Business {
+  const categorySlug = normalizeCategorySlug(row.category_slug);
   const category =
-    categories.find((candidate) => candidate.slug === row.category_slug) ??
-    categories[0];
+    categories.find((candidate) => candidate.slug === categorySlug) ?? {
+      description: "",
+      name: getFallbackCategoryName(categorySlug),
+      slug: categorySlug,
+    };
   const rawLocation = row.city.trim();
   const cityResolution = resolveCityFromLocationInput(cities, rawLocation);
   const businessName = row.name;
@@ -391,7 +417,7 @@ function mapPublishedBusiness(
     slug: row.slug,
     name: businessName,
     category: category.name,
-    categorySlug: category.slug,
+    categorySlug,
     city: rawLocation || cityResolution?.city.name || "",
     citySlug: cityResolution?.city.slug ?? "",
     neighborhood: cityResolution?.kind === "nearby" ? rawLocation : "",

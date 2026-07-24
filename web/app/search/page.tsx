@@ -6,8 +6,10 @@ import { BusinessCard } from "@/components/business-card";
 import { ContactAccessCard } from "@/components/contact-access-card";
 import { ResultsMap } from "@/components/results-map";
 import { SearchPanel } from "@/components/search-panel";
+import { SearchLocationAutoFilter } from "@/components/search-location-auto-filter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { categories, cities, getCategory, getCity } from "@/lib/data";
 import { searchDirectoryBusinesses } from "@/lib/directory-data";
 import {
@@ -32,6 +34,7 @@ type SearchPageProps = {
     lng?: string;
     radius?: string;
     localOnly?: string;
+    locationReady?: string;
   }>;
 };
 
@@ -49,6 +52,9 @@ const text = {
     noResults: "Нічого не знайдено",
     noResultsText:
       "Спробуйте змінити ключове слово, локацію або категорію.",
+    detectingLocation: "Підбираємо локальні результати...",
+    detectingLocationText:
+      "Визначаємо вашу локацію, щоб не показувати випадкові бізнеси перед першим локальним пошуком.",
     clear: "Очистити пошук",
     summary: (count: number, city: string, category: string) =>
       `${count} результатів · ${city} · ${category}`,
@@ -63,6 +69,9 @@ const text = {
     noResults: "No results found",
     noResultsText:
       "Try changing the keyword, location, or category.",
+    detectingLocation: "Finding local results...",
+    detectingLocationText:
+      "We are checking your location first, so broad results do not flash before the local search is ready.",
     clear: "Clear search",
     summary: (count: number, city: string, category: string) =>
       `${count} result${count === 1 ? "" : "s"} · ${city} · ${category}`,
@@ -84,10 +93,13 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const longitude = Number(resolvedSearchParams.lng);
   const radiusInKm = Number(resolvedSearchParams.radius) || 75;
   const localOnly = resolvedSearchParams.localOnly === "1";
+  const locationReady = resolvedSearchParams.locationReady === "1";
   const coordinates =
     Number.isFinite(latitude) && Number.isFinite(longitude)
       ? { latitude, longitude }
       : undefined;
+  const shouldAutoDetectLocation =
+    !citySlug && !near && !coordinates && !locationReady;
   const city = citySlug ? getCity(citySlug) : undefined;
   const category = categorySlug ? getCategory(categorySlug) : undefined;
   const user = await getCurrentUser();
@@ -136,15 +148,17 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const localizedCategory = category
     ? localizeCategory(category, locale)
     : undefined;
-  const results = await searchDirectoryBusinesses({
-    query,
-    citySlug: coordinates ? undefined : city?.slug,
-    categorySlug: category?.slug,
-    coordinates,
-    currentUserId: user?.id,
-    localOnly,
-    radiusInKm,
-  });
+  const results = shouldAutoDetectLocation
+    ? []
+    : await searchDirectoryBusinesses({
+        query,
+        citySlug: coordinates ? undefined : city?.slug,
+        categorySlug: category?.slug,
+        coordinates,
+        currentUserId: user?.id,
+        localOnly,
+        radiusInKm,
+      });
   const localizedResults = localizeBusinesses(results, locale);
   const mapResults = localizedResults.map(({ address, name, slug }) => ({
     address,
@@ -161,9 +175,32 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     place: string,
     category: string,
   ) => string;
+  const summaryText = shouldAutoDetectLocation
+    ? (labels.detectingLocation as string)
+    : near && coordinates
+      ? nearSummary(
+          localizedResults.length,
+          near,
+          localizedCategory?.name ?? (labels.allCategories as string),
+        )
+      : summary(
+          localizedResults.length,
+          localizedCity?.name ?? (labels.allCities as string),
+          localizedCategory?.name ?? (labels.allCategories as string),
+        );
 
   return (
     <div className="bg-background">
+      <SearchLocationAutoFilter
+        categories={categorySlug}
+        cities={cities}
+        enabled={shouldAutoDetectLocation}
+        locale={locale}
+        localOnly={localOnly}
+        preferLocalOnly
+        query={query}
+        radius={resolvedSearchParams.radius}
+      />
       <section className="border-b bg-card/50 py-10">
         <div className="container">
           <Badge variant="accent">{labels.kicker as string}</Badge>
@@ -171,17 +208,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             {labels.title as string}
           </h1>
           <p className="mt-3 text-sm text-muted-foreground">
-            {near && coordinates
-              ? nearSummary(
-                  localizedResults.length,
-                  near,
-                  localizedCategory?.name ?? (labels.allCategories as string),
-                )
-              : summary(
-                  localizedResults.length,
-                  localizedCity?.name ?? (labels.allCities as string),
-                  localizedCategory?.name ?? (labels.allCategories as string),
-                )}
+            {summaryText}
           </p>
           <div className="mt-6">
             <SearchPanel
@@ -192,7 +219,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               defaultQuery={query}
               defaultLocation={near}
               defaultCoordinates={coordinates}
-              defaultLocalOnly={localOnly}
+              defaultLocalOnly={shouldAutoDetectLocation ? true : localOnly}
               variant="compact"
               locale={locale}
             />
@@ -202,7 +229,12 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
       <section className="container grid gap-6 py-8 lg:grid-cols-[1fr_400px]">
         <div>
-          {localizedResults.length > 0 ? (
+          {shouldAutoDetectLocation ? (
+            <SearchLoadingState
+              title={labels.detectingLocation as string}
+              text={labels.detectingLocationText as string}
+            />
+          ) : localizedResults.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2">
               {localizedResults.map((business, index) => (
                 <BusinessCard
@@ -231,7 +263,11 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         </div>
         <aside className="hidden lg:block">
           <div className="sticky top-24 overflow-hidden rounded-lg border border-white/70 bg-card shadow-lift dark:border-white/10">
-            {canViewContacts ? (
+            {shouldAutoDetectLocation ? (
+              <div className="grid min-h-[520px] place-items-center bg-muted/40 p-6">
+                <Skeleton className="h-80 w-full rounded-lg" />
+              </div>
+            ) : canViewContacts ? (
               <ResultsMap
                 businesses={mapResults}
                 title={commonLabels.explore.mapPreview}
@@ -255,6 +291,28 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           </div>
         </aside>
       </section>
+    </div>
+  );
+}
+
+function SearchLoadingState({
+  text,
+  title,
+}: {
+  text: string;
+  title: string;
+}) {
+  return (
+    <div className="rounded-lg border bg-card p-8">
+      <Search className="h-10 w-10 text-primary" />
+      <h2 className="mt-4 text-2xl font-bold">{title}</h2>
+      <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+        {text}
+      </p>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <Skeleton className="h-56 rounded-lg" />
+        <Skeleton className="h-56 rounded-lg" />
+      </div>
     </div>
   );
 }
