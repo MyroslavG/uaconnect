@@ -445,9 +445,10 @@ export async function createBusinessContentItem(
     description: input.description,
     image_url: null,
     image_urls: [],
+    is_available: input.isAvailable,
     is_free: input.isFree,
     is_online: input.type === "event" && input.isOnline,
-    link_url: input.type === "event" ? input.linkUrl : null,
+    link_url: input.type === "event" || input.type === "product" ? input.linkUrl : null,
     location: input.type === "event" ? input.location : null,
     owner_id: user.id,
     price: input.isFree ? null : input.price,
@@ -532,7 +533,7 @@ export async function createBusinessContentItem(
 
   return {
     ok: true,
-    message: input.type === "event" ? "Event added." : "Service added.",
+    message: getBusinessContentSuccessMessage(input.type, "created"),
   };
 }
 
@@ -594,9 +595,10 @@ export async function updateBusinessContentItem(
   const updates: BusinessContentUpdate = {
     content_type: input.type,
     description: input.description,
+    is_available: input.isAvailable,
     is_free: input.isFree,
     is_online: input.type === "event" && input.isOnline,
-    link_url: input.type === "event" ? input.linkUrl : null,
+    link_url: input.type === "event" || input.type === "product" ? input.linkUrl : null,
     location: input.type === "event" ? input.location : null,
     price: input.isFree ? null : input.price,
     starts_at: input.type === "event" ? input.startsAt : null,
@@ -664,7 +666,7 @@ export async function updateBusinessContentItem(
 
   return {
     ok: true,
-    message: input.type === "event" ? "Event updated." : "Service updated.",
+    message: getBusinessContentSuccessMessage(input.type, "updated"),
   };
 }
 
@@ -821,14 +823,21 @@ export async function toggleSavedBusiness(formData: FormData) {
 
 function getBusinessContentInput(formData: FormData) {
   const rawType = String(formData.get("contentType") ?? "").trim();
-  const type: BusinessContentType = rawType === "event" ? "event" : "service";
-  const isFree = formData.get("isFree") === "on";
+  const type: BusinessContentType =
+    rawType === "event" || rawType === "product" ? rawType : "service";
+  const isFree = type === "product" ? false : formData.get("isFree") === "on";
+  const isAvailable =
+    type === "product" ? formData.getAll("isAvailable").includes("on") : true;
 
   return {
     description: String(formData.get("description") ?? "").trim(),
+    isAvailable,
     isFree,
     isOnline: formData.get("isOnline") === "on",
-    linkUrl: type === "event" ? optionalText(formData.get("linkUrl")) : null,
+    linkUrl:
+      type === "event" || type === "product"
+        ? optionalText(formData.get("linkUrl"))
+        : null,
     location: type === "event" ? optionalText(formData.get("location")) : null,
     price: isFree ? null : optionalText(formData.get("price")),
     registrationId: String(formData.get("registrationId") ?? "").trim(),
@@ -836,6 +845,16 @@ function getBusinessContentInput(formData: FormData) {
     title: String(formData.get("title") ?? "").trim(),
     type,
   };
+}
+
+function getBusinessContentSuccessMessage(
+  type: BusinessContentType,
+  action: "created" | "updated",
+) {
+  const name =
+    type === "event" ? "Event" : type === "product" ? "Product" : "Service";
+
+  return `${name} ${action === "created" ? "added" : "updated"}.`;
 }
 
 async function getOwnedRegistration(

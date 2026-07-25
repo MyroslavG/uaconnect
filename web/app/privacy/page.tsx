@@ -74,7 +74,7 @@ const text = {
         title: "Information We Collect",
         items: [
           "Account details provided through Google Sign-In or Sign in with Apple, including your name, email address, and profile photo when available.",
-          "Business information added by an owner or admin, including name, description, category, city, address, phone, website, Instagram, logo, services, and events.",
+          "Business information added by an owner or admin, including name, description, category, city, address, phone, website, Instagram, logo, services, products, and events.",
           "Owner contact email when it is different from the sign-in account email.",
           "Search inputs such as city, category, and search terms.",
           "Approximate location only when you allow the browser or app to use it for nearby search.",
@@ -83,7 +83,7 @@ const text = {
       {
         title: "How We Use Information",
         items: [
-          "To show businesses, services, and events to people looking for Ukrainian businesses in Canada.",
+          "To show businesses, services, products, and events to people looking for Ukrainian businesses in Canada.",
           "To let owners edit their profiles after signing in.",
           "To let an admin review new businesses and help onboard owners.",
           "To improve search quality, user experience, and error diagnostics.",
@@ -92,7 +92,7 @@ const text = {
       {
         title: "Public Information",
         items: [
-          "Published business profiles may show the business name, description, category, city, address, website, Instagram, phone, logo, services, and events.",
+          "Published business profiles may show the business name, description, category, city, address, website, Instagram, phone, logo, services, products, and events.",
           "Business contact details are available only to signed-in users.",
           "A business owner's personal sign-in email is not intended to be shown publicly as the business contact email.",
         ],
@@ -108,7 +108,7 @@ const text = {
       {
         title: "Your Choices",
         items: [
-          "Business owners can edit their profile, contact email, logo, services, and events in the dashboard.",
+          "Business owners can edit their profile, contact email, logo, services, products, and events in the dashboard.",
           "You can decline location access and type a city manually.",
           "To request deletion or correction of information, contact the Kolo admin through the contact listed on the app page or website.",
         ],

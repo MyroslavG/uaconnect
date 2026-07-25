@@ -315,6 +315,7 @@ async function getPublishedBusinessContentSignals(registrationIds: string[]) {
     const signals = signalsByRegistrationId.get(row.registration_id) ?? {
       contentCount: 0,
       eventCount: 0,
+      productCount: 0,
       serviceCount: 0,
       upcomingEventCount: 0,
     };
@@ -331,6 +332,10 @@ async function getPublishedBusinessContentSignals(registrationIds: string[]) {
       if (getTimestamp(row.starts_at) >= now) {
         signals.upcomingEventCount += 1;
       }
+    }
+
+    if (row.content_type === "product") {
+      signals.productCount += 1;
     }
 
     signals.latestContentAt = getLatestDate([
@@ -458,6 +463,7 @@ function mapBusinessContentItem(row: BusinessContentRow): BusinessContentItem {
     description: row.description,
     imageUrl: imageUrls[0],
     imageUrls,
+    isAvailable: row.is_available,
     isFree: row.is_free,
     isOnline: row.is_online,
     price: row.price ?? undefined,

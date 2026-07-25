@@ -197,7 +197,6 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         enabled={shouldAutoDetectLocation}
         locale={locale}
         localOnly={localOnly}
-        preferLocalOnly
         query={query}
         radius={resolvedSearchParams.radius}
       />
@@ -219,7 +218,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               defaultQuery={query}
               defaultLocation={near}
               defaultCoordinates={coordinates}
-              defaultLocalOnly={shouldAutoDetectLocation ? true : localOnly}
+              defaultLocalOnly={localOnly}
               variant="compact"
               locale={locale}
             />

@@ -144,12 +144,14 @@ function getActivityScore(business: Business, now: number) {
   const contentItems = business.contentItems ?? [];
   const serviceCount = contentItems.filter((item) => item.type === "service").length;
   const eventCount = contentItems.filter((item) => item.type === "event").length;
+  const productCount = contentItems.filter((item) => item.type === "product").length;
   const upcomingEventCount = contentItems.filter((item) =>
     isUpcomingEvent(item, now),
   ).length;
   const contentScore =
     Math.min(serviceCount, 3) * 7 +
     Math.min(eventCount, 3) * 6 +
+    Math.min(productCount, 3) * 5 +
     Math.min(upcomingEventCount, 2) * 10;
   const latestActivityAt =
     getLatestDate([

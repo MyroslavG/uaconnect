@@ -41,6 +41,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { Locale } from "@/lib/i18n";
 import type {
+  BusinessContentType,
   BusinessRegistrationStatus,
   Database,
 } from "@/lib/supabase/database.types";
@@ -99,13 +100,18 @@ const text = {
     noContact: "Контакти ще не додані",
     services: "Послуги",
     events: "Події",
+    products: "Продукти",
     addService: "Додати послугу",
     addEvent: "Додати подію",
+    addProduct: "Додати продукт",
     editService: "Редагувати послугу",
     editEvent: "Редагувати подію",
+    editProduct: "Редагувати продукт",
     noServices: "Додайте послуги, щоб люди швидше зрозуміли, що ви пропонуєте.",
     noEvents: "Додайте події, зустрічі або спеціальні пропозиції.",
+    noProducts: "Додайте продукти, щоб люди бачили, що можна купити або замовити.",
     title: "Назва",
+    productTitle: "Назва продукту",
     contentDescription: "Опис",
     image: "Фото",
     imageHint: "PNG, JPG, WebP або GIF до 5 MB.",
@@ -114,7 +120,18 @@ const text = {
     dateTime: "Дата і час",
     location: "Місце",
     online: "Онлайн",
+    available: "В наявності",
+    outOfStock: "Немає в наявності",
     link: "Посилання",
+    rankingTitle: "Як формується позиція у пошуку",
+    rankingIntro:
+      "Профілі з повнішою та свіжішою інформацією легше показати вище у релевантних результатах.",
+    rankingProfile:
+      "Додайте логотип, опис, адресу або онлайн-позначку та актуальні контакти.",
+    rankingContent:
+      "Додавайте послуги, продукти й події. Нові або оновлені записи допомагають профілю виглядати активним.",
+    rankingEvents:
+      "Майбутні події отримують додатковий пріоритет, коли вони релевантні пошуку.",
     add: "Додати",
     update: "Оновити",
     delete: "Видалити",
@@ -153,13 +170,18 @@ const text = {
     noContact: "No contact details yet",
     services: "Services",
     events: "Events",
+    products: "Products",
     addService: "Add service",
     addEvent: "Add event",
+    addProduct: "Add product",
     editService: "Edit service",
     editEvent: "Edit event",
+    editProduct: "Edit product",
     noServices: "Add services so people quickly understand what you offer.",
     noEvents: "Add events, meetups, or special offers.",
+    noProducts: "Add products so people can see what they can buy or order.",
     title: "Title",
+    productTitle: "Product name",
     contentDescription: "Description",
     image: "Photo",
     imageHint: "PNG, JPG, WebP, or GIF up to 5 MB.",
@@ -168,7 +190,18 @@ const text = {
     dateTime: "Date and time",
     location: "Location",
     online: "Online",
+    available: "Available",
+    outOfStock: "Out of stock",
     link: "Link",
+    rankingTitle: "How search ranking works",
+    rankingIntro:
+      "Profiles with more complete and fresher information are easier to show higher in relevant results.",
+    rankingProfile:
+      "Add a logo, description, address or online coverage, and current contact details.",
+    rankingContent:
+      "Add services, products, and events. New or updated items help your profile look active.",
+    rankingEvents:
+      "Upcoming events receive extra priority when they are relevant to the search.",
     add: "Add",
     update: "Update",
     delete: "Delete",
@@ -214,6 +247,9 @@ export function DashboardBusinessEditor({
   );
   const eventItems = contentItems.filter(
     (item) => item.content_type === "event",
+  );
+  const productItems = contentItems.filter(
+    (item) => item.content_type === "product",
   );
 
   useEffect(() => {
@@ -520,7 +556,8 @@ export function DashboardBusinessEditor({
           </aside>
         </div>
         <div className="border-t bg-background/55 p-5">
-          <div className="grid gap-4 lg:grid-cols-2">
+          <RankingExplanation labels={labels} />
+          <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
             <ContentColumn
               items={serviceItems}
               labels={labels}
@@ -535,11 +572,100 @@ export function DashboardBusinessEditor({
               title={labels.events}
               type="event"
             />
+            <ContentColumn
+              items={productItems}
+              labels={labels}
+              registrationId={registration.id}
+              title={labels.products}
+              type="product"
+            />
           </div>
         </div>
       </CardContent>
     </Card>
   );
+}
+
+function RankingExplanation({ labels }: { labels: Record<string, string> }) {
+  return (
+    <section className="rounded-lg border bg-card p-4 shadow-sm">
+      <h3 className="text-lg font-black">{labels.rankingTitle}</h3>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+        {labels.rankingIntro}
+      </p>
+      <div className="mt-4 grid gap-2 text-sm leading-6 text-muted-foreground md:grid-cols-3">
+        <p className="rounded-md border bg-background/70 p-3">
+          {labels.rankingProfile}
+        </p>
+        <p className="rounded-md border bg-background/70 p-3">
+          {labels.rankingContent}
+        </p>
+        <p className="rounded-md border bg-background/70 p-3">
+          {labels.rankingEvents}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function getContentTypeLabel(
+  type: BusinessContentType,
+  labels: Record<string, string>,
+) {
+  if (type === "event") {
+    return labels.events;
+  }
+
+  if (type === "product") {
+    return labels.products;
+  }
+
+  return labels.services;
+}
+
+function getContentAddLabel(
+  type: BusinessContentType,
+  labels: Record<string, string>,
+) {
+  if (type === "event") {
+    return labels.addEvent;
+  }
+
+  if (type === "product") {
+    return labels.addProduct;
+  }
+
+  return labels.addService;
+}
+
+function getContentEditLabel(
+  type: BusinessContentType,
+  labels: Record<string, string>,
+) {
+  if (type === "event") {
+    return labels.editEvent;
+  }
+
+  if (type === "product") {
+    return labels.editProduct;
+  }
+
+  return labels.editService;
+}
+
+function getContentEmptyLabel(
+  type: BusinessContentType,
+  labels: Record<string, string>,
+) {
+  if (type === "event") {
+    return labels.noEvents;
+  }
+
+  if (type === "product") {
+    return labels.noProducts;
+  }
+
+  return labels.noServices;
 }
 
 function ContentColumn({
@@ -553,14 +679,14 @@ function ContentColumn({
   labels: Record<string, string>;
   registrationId: string;
   title: string;
-  type: "service" | "event";
+  type: BusinessContentType;
 }) {
   const router = useRouter();
   const [state, formAction, isPending] = useActionState(
     createBusinessContentItem,
     initialState,
   );
-  const addLabel = type === "event" ? labels.addEvent : labels.addService;
+  const addLabel = getContentAddLabel(type, labels);
 
   useEffect(() => {
     if (state.ok) {
@@ -613,7 +739,7 @@ function ContentColumn({
           ))
         ) : (
           <p className="rounded-lg border border-dashed bg-background/70 p-4 text-sm leading-6 text-muted-foreground">
-            {type === "event" ? labels.noEvents : labels.noServices}
+            {getContentEmptyLabel(type, labels)}
           </p>
         )}
       </div>
@@ -638,6 +764,7 @@ function ContentItemCard({
     initialState,
   );
   const isEvent = item.content_type === "event";
+  const isProduct = item.content_type === "product";
   const imageUrls = getContentImageUrls(item);
   const coverImageUrl = imageUrls[0];
 
@@ -660,13 +787,20 @@ function ContentItemCard({
       <div className="grid gap-3 p-4">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline" className="bg-card">
-            {isEvent ? labels.events : labels.services}
+            {getContentTypeLabel(item.content_type, labels)}
           </Badge>
-          <Badge variant="green">
-            {item.is_free
-              ? labels.free
-              : formatPriceWithCurrency(item.price) || labels.emptyPrice}
-          </Badge>
+          {isProduct ? (
+            <Badge variant={item.is_available ? "green" : "outline"}>
+              {item.is_available ? labels.available : labels.outOfStock}
+            </Badge>
+          ) : null}
+          {item.is_free ? (
+            <Badge variant="green">{labels.free}</Badge>
+          ) : item.price ? (
+            <Badge variant="outline" className="bg-card">
+              {formatPriceWithCurrency(item.price)}
+            </Badge>
+          ) : null}
           {isEvent && item.is_online ? (
             <Badge variant="secondary">
               <Globe className="mr-1.5 h-3.5 w-3.5" />
@@ -680,15 +814,15 @@ function ContentItemCard({
             {item.description}
           </p>
         </div>
-        {isEvent ? (
+        {isEvent || isProduct ? (
           <div className="grid gap-2 text-xs font-semibold text-muted-foreground">
-            {item.starts_at ? (
+            {isEvent && item.starts_at ? (
               <span className="flex items-center gap-2">
                 <CalendarDays className="h-4 w-4 text-primary" />
                 {formatContentDate(item.starts_at)}
               </span>
             ) : null}
-            {item.location ? (
+            {isEvent && item.location ? (
               <span className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-primary" />
                 {item.location}
@@ -718,7 +852,7 @@ function ContentItemCard({
             <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
               <DialogHeader>
                 <DialogTitle>
-                  {isEvent ? labels.editEvent : labels.editService}
+                  {getContentEditLabel(item.content_type, labels)}
                 </DialogTitle>
               </DialogHeader>
               <form action={updateAction} className="grid gap-5">
@@ -771,10 +905,12 @@ function ContentFormFields({
   item?: BusinessContentRow;
   labels: Record<string, string>;
   registrationId: string;
-  type: "service" | "event";
+  type: BusinessContentType;
 }) {
   const idPrefix = `${type}-${item?.id ?? registrationId}`;
   const isEvent = type === "event";
+  const isProduct = type === "product";
+  const hasLink = isEvent || isProduct;
 
   return (
     <>
@@ -784,7 +920,7 @@ function ContentFormFields({
 
       <div className="grid gap-2">
         <FieldLabel htmlFor={`${idPrefix}-title`} badge={labels.required}>
-          {labels.title}
+          {isProduct ? labels.productTitle : labels.title}
         </FieldLabel>
         <Input
           defaultValue={item?.title ?? ""}
@@ -865,29 +1001,44 @@ function ContentFormFields({
             />
           </div>
         </div>
-        <label className="flex items-center justify-between gap-3 rounded-lg border bg-muted/35 px-4 py-3">
-          <span className="text-sm font-bold">{labels.free}</span>
-          <input
-            className="h-4 w-4 rounded border-input accent-primary"
-            defaultChecked={item?.is_free ?? false}
-            name="isFree"
-            type="checkbox"
-          />
-        </label>
+        {isProduct ? (
+          <label className="flex items-center justify-between gap-3 rounded-lg border bg-muted/35 px-4 py-3">
+            <span className="text-sm font-bold">{labels.available}</span>
+            <input
+              className="h-4 w-4 rounded border-input accent-primary"
+              defaultChecked={item?.is_available ?? true}
+              name="isAvailable"
+              type="checkbox"
+              value="on"
+            />
+          </label>
+        ) : (
+          <label className="flex items-center justify-between gap-3 rounded-lg border bg-muted/35 px-4 py-3">
+            <span className="text-sm font-bold">{labels.free}</span>
+            <input
+              className="h-4 w-4 rounded border-input accent-primary"
+              defaultChecked={item?.is_free ?? false}
+              name="isFree"
+              type="checkbox"
+            />
+          </label>
+        )}
       </div>
 
-      {isEvent ? (
+      {hasLink ? (
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="grid gap-2">
-            <FieldLabel htmlFor={`${idPrefix}-location`} badge={labels.optional}>
-              {labels.location}
-            </FieldLabel>
-            <Input
-              defaultValue={item?.location ?? ""}
-              id={`${idPrefix}-location`}
-              name="location"
-            />
-          </div>
+          {isEvent ? (
+            <div className="grid gap-2">
+              <FieldLabel htmlFor={`${idPrefix}-location`} badge={labels.optional}>
+                {labels.location}
+              </FieldLabel>
+              <Input
+                defaultValue={item?.location ?? ""}
+                id={`${idPrefix}-location`}
+                name="location"
+              />
+            </div>
+          ) : null}
           <div className="grid gap-2">
             <FieldLabel htmlFor={`${idPrefix}-linkUrl`} badge={labels.optional}>
               {labels.link}

@@ -107,11 +107,28 @@ import type {
 } from "./src/types";
 
 type Tab = "home" | "search" | "events" | "profile";
-type DashboardPanel = "profile" | "services" | "events";
+type DashboardPanel = "profile" | "services" | "events" | "products";
 type ProfilePanel = "account" | "addBusiness" | "businessInfo";
 type ContentDetailEntry = {
   business: Business;
   item: BusinessContentItem;
+};
+type AppTourPhase = "focus" | "text";
+type AppTourFocus =
+  | "addBusinessForm"
+  | "businessDashboard"
+  | "eventsFeed"
+  | "homeDiscovery"
+  | "profileControls"
+  | "searchFilters";
+type AppTourStep = {
+  focus: AppTourFocus;
+  Icon: LucideIcon;
+  profilePanel?: ProfilePanel;
+  tab: Tab;
+  target: string;
+  text: string;
+  title: string;
 };
 
 const BUSINESS_SHEET_HEIGHT = Math.round(Dimensions.get("window").height * 0.76);
@@ -138,16 +155,19 @@ const PUBLIC_WEB_URL = (
   process.env.EXPO_PUBLIC_WEB_URL ?? "https://koloapp.ca"
 ).replace(/\/+$/, "");
 const THEME_STORAGE_KEY = "kolo-theme";
+const WALKTHROUGH_STORAGE_KEY = "kolo-walkthrough-seen";
 const copy = {
   uk: {
     addBusiness: "Додати",
     addContent: "Додати",
     addEvent: "Додати подію",
+    addProduct: "Додати продукт",
     addService: "Додати послугу",
     address: "Адреса",
     all: "Усі",
     allCanada: "Уся Канада",
     about: "Про бізнес",
+    available: "В наявності",
     businesses: "бізнесів",
     canadaWide: "Онлайн · вся Канада",
     category: "Категорія",
@@ -156,6 +176,37 @@ const copy = {
     city: "Місто або локація",
     cancel: "Скасувати",
     close: "Закрити",
+    walkthroughTitle: "Ознайомлення з Kolo",
+    walkthroughIntro:
+      "Проведемо вас по основних сторінках і підсвітимо місця, з якими можна взаємодіяти.",
+    walkthroughHomeTitle: "Головна",
+    walkthroughHomeText:
+      "Натискайте на пошук, категорії, рекомендації або нові публікації, щоб швидко перейти до результатів.",
+    walkthroughHomeTarget: "Пошук, категорії та рекомендації",
+    walkthroughSearchTitle: "Знаходьте потрібне поруч",
+    walkthroughSearchText:
+      "Тут можна змінити запит, локацію, категорію, локальний режим і відкрити потрібний бізнес.",
+    walkthroughSearchTarget: "Поля пошуку та фільтри",
+    walkthroughEventsTitle: "Події поруч",
+    walkthroughEventsText:
+      "Вибирайте локацію, переглядайте події та відкривайте їх, щоб побачити деталі й контакти.",
+    walkthroughEventsTarget: "Локація та список подій",
+    walkthroughProfileTitle: "Профіль",
+    walkthroughProfileText:
+      "Тут знаходиться вхід, збережені бізнеси, тема, особисті дані та повторне ознайомлення.",
+    walkthroughProfileTarget: "Акаунт, тема та збережені",
+    walkthroughAddBusinessTitle: "Додати бізнес",
+    walkthroughAddBusinessText:
+      "Заповніть форму, додайте контакти й логотип, а потім надішліть бізнес на перевірку.",
+    walkthroughAddBusinessTarget: "Форма додавання бізнесу",
+    walkthroughBusinessTitle: "Кабінет бізнесу",
+    walkthroughBusinessText:
+      "Власник може перемикатися між профілем, послугами, продуктами й подіями та редагувати кожну частину.",
+    walkthroughBusinessTarget: "Редагування бізнесу і контенту",
+    walkthroughAgain: "Показати ознайомлення",
+    walkthroughShowOnPage: "Показати на сторінці",
+    walkthroughSkip: "Пропустити ознайомлення",
+    walkthroughTargetLabel: "Тут можна взаємодіяти",
     contactEmail: "Робочий email",
     contacts: "Контакти",
     contactSignInText:
@@ -206,7 +257,7 @@ const copy = {
     homeIntro:
       "Знаходьте українські бізнеси, сервіси та спеціалістів у Канаді.",
     homeTitle: "Українські бізнеси поруч",
-    latestUpdates: "Нові послуги та події",
+    latestUpdates: "Нові послуги, продукти та події",
     localOnly: "Лише локальні",
     loading: "Завантаження",
     loadingBusinesses: "Завантажуємо актуальні бізнеси...",
@@ -251,8 +302,19 @@ const copy = {
     popularCategories: "Популярні категорії",
     price: "Ціна",
     pricePlaceholder: "$100",
+    productTitle: "Назва продукту",
+    products: "Продукти",
     quickCities: "Міста поруч",
     recommended: "Рекомендації",
+    rankingTitle: "Як працює позиція у пошуку",
+    rankingIntro:
+      "Вище частіше показуються профілі, які повні, актуальні й релевантні пошуку.",
+    rankingProfile:
+      "Додайте логотип, опис, адресу або онлайн-позначку та робочі контакти.",
+    rankingContent:
+      "Оновлюйте послуги, продукти й події, щоб профіль виглядав активним.",
+    rankingEvents:
+      "Майбутні події отримують додатковий пріоритет у релевантних результатах.",
     featuredBusinesses: "Бізнеси для вас",
     instagram: "Instagram",
     logo: "Логотип",
@@ -264,6 +326,7 @@ const copy = {
       "Заповніть назву бізнесу, місто або локацію та опис.",
     missingContentFields: "Заповніть назву та опис.",
     online: "Онлайн",
+    outOfStock: "Немає в наявності",
     registerIntro: "Подайте бізнес на перевірку або підготуйте профіль.",
     save: "Зберегти",
     saveChanges: "Зберегти зміни",
@@ -318,11 +381,13 @@ const copy = {
     addBusiness: "Add",
     addContent: "Add",
     addEvent: "Add event",
+    addProduct: "Add product",
     addService: "Add service",
     address: "Address",
     all: "All",
     allCanada: "All Canada",
     about: "About",
+    available: "Available",
     businesses: "businesses",
     canadaWide: "Online · Canada-wide",
     category: "Category",
@@ -331,6 +396,37 @@ const copy = {
     city: "City or location",
     cancel: "Cancel",
     close: "Close",
+    walkthroughTitle: "Kolo introduction",
+    walkthroughIntro:
+      "We will move through the main pages and highlight the places people can interact with.",
+    walkthroughHomeTitle: "Home",
+    walkthroughHomeText:
+      "Tap search, categories, recommendations, or new posts to quickly jump into results.",
+    walkthroughHomeTarget: "Search, categories, and recommendations",
+    walkthroughSearchTitle: "Find what you need nearby",
+    walkthroughSearchText:
+      "Change the query, location, category, local-only mode, and open a business from here.",
+    walkthroughSearchTarget: "Search fields and filters",
+    walkthroughEventsTitle: "Events nearby",
+    walkthroughEventsText:
+      "Choose a location, browse events, and open them to view details and contacts.",
+    walkthroughEventsTarget: "Location and events list",
+    walkthroughProfileTitle: "Profile",
+    walkthroughProfileText:
+      "Profile contains sign-in, saved businesses, theme, personal details, and this introduction.",
+    walkthroughProfileTarget: "Account, theme, and saved businesses",
+    walkthroughAddBusinessTitle: "Add business",
+    walkthroughAddBusinessText:
+      "Fill out the form, add contacts and a logo, then submit the business for review.",
+    walkthroughAddBusinessTarget: "Business submission form",
+    walkthroughBusinessTitle: "Business dashboard",
+    walkthroughBusinessText:
+      "Owners can switch between profile, services, products, and events, then edit each part.",
+    walkthroughBusinessTarget: "Business editing and content",
+    walkthroughAgain: "Show introduction",
+    walkthroughShowOnPage: "Show on page",
+    walkthroughSkip: "Skip introduction",
+    walkthroughTargetLabel: "You can interact here",
     contactEmail: "Work email",
     contacts: "Contacts",
     contactSignInText:
@@ -380,7 +476,7 @@ const copy = {
     homeIntro:
       "Find Ukrainian-owned businesses, services, and specialists in Canada.",
     homeTitle: "Ukrainian businesses nearby",
-    latestUpdates: "New services & events",
+    latestUpdates: "New services, products & events",
     localOnly: "Local only",
     loading: "Loading",
     loadingBusinesses: "Loading current businesses...",
@@ -425,8 +521,19 @@ const copy = {
     popularCategories: "Popular categories",
     price: "Price",
     pricePlaceholder: "from $100 or free",
+    productTitle: "Product name",
+    products: "Products",
     quickCities: "Nearby cities",
     recommended: "Recommended",
+    rankingTitle: "How search ranking works",
+    rankingIntro:
+      "Profiles are more likely to appear higher when they are complete, current, and relevant to the search.",
+    rankingProfile:
+      "Add a logo, description, address or online coverage, and working contacts.",
+    rankingContent:
+      "Keep services, products, and events updated so the profile looks active.",
+    rankingEvents:
+      "Upcoming events receive extra priority in relevant results.",
     featuredBusinesses: "Businesses for you",
     instagram: "Instagram",
     logo: "Logo",
@@ -438,6 +545,7 @@ const copy = {
       "Fill in the business name, city or location, and description.",
     missingContentFields: "Fill in the title and description.",
     online: "Online",
+    outOfStock: "Out of stock",
     registerIntro: "Submit a business for review or prepare a profile.",
     save: "Save",
     saveChanges: "Save changes",
@@ -589,6 +697,36 @@ function getBusinessShareMessage(
   return `Check out ${business.name}${locationLabel ? ` (${locationLabel})` : ""} on Kolo: ${shareUrl}`;
 }
 
+function getBusinessContentShareUrl(
+  business: Business,
+  item: BusinessContentItem,
+) {
+  const slug = business.slug?.trim() ?? "";
+
+  if (slug) {
+    return `${PUBLIC_WEB_URL}/business/${encodeURIComponent(
+      slug,
+    )}?content=${encodeURIComponent(item.id)}`;
+  }
+
+  return `${PUBLIC_WEB_URL}/search?query=${encodeURIComponent(
+    `${business.name} ${item.title}`,
+  )}`;
+}
+
+function getBusinessContentShareMessage(
+  business: Business,
+  item: BusinessContentItem,
+  locale: Locale,
+  shareUrl: string,
+) {
+  if (locale === "uk") {
+    return `Подивись ${item.title} від ${business.name} у Kolo: ${shareUrl}`;
+  }
+
+  return `Check out ${item.title} by ${business.name} on Kolo: ${shareUrl}`;
+}
+
 function getBusinessSlugFromLink(url: string) {
   const pathOnly = url.split("#")[0]?.split("?")[0] ?? "";
   const match = pathOnly.match(/\/(?:--\/)?business\/([^/?#]+)/i);
@@ -623,7 +761,7 @@ export default function App() {
   const [isResolvingCurrentLocation, setIsResolvingCurrentLocation] =
     useState(false);
   const [selectedCategory, setSelectedCategory] = useState("all");
-  const [localOnly, setLocalOnly] = useState(true);
+  const [localOnly, setLocalOnly] = useState(false);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [selectedContentEntry, setSelectedContentEntry] =
     useState<ContentDetailEntry | null>(null);
@@ -652,10 +790,19 @@ export default function App() {
   const [visibleAnnouncements, setVisibleAnnouncements] = useState<
     AppAnnouncement[]
   >([]);
+  const [isWalkthroughVisible, setIsWalkthroughVisible] = useState(false);
+  const [walkthroughPhase, setWalkthroughPhase] =
+    useState<AppTourPhase>("text");
+  const [walkthroughStepIndex, setWalkthroughStepIndex] = useState(0);
   const [savedBusyBusinessId, setSavedBusyBusinessId] = useState<string | null>(
     null,
   );
   const labels = { ...copy[locale], ...connectionCopy[locale] };
+  const walkthroughSteps = getWalkthroughSteps(labels);
+  const activeWalkthroughStep =
+    walkthroughSteps[walkthroughStepIndex] ?? walkthroughSteps[0];
+  const activeWalkthroughTab = activeWalkthroughStep?.tab;
+  const activeWalkthroughProfilePanel = activeWalkthroughStep?.profilePanel;
 
   useEffect(() => {
     let isMounted = true;
@@ -691,6 +838,55 @@ export default function App() {
       },
     );
   }, [hasLoadedTheme, isDarkMode]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    AsyncStorage.getItem(WALKTHROUGH_STORAGE_KEY)
+      .then((value) => {
+        if (isMounted && value !== "seen") {
+          setIsWalkthroughVisible(true);
+        }
+      })
+      .catch((error) => {
+        console.error("[kolo:mobile-walkthrough-load]", error);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isWalkthroughVisible || !activeWalkthroughTab) {
+      return;
+    }
+
+    setActiveTab(activeWalkthroughTab);
+
+    if (activeWalkthroughProfilePanel) {
+      setActiveProfilePanel(activeWalkthroughProfilePanel);
+    }
+  }, [
+    activeWalkthroughProfilePanel,
+    activeWalkthroughTab,
+    isWalkthroughVisible,
+  ]);
+
+  function showWalkthrough() {
+    setWalkthroughStepIndex(0);
+    setWalkthroughPhase("text");
+    setIsWalkthroughVisible(true);
+  }
+
+  function completeWalkthrough() {
+    setIsWalkthroughVisible(false);
+    setWalkthroughPhase("text");
+    setWalkthroughStepIndex(0);
+    AsyncStorage.setItem(WALKTHROUGH_STORAGE_KEY, "seen").catch((error) => {
+      console.error("[kolo:mobile-walkthrough-save]", error);
+    });
+  }
 
   async function applyCurrentLocation(silent = false) {
     if (isResolvingCurrentLocation) {
@@ -1434,6 +1630,7 @@ export default function App() {
         id: `local-${Date.now()}`,
         imageUrl: imageUrls[0],
         imageUrls,
+        isAvailable: input.isAvailable ?? true,
         ownerId: "local",
         status: "published",
       };
@@ -1456,6 +1653,7 @@ export default function App() {
                 ...input,
                 imageUrl: nextImageUrls[0] ?? item.imageUrl,
                 imageUrls: nextImageUrls.length > 0 ? nextImageUrls : item.imageUrls,
+                isAvailable: input.isAvailable ?? item.isAvailable,
               }
             : item,
         ),
@@ -1550,6 +1748,26 @@ export default function App() {
     }
   }
 
+  async function handleShareContent(entry: ContentDetailEntry) {
+    const shareUrl = getBusinessContentShareUrl(entry.business, entry.item);
+
+    try {
+      await NativeShare.share({
+        message: getBusinessContentShareMessage(
+          entry.business,
+          entry.item,
+          locale,
+          shareUrl,
+        ),
+        title: entry.item.title,
+        url: shareUrl,
+      });
+    } catch (error) {
+      console.error("[kolo:mobile-content-share]", error);
+      Alert.alert(labels.shareBusiness, labels.shareFailed);
+    }
+  }
+
   const canViewContacts = Boolean(session);
 
   return (
@@ -1593,6 +1811,7 @@ export default function App() {
                 setActiveTab("search");
               }}
               onShareBusiness={handleShareBusiness}
+              onShareContent={handleShareContent}
               onSearchPress={() => setActiveTab("search")}
               onToggleSavedBusiness={handleToggleSavedBusiness}
               savedBusyBusinessId={savedBusyBusinessId}
@@ -1643,6 +1862,7 @@ export default function App() {
               localOnly={localOnly}
               location={location}
               onContentPress={handleStandaloneContentPress}
+              onShareContent={handleShareContent}
               onUseCurrentLocation={applyCurrentLocation}
               setLocation={setLocation}
               setLocalOnly={setLocalOnly}
@@ -1672,6 +1892,7 @@ export default function App() {
               onBusinessSubmit={handleBusinessRegistration}
               onProfileSave={handleProfileSave}
               onShareBusiness={handleShareBusiness}
+              onShowWalkthrough={showWalkthrough}
               onProfilePanelChange={setActiveProfilePanel}
               onToggleSavedBusiness={handleToggleSavedBusiness}
               onUpdateContent={handleBusinessContentUpdate}
@@ -1721,6 +1942,39 @@ export default function App() {
         </View>
       </View>
 
+      <GuidedIntroductionOverlay
+        activeStepIndex={walkthroughStepIndex}
+        isDarkMode={isDarkMode}
+        labels={labels}
+        phase={walkthroughPhase}
+        onBack={() => {
+          if (walkthroughPhase === "focus") {
+            setWalkthroughPhase("text");
+            return;
+          }
+
+          setWalkthroughStepIndex((index) => Math.max(0, index - 1));
+        }}
+        onClose={completeWalkthrough}
+        onNext={() => {
+          if (walkthroughPhase === "text") {
+            setWalkthroughPhase("focus");
+            return;
+          }
+
+          if (walkthroughStepIndex >= walkthroughSteps.length - 1) {
+            completeWalkthrough();
+            return;
+          }
+
+          setWalkthroughPhase("text");
+          setWalkthroughStepIndex((index) =>
+            Math.min(walkthroughSteps.length - 1, index + 1),
+          );
+        }}
+        steps={walkthroughSteps}
+        visible={isWalkthroughVisible}
+      />
       <BusinessModal
         business={selectedBusiness}
         canViewContacts={canViewContacts}
@@ -1735,6 +1989,7 @@ export default function App() {
         }}
         onContentPress={handleBusinessModalContentPress}
         onShareBusiness={handleShareBusiness}
+        onShareContent={handleShareContent}
         onToggleSavedBusiness={handleToggleSavedBusiness}
         saveBusyBusinessId={savedBusyBusinessId}
         onManage={() => {
@@ -1748,6 +2003,7 @@ export default function App() {
         entry={selectedContentEntry}
         isDarkMode={isDarkMode}
         labels={labels}
+        onShareContent={handleShareContent}
         onBusinessPress={(business) => {
           setSelectedContentEntry(null);
           setContentReturnBusiness(null);
@@ -1986,6 +2242,7 @@ function EventsScreen({
   localOnly,
   location,
   onContentPress,
+  onShareContent,
   onUseCurrentLocation,
   setLocation,
   setLocalOnly,
@@ -1999,6 +2256,7 @@ function EventsScreen({
   localOnly: boolean;
   location: string;
   onContentPress: (entry: ContentDetailEntry) => void;
+  onShareContent: (entry: ContentDetailEntry) => Promise<void>;
   onUseCurrentLocation: (silent?: boolean) => Promise<string | undefined>;
   setLocation: (value: string) => void;
   setLocalOnly: (value: boolean) => void;
@@ -2120,6 +2378,9 @@ function EventsScreen({
             key={item.id}
             labels={labels}
             onPress={() => onContentPress({ business, item })}
+            onShare={() => {
+              void onShareContent({ business, item });
+            }}
             showBusinessName
           />
         ))
@@ -2144,6 +2405,7 @@ function HomeScreen({
   onCategoryPress,
   onLocationPress,
   onShareBusiness,
+  onShareContent,
   onSearchPress,
   onToggleSavedBusiness,
   savedBusyBusinessId,
@@ -2159,6 +2421,7 @@ function HomeScreen({
   onCategoryPress: (categorySlug: string) => void;
   onLocationPress: (location: string) => void;
   onShareBusiness: (business: Business) => Promise<void>;
+  onShareContent: (entry: ContentDetailEntry) => Promise<void>;
   onSearchPress: () => void;
   onToggleSavedBusiness: (business: Business) => void;
   savedBusyBusinessId: string | null;
@@ -2378,6 +2641,9 @@ function HomeScreen({
             key={item.id}
             labels={labels}
             onPress={() => onContentPress({ business, item })}
+            onShare={() => {
+              void onShareContent({ business, item });
+            }}
             showBusinessName
           />
         ))
@@ -2829,6 +3095,7 @@ function DashboardScreen({
 
   const serviceItems = contentItems.filter((item) => item.type === "service");
   const eventItems = contentItems.filter((item) => item.type === "event");
+  const productItems = contentItems.filter((item) => item.type === "product");
 
   return (
     <KeyboardAwareScreen>
@@ -2859,16 +3126,25 @@ function DashboardScreen({
           label={labels.events}
           onPress={() => setActivePanel("events")}
         />
+        <DashboardPanelButton
+          active={activePanel === "products"}
+          isDarkMode={isDarkMode}
+          label={labels.products}
+          onPress={() => setActivePanel("products")}
+        />
       </View>
 
       {activePanel === "profile" && !isEditingProfile ? (
-        <DashboardProfilePreview
-          business={business}
-          isDarkMode={isDarkMode}
-          labels={labels}
-          locale={locale}
-          onEdit={() => setIsEditingProfile(true)}
-        />
+        <>
+          <DashboardProfilePreview
+            business={business}
+            isDarkMode={isDarkMode}
+            labels={labels}
+            locale={locale}
+            onEdit={() => setIsEditingProfile(true)}
+          />
+          <RankingExplanationCard isDarkMode={isDarkMode} labels={labels} />
+        </>
       ) : null}
 
       {activePanel === "profile" && isEditingProfile ? (
@@ -3057,17 +3333,73 @@ function DashboardScreen({
           onUpdate={onUpdateContent}
         />
       ) : null}
+
+      {activePanel === "products" ? (
+        <BusinessContentSection
+          business={business}
+          contentType="product"
+          isDarkMode={isDarkMode}
+          items={productItems}
+          labels={labels}
+          onCreate={onCreateContent}
+          onDelete={onDeleteContent}
+          onUpdate={onUpdateContent}
+        />
+      ) : null}
     </KeyboardAwareScreen>
+  );
+}
+
+function RankingExplanationCard({
+  isDarkMode,
+  labels,
+}: {
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+}) {
+  return (
+    <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
+      <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+        {labels.rankingTitle}
+      </Text>
+      <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+        {labels.rankingIntro}
+      </Text>
+      {[labels.rankingProfile, labels.rankingContent, labels.rankingEvents].map(
+        (item) => (
+          <View
+            key={item}
+            style={[styles.rankingInfoRow, isDarkMode ? styles.darkSettingRow : null]}
+          >
+            <Sparkles
+              color={isDarkMode ? "#E5E5EA" : "#111111"}
+              size={16}
+              strokeWidth={2.6}
+            />
+            <Text
+              style={[
+                styles.rankingInfoText,
+                isDarkMode ? styles.darkMutedText : null,
+              ]}
+            >
+              {item}
+            </Text>
+          </View>
+        ),
+      )}
+    </View>
   );
 }
 
 function DashboardPanelButton({
   active,
+  compact = false,
   isDarkMode,
   label,
   onPress,
 }: {
   active: boolean;
+  compact?: boolean;
   isDarkMode: boolean;
   label: string;
   onPress: () => void;
@@ -3078,14 +3410,16 @@ function DashboardPanelButton({
       onPress={onPress}
       style={[
         styles.dashboardTabButton,
+        compact ? styles.compactDashboardTabButton : null,
         active ? styles.activeDashboardTabButton : null,
         isDarkMode && !active ? styles.darkIconBox : null,
       ]}
     >
       <Text
-        numberOfLines={1}
+        numberOfLines={compact ? 1 : 2}
         style={[
           styles.dashboardTabButtonText,
+          compact ? styles.compactDashboardTabButtonText : null,
           active ? styles.activeDashboardTabButtonText : null,
           isDarkMode && !active ? styles.darkText : null,
         ]}
@@ -3114,10 +3448,11 @@ function ProfilePanelTabs({
   ];
 
   return (
-    <View style={[styles.dashboardTabs, isDarkMode ? styles.darkSettingRow : null]}>
+    <View style={[styles.profilePanelTabs, isDarkMode ? styles.darkSettingRow : null]}>
       {panels.map((panel) => (
         <DashboardPanelButton
           active={activePanel === panel.value}
+          compact
           isDarkMode={isDarkMode}
           key={panel.value}
           label={panel.label}
@@ -3434,8 +3769,10 @@ function BusinessContentSection({
   onUpdate: (input: BusinessContentUpdateInput) => Promise<void> | void;
 }) {
   const isEvent = contentType === "event";
+  const isProduct = contentType === "product";
   const [description, setDescription] = useState("");
   const [editingItem, setEditingItem] = useState<BusinessContentItem | null>(null);
+  const [isAvailable, setIsAvailable] = useState(true);
   const [images, setImages] = useState<BusinessContentImageInput[]>([]);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [isFree, setIsFree] = useState(false);
@@ -3489,6 +3826,7 @@ function BusinessContentSection({
     setDescription("");
     setEditingItem(null);
     setImages([]);
+    setIsAvailable(true);
     setIsFree(false);
     setIsOnline(false);
     setLinkUrl("");
@@ -3503,6 +3841,7 @@ function BusinessContentSection({
     setEditingItem(item);
     setErrorMessage("");
     setImages([]);
+    setIsAvailable(item.isAvailable);
     setIsFree(item.isFree);
     setIsOnline(item.isOnline);
     setLinkUrl(item.linkUrl ?? "");
@@ -3535,11 +3874,12 @@ function BusinessContentSection({
       const input: BusinessContentInput = {
         description,
         images,
-        isFree,
+        isAvailable: isProduct ? isAvailable : true,
+        isFree: isProduct ? false : isFree,
         isOnline: isEvent && isOnline,
-        linkUrl: isEvent ? linkUrl : undefined,
+        linkUrl: isEvent || isProduct ? linkUrl : undefined,
         location: isEvent ? location : undefined,
-        price: isFree ? "" : price,
+        price: !isProduct && isFree ? "" : price,
         registrationId: business.registrationId ?? business.id,
         startsAt: isEvent ? startsAt : undefined,
         title,
@@ -3615,7 +3955,7 @@ function BusinessContentSection({
       <View style={styles.contentSectionHeader}>
         <View>
           <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
-            {isEvent ? labels.events : labels.services}
+            {isProduct ? labels.products : isEvent ? labels.events : labels.services}
           </Text>
           <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
             {items.length} {labels.contentItems}
@@ -3726,7 +4066,13 @@ function BusinessContentSection({
 
         <Field
           isDarkMode={isDarkMode}
-          label={isEvent ? labels.eventTitle : labels.serviceTitle}
+          label={
+            isProduct
+              ? labels.productTitle
+              : isEvent
+                ? labels.eventTitle
+                : labels.serviceTitle
+          }
         >
           <TextInput
             onChangeText={(value) => {
@@ -3734,7 +4080,13 @@ function BusinessContentSection({
               setErrorMessage("");
               setSuccessMessage("");
             }}
-            placeholder={isEvent ? labels.eventTitle : labels.serviceTitle}
+            placeholder={
+              isProduct
+                ? labels.productTitle
+                : isEvent
+                  ? labels.eventTitle
+                  : labels.serviceTitle
+            }
             placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
             style={[styles.input, isDarkMode ? styles.darkInput : null]}
             value={title}
@@ -3778,16 +4130,28 @@ function BusinessContentSection({
               ]}
               value={isFree ? "" : price}
             />
-            <SelectableChip
-              isDarkMode={isDarkMode}
-              label={labels.free}
-              onPress={() => {
-                setIsFree((value) => !value);
-                setPrice("");
-                setSuccessMessage("");
-              }}
-              selected={isFree}
-            />
+            {isProduct ? (
+              <SelectableChip
+                isDarkMode={isDarkMode}
+                label={isAvailable ? labels.available : labels.outOfStock}
+                onPress={() => {
+                  setIsAvailable((value) => !value);
+                  setSuccessMessage("");
+                }}
+                selected={isAvailable}
+              />
+            ) : (
+              <SelectableChip
+                isDarkMode={isDarkMode}
+                label={labels.free}
+                onPress={() => {
+                  setIsFree((value) => !value);
+                  setPrice("");
+                  setSuccessMessage("");
+                }}
+                selected={isFree}
+              />
+            )}
           </View>
         </Field>
 
@@ -3834,9 +4198,10 @@ function BusinessContentSection({
           </Pressable>
         </Field>
 
-        {isEvent ? (
+        {isEvent || isProduct ? (
           <>
-            <Field isDarkMode={isDarkMode} label={labels.eventDate}>
+            {isEvent ? (
+              <Field isDarkMode={isDarkMode} label={labels.eventDate}>
               <ContentDateTimePicker
                 isDarkMode={isDarkMode}
                 labels={labels}
@@ -3846,8 +4211,10 @@ function BusinessContentSection({
                 }}
                 value={startsAt}
               />
-            </Field>
-            <Field isDarkMode={isDarkMode} label={labels.eventLocation}>
+              </Field>
+            ) : null}
+            {isEvent ? (
+              <Field isDarkMode={isDarkMode} label={labels.eventLocation}>
               <View style={styles.inlinePickerRow}>
                 <TextInput
                   onChangeText={(value) => {
@@ -3873,7 +4240,8 @@ function BusinessContentSection({
                   selected={isOnline}
                 />
               </View>
-            </Field>
+              </Field>
+            ) : null}
             <Field isDarkMode={isDarkMode} label={labels.contentLink}>
               <TextInput
                 autoCapitalize="none"
@@ -3898,7 +4266,9 @@ function BusinessContentSection({
               ? labels.saveChanges
               : isEvent
                 ? labels.addEvent
-                : labels.addService
+                : isProduct
+                  ? labels.addProduct
+                  : labels.addService
           }
           onPress={() => {
             void handleSubmit();
@@ -3929,6 +4299,11 @@ function BusinessContentCard({
 }) {
   const coverImageUrl = getContentImageUrls(item)[0];
   const metaItems = [
+    item.type === "product"
+      ? item.isAvailable
+        ? labels.available
+        : labels.outOfStock
+      : undefined,
     item.isFree ? labels.free : formatPriceWithCurrency(item.price),
     item.isOnline ? labels.online : undefined,
     item.startsAt ? formatContentDate(item.startsAt) : undefined,
@@ -3940,9 +4315,12 @@ function BusinessContentCard({
     <View style={[styles.contentItemCard, isDarkMode ? styles.darkSettingRow : null]}>
       {coverImageUrl ? (
         <Image
-          resizeMode="cover"
+          resizeMode="contain"
           source={{ uri: coverImageUrl }}
-          style={styles.contentItemImage}
+          style={[
+            styles.contentItemImage,
+            isDarkMode ? styles.darkContentImageSurface : null,
+          ]}
         />
       ) : null}
       <View style={styles.contentItemHeader}>
@@ -3951,7 +4329,7 @@ function BusinessContentCard({
         </Text>
         <View style={styles.contentItemActions}>
           <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
-            {item.type === "event" ? labels.events : labels.services}
+            {getContentTypeLabel(item, labels)}
           </Text>
           <Pressable
             accessibilityLabel={labels.edit}
@@ -4010,6 +4388,21 @@ function BusinessContentCard({
   );
 }
 
+function getContentTypeLabel(
+  item: BusinessContentItem,
+  labels: Record<string, string>,
+) {
+  if (item.type === "event") {
+    return labels.events;
+  }
+
+  if (item.type === "product") {
+    return labels.products;
+  }
+
+  return labels.services;
+}
+
 function ProfileScreen({
   activeProfilePanel,
   authMessage,
@@ -4033,6 +4426,7 @@ function ProfileScreen({
   onProfileSave,
   onProfilePanelChange,
   onShareBusiness,
+  onShowWalkthrough,
   onSignIn,
   onSignOut,
   onToggleSavedBusiness,
@@ -4065,6 +4459,7 @@ function ProfileScreen({
   onProfileSave: (input: ProfileUpdateInput) => Promise<UserProfile>;
   onProfilePanelChange: (panel: ProfilePanel) => void;
   onShareBusiness: (business: Business) => Promise<void>;
+  onShowWalkthrough: () => void;
   onSignIn: () => Promise<void>;
   onSignOut: () => Promise<void>;
   onToggleSavedBusiness: (business: Business) => void;
@@ -4588,6 +4983,11 @@ function ProfileScreen({
           />
         </View>
 
+        <SecondaryButton
+          isDarkMode={isDarkMode}
+          label={labels.walkthroughAgain}
+          onPress={onShowWalkthrough}
+        />
       </View>
     </KeyboardAwareScreen>
   );
@@ -4797,7 +5197,10 @@ function BusinessCardLogo({
         onError={() => setHasImageError(true)}
         resizeMode="contain"
         source={{ uri: logoUrl }}
-        style={styles.cardBusinessLogo}
+        style={[
+          styles.cardBusinessLogo,
+          isDarkMode ? styles.darkContentImageSurface : null,
+        ]}
       />
     );
   }
@@ -4812,6 +5215,7 @@ function PublicContentCard({
   item,
   labels,
   onPress,
+  onShare,
   showBusinessName,
 }: {
   business: Business;
@@ -4820,10 +5224,16 @@ function PublicContentCard({
   item: BusinessContentItem;
   labels: Record<string, string>;
   onPress?: () => void;
+  onShare?: () => void;
   showBusinessName?: boolean;
 }) {
   const coverImageUrl = getContentImageUrls(item)[0];
   const metaItems = [
+    item.type === "product"
+      ? item.isAvailable
+        ? labels.available
+        : labels.outOfStock
+      : undefined,
     item.isFree ? labels.free : formatPriceWithCurrency(item.price),
     item.isOnline ? labels.online : undefined,
     item.startsAt ? formatContentDate(item.startsAt) : undefined,
@@ -4843,9 +5253,12 @@ function PublicContentCard({
     >
       {coverImageUrl ? (
         <Image
-          resizeMode="cover"
+          resizeMode="contain"
           source={{ uri: coverImageUrl }}
-          style={styles.contentItemImage}
+          style={[
+            styles.contentItemImage,
+            isDarkMode ? styles.darkContentImageSurface : null,
+          ]}
         />
       ) : null}
       <View style={styles.contentItemHeader}>
@@ -4859,9 +5272,31 @@ function PublicContentCard({
             {item.title}
           </Text>
         </View>
-        <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
-          {item.type === "event" ? labels.events : labels.services}
-        </Text>
+        <View style={styles.contentItemActions}>
+          <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
+            {getContentTypeLabel(item, labels)}
+          </Text>
+          {onShare ? (
+            <Pressable
+              accessibilityLabel={labels.shareBusiness}
+              accessibilityRole="button"
+              onPress={(event) => {
+                event.stopPropagation();
+                onShare();
+              }}
+              style={[
+                styles.contentItemActionButton,
+                isDarkMode ? styles.darkIconBox : null,
+              ]}
+            >
+              <Share2
+                color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+                size={16}
+                strokeWidth={2.6}
+              />
+            </Pressable>
+          ) : null}
+        </View>
       </View>
       <Text
         numberOfLines={2}
@@ -5088,6 +5523,406 @@ function AnnouncementCenter({
   );
 }
 
+function getWalkthroughSteps(labels: Record<string, string>): AppTourStep[] {
+  return [
+    {
+      focus: "homeDiscovery",
+      Icon: Home,
+      tab: "home",
+      target: labels.walkthroughHomeTarget,
+      title: labels.walkthroughHomeTitle,
+      text: labels.walkthroughHomeText,
+    },
+    {
+      focus: "searchFilters",
+      Icon: Search,
+      tab: "search",
+      target: labels.walkthroughSearchTarget,
+      title: labels.walkthroughSearchTitle,
+      text: labels.walkthroughSearchText,
+    },
+    {
+      focus: "eventsFeed",
+      Icon: CalendarDays,
+      tab: "events",
+      target: labels.walkthroughEventsTarget,
+      title: labels.walkthroughEventsTitle,
+      text: labels.walkthroughEventsText,
+    },
+    {
+      focus: "profileControls",
+      Icon: UserRound,
+      profilePanel: "account",
+      tab: "profile",
+      target: labels.walkthroughProfileTarget,
+      title: labels.walkthroughProfileTitle,
+      text: labels.walkthroughProfileText,
+    },
+    {
+      focus: "addBusinessForm",
+      Icon: Plus,
+      profilePanel: "addBusiness",
+      tab: "profile",
+      target: labels.walkthroughAddBusinessTarget,
+      title: labels.walkthroughAddBusinessTitle,
+      text: labels.walkthroughAddBusinessText,
+    },
+    {
+      focus: "businessDashboard",
+      Icon: Store,
+      profilePanel: "businessInfo",
+      tab: "profile",
+      target: labels.walkthroughBusinessTarget,
+      title: labels.walkthroughBusinessTitle,
+      text: labels.walkthroughBusinessText,
+    },
+  ];
+}
+
+function getIntroductionFocusStyle(focus: AppTourFocus) {
+  const screenHeight = Dimensions.get("window").height;
+  const highTop = Platform.OS === "android" ? 82 : 92;
+
+  switch (focus) {
+    case "homeDiscovery":
+      return {
+        height: 88,
+        left: 16,
+        right: 16,
+        top: Math.max(256, Math.round(screenHeight * 0.34)),
+      };
+    case "searchFilters":
+      return {
+        height: 252,
+        left: 14,
+        right: 14,
+        top: highTop,
+      };
+    case "eventsFeed":
+      return {
+        height: 222,
+        left: 14,
+        right: 14,
+        top: highTop,
+      };
+    case "profileControls":
+      return {
+        height: 178,
+        left: 14,
+        right: 14,
+        top: 134,
+      };
+    case "addBusinessForm":
+      return {
+        height: 260,
+        left: 14,
+        right: 14,
+        top: 148,
+      };
+    case "businessDashboard":
+      return {
+        height: 190,
+        left: 14,
+        right: 14,
+        top: 150,
+      };
+    default:
+      return {
+        height: 180,
+        left: 14,
+        right: 14,
+        top: highTop,
+      };
+  }
+}
+
+function GuidedIntroductionOverlay({
+  activeStepIndex,
+  isDarkMode,
+  labels,
+  onBack,
+  onClose,
+  onNext,
+  phase,
+  steps,
+  visible,
+}: {
+  activeStepIndex: number;
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  onBack: () => void;
+  onClose: () => void;
+  onNext: () => void;
+  phase: AppTourPhase;
+  steps: AppTourStep[];
+  visible: boolean;
+}) {
+  const activeStep = steps[activeStepIndex] ?? steps[0];
+  const ActiveStepIcon = activeStep?.Icon;
+  const isLastStep = activeStepIndex === steps.length - 1;
+  const isFocusPhase = phase === "focus";
+  const focusStyle = getIntroductionFocusStyle(
+    activeStep?.focus ?? "homeDiscovery",
+  );
+
+  if (!activeStep || !ActiveStepIcon) {
+    return null;
+  }
+
+  return (
+    <Modal
+      animationType="slide"
+      onRequestClose={onClose}
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
+      transparent
+      visible={visible}
+    >
+      <View
+        style={[
+          styles.introductionOverlay,
+          isDarkMode ? styles.darkIntroductionOverlay : null,
+          isFocusPhase ? styles.focusIntroductionOverlay : null,
+          isDarkMode && isFocusPhase ? styles.darkFocusIntroductionOverlay : null,
+        ]}
+      >
+        {isFocusPhase ? (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.introductionFocusBox,
+              focusStyle,
+              styles.activeIntroductionFocusBox,
+              isDarkMode ? styles.darkIntroductionFocusBox : null,
+              isDarkMode ? styles.darkActiveIntroductionFocusBox : null,
+            ]}
+          >
+            <View
+              style={[
+                styles.introductionFocusGlow,
+                isDarkMode ? styles.darkIntroductionFocusGlow : null,
+              ]}
+            />
+            <View
+              style={[
+                styles.introductionTargetPill,
+                isDarkMode ? styles.darkIntroductionTargetPill : null,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.introductionTargetLabel,
+                  isDarkMode ? styles.darkIntroductionTargetLabel : null,
+                ]}
+              >
+                {labels.walkthroughTargetLabel}
+              </Text>
+              <Text
+                style={[
+                  styles.introductionTargetText,
+                  isDarkMode ? styles.darkIntroductionTargetText : null,
+                ]}
+              >
+                {activeStep.target}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+        {isFocusPhase ? (
+          <View
+            style={[
+              styles.introductionFocusControls,
+              isDarkMode ? styles.darkIntroductionFocusControls : null,
+            ]}
+          >
+            <View style={styles.flex}>
+              <Text
+                style={[
+                  styles.introductionTargetLabel,
+                  isDarkMode ? styles.darkIntroductionTargetLabel : null,
+                ]}
+              >
+                {activeStepIndex + 1}/{steps.length}
+              </Text>
+              <Text
+                style={[
+                  styles.introductionFocusTitle,
+                  isDarkMode ? styles.darkText : null,
+                ]}
+              >
+                {activeStep.target}
+              </Text>
+            </View>
+            <Pressable
+              accessibilityLabel={labels.close}
+              accessibilityRole="button"
+              onPress={onClose}
+              style={[
+                styles.introductionIconAction,
+                isDarkMode ? styles.darkIntroductionSecondaryAction : null,
+              ]}
+            >
+              <X
+                color={isDarkMode ? "#F5F5F7" : "#111111"}
+                size={18}
+                strokeWidth={2.7}
+              />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onNext}
+              style={[
+                styles.introductionFocusNextAction,
+                isDarkMode ? styles.darkIntroductionPrimaryAction : null,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.introductionPrimaryActionText,
+                  isDarkMode ? styles.darkIntroductionPrimaryActionText : null,
+                ]}
+              >
+                {isLastStep ? labels.done : labels.next}
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.introductionCallout,
+              isDarkMode ? styles.darkIntroductionCallout : null,
+            ]}
+          >
+            <View style={styles.walkthroughHeader}>
+              <View style={styles.flex}>
+                <Text style={[styles.modalTitle, isDarkMode ? styles.darkText : null]}>
+                  {labels.walkthroughTitle}
+                </Text>
+                <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+                  {labels.walkthroughIntro}
+                </Text>
+              </View>
+              <Pressable
+                accessibilityLabel={labels.close}
+                accessibilityRole="button"
+                onPress={onClose}
+                style={[styles.modalCloseButton, isDarkMode ? styles.darkSettingRow : null]}
+              >
+                <X
+                  color={isDarkMode ? "#E5E5EA" : "#111111"}
+                  size={19}
+                  strokeWidth={2.7}
+                />
+              </Pressable>
+            </View>
+
+            <View style={styles.introductionStepMeta}>
+              <Text
+                style={[
+                  styles.introductionStepCount,
+                  isDarkMode ? styles.darkIntroductionStepCount : null,
+                ]}
+              >
+                {activeStepIndex + 1}/{steps.length}
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.walkthroughStepCard,
+                isDarkMode ? styles.darkIntroductionStepCard : null,
+              ]}
+            >
+              <View
+                style={[
+                  styles.walkthroughIcon,
+                  isDarkMode ? styles.darkIntroductionIcon : null,
+                ]}
+              >
+                <ActiveStepIcon
+                  color={isDarkMode ? "#E5E5EA" : "#111111"}
+                  size={28}
+                  strokeWidth={2.7}
+                />
+              </View>
+              <Text style={[styles.walkthroughStepTitle, isDarkMode ? styles.darkText : null]}>
+                {activeStep.title}
+              </Text>
+              <Text style={[styles.walkthroughStepText, isDarkMode ? styles.darkMutedText : null]}>
+                {activeStep.text}
+              </Text>
+            </View>
+
+            <View style={styles.walkthroughDots}>
+              {steps.map((step, index) => (
+                <View
+                  key={step.title}
+                  style={[
+                    styles.walkthroughDot,
+                    index === activeStepIndex ? styles.activeWalkthroughDot : null,
+                    isDarkMode && index === activeStepIndex
+                      ? styles.darkActiveWalkthroughDot
+                      : null,
+                    isDarkMode && index !== activeStepIndex
+                      ? styles.darkWalkthroughDot
+                      : null,
+                  ]}
+                />
+              ))}
+            </View>
+
+            <View style={styles.walkthroughActions}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  if (activeStepIndex === 0) {
+                    onClose();
+                    return;
+                  }
+
+                  onBack();
+                }}
+                style={[
+                  styles.introductionSecondaryAction,
+                  isDarkMode ? styles.darkIntroductionSecondaryAction : null,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.introductionSecondaryActionText,
+                    isDarkMode ? styles.darkIntroductionSecondaryActionText : null,
+                  ]}
+                >
+                  {activeStepIndex === 0
+                    ? labels.walkthroughSkip
+                    : labels.previous}
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={onNext}
+                style={[
+                  styles.introductionPrimaryAction,
+                  isDarkMode ? styles.darkIntroductionPrimaryAction : null,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.introductionPrimaryActionText,
+                    isDarkMode ? styles.darkIntroductionPrimaryActionText : null,
+                  ]}
+                >
+                  {labels.walkthroughShowOnPage}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+      </View>
+    </Modal>
+  );
+}
+
 function BusinessContentModal({
   canViewContacts,
   entry,
@@ -5096,6 +5931,7 @@ function BusinessContentModal({
   onBusinessPress,
   onClose,
   onRequireSignIn,
+  onShareContent,
 }: {
   canViewContacts: boolean;
   entry: ContentDetailEntry | null;
@@ -5104,17 +5940,20 @@ function BusinessContentModal({
   onBusinessPress: (business: Business) => void;
   onClose: () => void;
   onRequireSignIn: () => void;
+  onShareContent: (entry: ContentDetailEntry) => Promise<void>;
 }) {
   const item = entry?.item;
   const imageUrls = getContentImageUrls(item);
   const contentLinkUrl =
     canViewContacts && item?.linkUrl ? getWebsiteUrl(item.linkUrl) : null;
+  const businessContacts = entry ? getBusinessContacts(entry.business, labels) : [];
   const locationUrl =
     canViewContacts && item?.location && !item.isOnline
       ? getAddressUrl(item.location, entry?.business.city)
       : null;
   const hasLockedContacts =
-    !canViewContacts && Boolean(item?.location || item?.linkUrl);
+    !canViewContacts &&
+    Boolean(item?.location || item?.linkUrl || businessContacts.length);
   const hasMeta = Boolean(
     item?.startsAt ||
       (canViewContacts && item?.location) ||
@@ -5153,21 +5992,40 @@ function BusinessContentModal({
                     {item.title}
                   </Text>
                 </View>
-                <Pressable
-                  accessibilityLabel={labels.close}
-                  accessibilityRole="button"
-                  onPress={onClose}
-                  style={[
-                    styles.modalCloseButton,
-                    isDarkMode ? styles.darkSettingRow : null,
-                  ]}
-                >
-                  <X
-                    color={isDarkMode ? "#E5E5EA" : "#111111"}
-                    size={19}
-                    strokeWidth={2.7}
-                  />
-                </Pressable>
+                <View style={styles.cardHeaderActions}>
+                  <Pressable
+                    accessibilityLabel={labels.shareBusiness}
+                    accessibilityRole="button"
+                    onPress={() => {
+                      void onShareContent(entry);
+                    }}
+                    style={[
+                      styles.modalCloseButton,
+                      isDarkMode ? styles.darkSettingRow : null,
+                    ]}
+                  >
+                    <Share2
+                      color={isDarkMode ? "#E5E5EA" : "#111111"}
+                      size={18}
+                      strokeWidth={2.7}
+                    />
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel={labels.close}
+                    accessibilityRole="button"
+                    onPress={onClose}
+                    style={[
+                      styles.modalCloseButton,
+                      isDarkMode ? styles.darkSettingRow : null,
+                    ]}
+                  >
+                    <X
+                      color={isDarkMode ? "#E5E5EA" : "#111111"}
+                      size={19}
+                      strokeWidth={2.7}
+                    />
+                  </Pressable>
+                </View>
               </View>
 
               <Pressable
@@ -5207,8 +6065,13 @@ function BusinessContentModal({
 
               <View style={styles.contentDetailPillRow}>
                 <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
-                  {item.type === "event" ? labels.events : labels.services}
+                  {getContentTypeLabel(item, labels)}
                 </Text>
+                {item.type === "product" ? (
+                  <Text style={[styles.onlineBadge, isDarkMode ? styles.darkOnlineBadge : null]}>
+                    {item.isAvailable ? labels.available : labels.outOfStock}
+                  </Text>
+                ) : null}
                 {item.isFree ? (
                   <Text style={[styles.onlineBadge, isDarkMode ? styles.darkOnlineBadge : null]}>
                     {labels.free}
@@ -5298,6 +6161,25 @@ function BusinessContentModal({
                   ) : null}
                 </View>
               ) : null}
+              {canViewContacts && businessContacts.length ? (
+                <View style={[styles.contactCard, isDarkMode ? styles.darkSettingRow : null]}>
+                  <Text
+                    style={[
+                      styles.contactSectionTitle,
+                      isDarkMode ? styles.darkText : null,
+                    ]}
+                  >
+                    {labels.contacts}
+                  </Text>
+                  {businessContacts.map((contact) => (
+                    <ContactRow
+                      contact={contact}
+                      isDarkMode={isDarkMode}
+                      key={contact.key}
+                    />
+                  ))}
+                </View>
+              ) : null}
             </ScrollView>
           ) : null}
         </View>
@@ -5340,9 +6222,14 @@ function ContentImageCarousel({
   }
 
   return (
-    <View style={styles.contentDetailImageFrame}>
+    <View
+      style={[
+        styles.contentDetailImageFrame,
+        isDarkMode ? styles.darkContentImageSurface : null,
+      ]}
+    >
       <Image
-        resizeMode="cover"
+        resizeMode="contain"
         source={{ uri: activeImageUrl }}
         style={styles.contentDetailImage}
       />
@@ -5400,6 +6287,7 @@ function BusinessModal({
   onManage,
   onRequireSignIn,
   onShareBusiness,
+  onShareContent,
   onToggleSavedBusiness,
   saveBusyBusinessId,
 }: {
@@ -5413,16 +6301,18 @@ function BusinessModal({
   onManage: () => void;
   onRequireSignIn: () => void;
   onShareBusiness: (business: Business) => Promise<void>;
+  onShareContent: (entry: ContentDetailEntry) => Promise<void>;
   onToggleSavedBusiness: (business: Business) => void;
   saveBusyBusinessId: string | null;
 }) {
   const contacts = business ? getBusinessContacts(business, labels) : [];
-  const [activeModalTab, setActiveModalTab] = useState<"about" | "services" | "events">(
-    "about",
-  );
+  const [activeModalTab, setActiveModalTab] = useState<
+    "about" | "services" | "events" | "products"
+  >("about");
   const contentItems = business?.contentItems ?? [];
   const serviceItems = contentItems.filter((item) => item.type === "service");
   const eventItems = contentItems.filter((item) => item.type === "event");
+  const productItems = contentItems.filter((item) => item.type === "product");
   const modalLogoUrl = getRenderableImageUrl(business?.logoUrl);
   const [hasModalLogoImageError, setHasModalLogoImageError] = useState(false);
 
@@ -5571,6 +6461,12 @@ function BusinessModal({
                   label={labels.events}
                   onPress={() => setActiveModalTab("events")}
                 />
+                <DashboardPanelButton
+                  active={activeModalTab === "products"}
+                  isDarkMode={isDarkMode}
+                  label={labels.products}
+                  onPress={() => setActiveModalTab("products")}
+                />
               </View>
 
               {activeModalTab === "about" ? (
@@ -5619,6 +6515,9 @@ function BusinessModal({
                       key={item.id}
                       labels={labels}
                       onPress={() => onContentPress({ business, item })}
+                      onShare={() => {
+                        void onShareContent({ business, item });
+                      }}
                     />
                   ))
                 ) : (
@@ -5639,6 +6538,31 @@ function BusinessModal({
                       key={item.id}
                       labels={labels}
                       onPress={() => onContentPress({ business, item })}
+                      onShare={() => {
+                        void onShareContent({ business, item });
+                      }}
+                    />
+                  ))
+                ) : (
+                  <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
+                    {labels.noContentItems}
+                  </Text>
+                )
+              ) : null}
+              {activeModalTab === "products" ? (
+                productItems.length ? (
+                  productItems.map((item) => (
+                    <PublicContentCard
+                      business={business}
+                      canViewContacts={canViewContacts}
+                      isDarkMode={isDarkMode}
+                      item={item}
+                      key={item.id}
+                      labels={labels}
+                      onPress={() => onContentPress({ business, item })}
+                      onShare={() => {
+                        void onShareContent({ business, item });
+                      }}
                     />
                   ))
                 ) : (
@@ -6151,10 +7075,12 @@ function PrimaryButton({
 
 function SecondaryButton({
   disabled,
+  isDarkMode = false,
   label,
   onPress,
 }: {
   disabled?: boolean;
+  isDarkMode?: boolean;
   label: string;
   onPress: () => void;
 }) {
@@ -6163,9 +7089,20 @@ function SecondaryButton({
       accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
-      style={[styles.secondaryButton, disabled ? styles.disabledButton : null]}
+      style={[
+        styles.secondaryButton,
+        isDarkMode ? styles.darkSecondaryButton : null,
+        disabled ? styles.disabledButton : null,
+      ]}
     >
-      <Text style={styles.secondaryButtonText}>{label}</Text>
+      <Text
+        style={[
+          styles.secondaryButtonText,
+          isDarkMode ? styles.darkSecondaryButtonText : null,
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -6937,6 +7874,23 @@ const styles = StyleSheet.create({
     gap: 16,
     padding: 18,
   },
+  rankingInfoRow: {
+    alignItems: "flex-start",
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    padding: 12,
+  },
+  rankingInfoText: {
+    color: "#6E6E73",
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 19,
+  },
   clearFiltersButton: {
     alignItems: "center",
     backgroundColor: "#FFFFFF",
@@ -7227,6 +8181,7 @@ const styles = StyleSheet.create({
   },
   contentItemImage: {
     aspectRatio: 1.8,
+    backgroundColor: "#F5F5F7",
     borderRadius: 14,
     width: "100%",
   },
@@ -7400,6 +8355,10 @@ const styles = StyleSheet.create({
     shadowColor: "#000000",
     shadowOpacity: 0.18,
   },
+  darkContentImageSurface: {
+    backgroundColor: "#111111",
+    borderColor: "#2C2C2E",
+  },
   darkEmptyState: {
     backgroundColor: "#1C1C1E",
     color: "#A1A1A6",
@@ -7407,6 +8366,78 @@ const styles = StyleSheet.create({
   darkIconBox: {
     backgroundColor: "#2C2C2E",
     borderColor: "#3A3A3C",
+  },
+  darkActiveWalkthroughDot: {
+    backgroundColor: "#F5F5F7",
+  },
+  darkIntroductionCallout: {
+    backgroundColor: "#1C1C1E",
+    borderColor: "#3A3A3C",
+    shadowColor: "#000000",
+  },
+  darkIntroductionFocusBox: {
+    backgroundColor: "rgba(44, 44, 46, 0.72)",
+    borderColor: "rgba(245, 245, 247, 0.92)",
+  },
+  darkActiveIntroductionFocusBox: {
+    backgroundColor: "rgba(245, 245, 247, 0.1)",
+    borderColor: "#F5F5F7",
+  },
+  darkIntroductionFocusControls: {
+    backgroundColor: "rgba(28, 28, 30, 0.96)",
+    borderColor: "#3A3A3C",
+    shadowColor: "#000000",
+  },
+  darkFocusIntroductionOverlay: {
+    backgroundColor: "rgba(0, 0, 0, 0.28)",
+  },
+  darkIntroductionFocusGlow: {
+    backgroundColor: "rgba(245, 245, 247, 0.12)",
+    borderColor: "rgba(245, 245, 247, 0.24)",
+  },
+  darkIntroductionIcon: {
+    backgroundColor: "#111111",
+    borderColor: "#48484A",
+  },
+  darkIntroductionOverlay: {
+    backgroundColor: "rgba(0, 0, 0, 0.58)",
+  },
+  darkIntroductionPrimaryAction: {
+    backgroundColor: "#F5F5F7",
+  },
+  darkIntroductionPrimaryActionText: {
+    color: "#111111",
+  },
+  darkIntroductionSecondaryAction: {
+    backgroundColor: "#2C2C2E",
+    borderColor: "#48484A",
+  },
+  darkIntroductionSecondaryActionText: {
+    color: "#F5F5F7",
+  },
+  darkIntroductionStepCard: {
+    backgroundColor: "#2C2C2E",
+    borderColor: "#48484A",
+  },
+  darkIntroductionStepCount: {
+    color: "#C7C7CC",
+  },
+  darkIntroductionTargetLabel: {
+    color: "#C7C7CC",
+  },
+  darkIntroductionTargetPill: {
+    backgroundColor: "rgba(17, 17, 17, 0.86)",
+    borderColor: "rgba(245, 245, 247, 0.18)",
+  },
+  darkIntroductionTargetText: {
+    color: "#F5F5F7",
+  },
+  darkSecondaryButton: {
+    backgroundColor: "#1C1C1E",
+    borderColor: "#3A3A3C",
+  },
+  darkSecondaryButtonText: {
+    color: "#F5F5F7",
   },
   darkFloatingControl: {
     backgroundColor: "rgba(28, 28, 30, 0.86)",
@@ -7509,15 +8540,31 @@ const styles = StyleSheet.create({
     borderColor: "#E5E5EA",
     borderRadius: 14,
     borderWidth: 1,
-    flex: 1,
+    flexBasis: "47%",
+    flexGrow: 1,
+    flexShrink: 0,
     justifyContent: "center",
+    minHeight: 48,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  compactDashboardTabButton: {
+    flexBasis: 0,
+    flexShrink: 1,
     minHeight: 44,
     paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   dashboardTabButtonText: {
     color: "#111111",
     fontSize: 13,
     fontWeight: "900",
+    lineHeight: 16,
+    textAlign: "center",
+  },
+  compactDashboardTabButtonText: {
+    fontSize: 12,
+    lineHeight: 15,
   },
   dashboardTabs: {
     backgroundColor: "#F5F5F7",
@@ -7525,7 +8572,17 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
+    padding: 6,
+  },
+  profilePanelTabs: {
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
     padding: 6,
   },
   emptyState: {
@@ -8103,6 +9160,219 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: "900",
     lineHeight: 34,
+  },
+  introductionCallout: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 30,
+    borderWidth: 1,
+    elevation: 16,
+    gap: 16,
+    padding: 18,
+    paddingBottom: 24,
+    shadowColor: "#111111",
+    shadowOffset: { height: -8, width: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 28,
+  },
+  activeIntroductionFocusBox: {
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    borderColor: "#111111",
+  },
+  introductionFocusBox: {
+    alignItems: "flex-start",
+    backgroundColor: "rgba(255, 255, 255, 0.76)",
+    borderColor: "rgba(17, 17, 17, 0.9)",
+    borderRadius: 26,
+    borderWidth: 2,
+    justifyContent: "flex-start",
+    padding: 10,
+    position: "absolute",
+    shadowColor: "#111111",
+    shadowOffset: { height: 10, width: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+  },
+  introductionFocusControls: {
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.96)",
+    borderColor: "#E5E5EA",
+    borderRadius: 24,
+    borderWidth: 1,
+    elevation: 14,
+    flexDirection: "row",
+    gap: 10,
+    margin: 10,
+    padding: 12,
+    shadowColor: "#111111",
+    shadowOffset: { height: -8, width: 0 },
+    shadowOpacity: 0.14,
+    shadowRadius: 22,
+  },
+  introductionFocusGlow: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
+    borderColor: "rgba(17, 17, 17, 0.12)",
+    borderRadius: 26,
+    borderWidth: 8,
+  },
+  introductionFocusNextAction: {
+    alignItems: "center",
+    backgroundColor: "#111111",
+    borderRadius: 16,
+    justifyContent: "center",
+    minHeight: 46,
+    paddingHorizontal: 14,
+  },
+  introductionFocusTitle: {
+    color: "#111111",
+    fontSize: 14,
+    fontWeight: "900",
+    lineHeight: 18,
+  },
+  introductionIconAction: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#D1D1D6",
+    borderRadius: 16,
+    borderWidth: 1,
+    height: 46,
+    justifyContent: "center",
+    width: 46,
+  },
+  focusIntroductionOverlay: {
+    backgroundColor: "rgba(17, 17, 17, 0.08)",
+  },
+  introductionOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(17, 17, 17, 0.16)",
+    justifyContent: "flex-end",
+    padding: 10,
+  },
+  introductionPrimaryAction: {
+    alignItems: "center",
+    backgroundColor: "#111111",
+    borderRadius: 16,
+    justifyContent: "center",
+    minHeight: 50,
+    paddingHorizontal: 16,
+  },
+  introductionPrimaryActionText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+    lineHeight: 20,
+    textAlign: "center",
+  },
+  introductionSecondaryAction: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#D1D1D6",
+    borderRadius: 16,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 50,
+    paddingHorizontal: 16,
+  },
+  introductionSecondaryActionText: {
+    color: "#111111",
+    fontSize: 15,
+    fontWeight: "900",
+    lineHeight: 20,
+    textAlign: "center",
+  },
+  introductionStepCount: {
+    color: "#6E6E73",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+  introductionStepMeta: {
+    alignItems: "center",
+  },
+  introductionTargetLabel: {
+    color: "#6E6E73",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0,
+    textTransform: "uppercase",
+  },
+  introductionTargetPill: {
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
+    borderColor: "rgba(17, 17, 17, 0.12)",
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 2,
+    maxWidth: "86%",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  introductionTargetText: {
+    color: "#111111",
+    fontSize: 13,
+    fontWeight: "900",
+    lineHeight: 17,
+  },
+  walkthroughActions: {
+    gap: 10,
+  },
+  walkthroughDot: {
+    backgroundColor: "#D1D1D6",
+    borderRadius: 999,
+    height: 8,
+    width: 8,
+  },
+  activeWalkthroughDot: {
+    backgroundColor: "#111111",
+    width: 26,
+  },
+  darkWalkthroughDot: {
+    backgroundColor: "#3A3A3C",
+  },
+  walkthroughDots: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "center",
+  },
+  walkthroughHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 14,
+    justifyContent: "space-between",
+  },
+  walkthroughIcon: {
+    alignItems: "center",
+    alignSelf: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 24,
+    borderWidth: 1,
+    height: 72,
+    justifyContent: "center",
+    width: 72,
+  },
+  walkthroughStepCard: {
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 24,
+    borderWidth: 1,
+    gap: 12,
+    padding: 18,
+  },
+  walkthroughStepText: {
+    color: "#6E6E73",
+    fontSize: 15,
+    fontWeight: "700",
+    lineHeight: 22,
+    textAlign: "center",
+  },
+  walkthroughStepTitle: {
+    color: "#111111",
+    fontSize: 22,
+    fontWeight: "900",
+    lineHeight: 27,
+    textAlign: "center",
   },
   mutedText: {
     color: "#6E6E73",

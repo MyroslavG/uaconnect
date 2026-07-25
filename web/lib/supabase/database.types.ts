@@ -9,7 +9,7 @@ export type Json =
 export type AppRole = "user" | "admin";
 export type BusinessRegistrationStatus = "pending" | "approved" | "rejected";
 export type BusinessStatus = "published" | "hidden";
-export type BusinessContentType = "service" | "event";
+export type BusinessContentType = "service" | "event" | "product";
 export type BusinessContentStatus = "draft" | "published";
 export type AppNotificationStatus = "draft" | "published";
 
@@ -230,6 +230,7 @@ export type Database = {
           description: string;
           image_url: string | null;
           image_urls: string[] | null;
+          is_available: boolean;
           is_free: boolean;
           is_online: boolean;
           price: string | null;
@@ -249,6 +250,7 @@ export type Database = {
           description: string;
           image_url?: string | null;
           image_urls?: string[] | null;
+          is_available?: boolean;
           is_free?: boolean;
           is_online?: boolean;
           price?: string | null;
@@ -268,6 +270,7 @@ export type Database = {
           description?: string;
           image_url?: string | null;
           image_urls?: string[] | null;
+          is_available?: boolean;
           is_free?: boolean;
           is_online?: boolean;
           price?: string | null;

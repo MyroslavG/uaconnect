@@ -29,7 +29,7 @@ export type Business = {
   updatedAt?: string;
 };
 
-export type BusinessContentType = "service" | "event";
+export type BusinessContentType = "service" | "event" | "product";
 
 export type BusinessContentItem = {
   id: string;
@@ -42,6 +42,7 @@ export type BusinessContentItem = {
   imageUrls?: string[];
   isFree: boolean;
   isOnline: boolean;
+  isAvailable: boolean;
   price?: string;
   startsAt?: string;
   location?: string;
@@ -60,6 +61,7 @@ export type BusinessContentInput = {
   images?: BusinessContentImageInput[];
   isFree: boolean;
   isOnline: boolean;
+  isAvailable?: boolean;
   price?: string;
   startsAt?: string;
   location?: string;

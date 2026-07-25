@@ -101,6 +101,7 @@ export default async function HomePage() {
             canViewContacts={canViewContacts}
             contentItems={featuredContentItems.slice(0, 3)}
             labels={contentLabels}
+            locale={locale}
           />
         </div>
       </section>
@@ -169,6 +170,7 @@ export default async function HomePage() {
             canViewContacts={canViewContacts}
             entries={featuredContentItems}
             labels={contentLabels}
+            locale={locale}
             nextPath="/"
             showBusinessName
           />
@@ -221,11 +223,13 @@ function HomePulsePanel({
   canViewContacts,
   contentItems,
   labels,
+  locale,
 }: {
   businesses: Business[];
   canViewContacts: boolean;
   contentItems: Array<{ business: Business; item: NonNullable<Business["contentItems"]>[number] }>;
   labels: ReturnType<typeof getHomeContentLabels>;
+  locale: "uk" | "en";
 }) {
   return (
     <aside className="hidden rounded-lg border bg-card/90 p-5 shadow-soft backdrop-blur lg:block">
@@ -248,6 +252,7 @@ function HomePulsePanel({
           canViewContacts={canViewContacts}
           entries={contentItems}
           labels={labels}
+          locale={locale}
           nextPath="/"
         />
       ) : (
@@ -370,16 +375,20 @@ function getHomeContentLabels(locale: "uk" | "en") {
   return locale === "uk"
     ? {
         kicker: "Нове",
-        title: "Послуги та події",
+        title: "Послуги, продукти та події",
         text: "Актуальні пропозиції від українських бізнесів у Канаді.",
         contactSignInText:
-          "Локацію та посилання видно лише після входу.",
+          "Контакти, локацію та посилання видно лише після входу.",
         contactSignInTitle: "Увійдіть, щоб побачити контакти",
         service: "Послуга",
         event: "Подія",
+        product: "Продукт",
+        available: "В наявності",
+        outOfStock: "Немає в наявності",
         free: "Безкоштовно",
         link: "Посилання",
         online: "Онлайн",
+        businessContacts: "Контакти бізнесу",
         pulseKicker: "Живий пульс",
         pulseTitle: "Новинки від бізнесів",
         searchCta: "Відкрити пошук",
@@ -387,16 +396,20 @@ function getHomeContentLabels(locale: "uk" | "en") {
       }
     : {
         kicker: "New",
-        title: "Services and events",
-        text: "Fresh offers and upcoming events from Ukrainian businesses in Canada.",
+        title: "Services, products, and events",
+        text: "Fresh offers, products, and upcoming events from Ukrainian businesses in Canada.",
         contactSignInText:
-          "Location and external links are visible after sign-in.",
+          "Contacts, location, and external links are visible after sign-in.",
         contactSignInTitle: "Sign in to view contacts",
         service: "Service",
         event: "Event",
+        product: "Product",
+        available: "Available",
+        outOfStock: "Out of stock",
         free: "Free",
         link: "Link",
         online: "Online",
+        businessContacts: "Business contacts",
         pulseKicker: "Live pulse",
         pulseTitle: "Fresh from owners",
         searchCta: "Open search",

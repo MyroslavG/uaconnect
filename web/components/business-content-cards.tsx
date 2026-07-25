@@ -1,19 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { type ReactNode, useEffect, useState } from "react";
 import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
   Globe2,
+  Instagram,
   Link as LinkIcon,
   Lock,
   MapPin,
+  Phone,
 } from "lucide-react";
 
 import { signInWithGoogle } from "@/app/auth/actions";
+import { ShareLinkButton } from "@/components/share-link-button";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -23,21 +27,44 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { Business, BusinessContentItem } from "@/lib/types";
-import { formatExternalUrl, formatPriceWithCurrency } from "@/lib/utils";
+import {
+  formatExternalUrl,
+  formatInstagramHandle,
+  formatPriceWithCurrency,
+  getInstagramUrl,
+} from "@/lib/utils";
+import type { Locale } from "@/lib/i18n";
 
 export type BusinessContentCardLabels = {
   contactSignInText: string;
   contactSignInTitle: string;
   event: string;
+  product: string;
+  available: string;
+  outOfStock: string;
   free: string;
   link: string;
   online: string;
   service: string;
   signIn: string;
+  businessContacts?: string;
+  phone?: string;
+  website?: string;
+  instagram?: string;
+  address?: string;
 };
 
 export type BusinessContentCardEntry = {
-  business?: Pick<Business, "name" | "slug">;
+  business?: Pick<
+    Business,
+    | "address"
+    | "city"
+    | "instagram"
+    | "name"
+    | "phone"
+    | "slug"
+    | "website"
+  >;
   item: BusinessContentItem;
 };
 
@@ -45,19 +72,43 @@ type BusinessContentCardsProps = {
   canViewContacts?: boolean;
   entries: BusinessContentCardEntry[];
   labels: BusinessContentCardLabels;
+  locale?: Locale;
   nextPath?: string;
   showBusinessName?: boolean;
 };
+
+function useSharedContentEntry(entries: BusinessContentCardEntry[]) {
+  const searchParams = useSearchParams();
+  const sharedContentId = searchParams.get("content");
+  const [selectedEntry, setSelectedEntry] =
+    useState<BusinessContentCardEntry | null>(null);
+
+  useEffect(() => {
+    if (!sharedContentId) {
+      return;
+    }
+
+    const matchingEntry = entries.find(
+      (entry) => entry.item.id === sharedContentId,
+    );
+
+    if (matchingEntry) {
+      setSelectedEntry(matchingEntry);
+    }
+  }, [entries, sharedContentId]);
+
+  return [selectedEntry, setSelectedEntry] as const;
+}
 
 export function BusinessContentCards({
   canViewContacts = false,
   entries,
   labels,
+  locale = "uk",
   nextPath = "/",
   showBusinessName = false,
 }: BusinessContentCardsProps) {
-  const [selectedEntry, setSelectedEntry] =
-    useState<BusinessContentCardEntry | null>(null);
+  const [selectedEntry, setSelectedEntry] = useSharedContentEntry(entries);
 
   return (
     <>
@@ -80,6 +131,7 @@ export function BusinessContentCards({
               canViewContacts={canViewContacts}
               entry={entry}
               labels={labels}
+              locale={locale}
               showBusinessName={showBusinessName}
             />
           </article>
@@ -89,6 +141,7 @@ export function BusinessContentCards({
       <ContentDetailDialog
         canViewContacts={canViewContacts}
         labels={labels}
+        locale={locale}
         nextPath={nextPath}
         onClose={() => setSelectedEntry(null)}
         selectedEntry={selectedEntry}
@@ -101,10 +154,10 @@ export function BusinessContentPulseList({
   canViewContacts = false,
   entries,
   labels,
+  locale = "uk",
   nextPath = "/",
 }: BusinessContentCardsProps) {
-  const [selectedEntry, setSelectedEntry] =
-    useState<BusinessContentCardEntry | null>(null);
+  const [selectedEntry, setSelectedEntry] = useSharedContentEntry(entries);
 
   return (
     <>
@@ -126,7 +179,7 @@ export function BusinessContentPulseList({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-bold uppercase text-muted-foreground">
-                  {entry.item.type === "event" ? labels.event : labels.service}
+                  {getContentTypeLabel(entry.item, labels)}
                 </p>
                 <h3 className="mt-1 line-clamp-1 font-black">
                   {entry.item.title}
@@ -137,7 +190,16 @@ export function BusinessContentPulseList({
                   </p>
                 ) : null}
               </div>
-              <ExternalLink className="mt-1 h-4 w-4 shrink-0 opacity-50 transition group-hover:opacity-100" />
+              <div className="mt-1 flex shrink-0 items-center gap-2">
+                <ShareLinkButton
+                  className="h-9 w-9"
+                  href={getContentShareHref(entry)}
+                  locale={locale}
+                  text={getContentShareText(entry, locale)}
+                  title={entry.item.title}
+                />
+                <ExternalLink className="h-4 w-4 opacity-50 transition group-hover:opacity-100" />
+              </div>
             </div>
           </article>
         ))}
@@ -145,6 +207,7 @@ export function BusinessContentPulseList({
       <ContentDetailDialog
         canViewContacts={canViewContacts}
         labels={labels}
+        locale={locale}
         nextPath={nextPath}
         onClose={() => setSelectedEntry(null)}
         selectedEntry={selectedEntry}
@@ -156,12 +219,14 @@ export function BusinessContentPulseList({
 function ContentDetailDialog({
   canViewContacts,
   labels,
+  locale,
   nextPath,
   onClose,
   selectedEntry,
 }: {
   canViewContacts: boolean;
   labels: BusinessContentCardLabels;
+  locale: Locale;
   nextPath: string;
   onClose: () => void;
   selectedEntry: BusinessContentCardEntry | null;
@@ -181,6 +246,7 @@ function ContentDetailDialog({
             canViewContacts={canViewContacts}
             entry={selectedEntry}
             labels={labels}
+            locale={locale}
             nextPath={nextPath}
           />
         ) : null}
@@ -193,11 +259,13 @@ function ContentCardBody({
   canViewContacts,
   entry,
   labels,
+  locale,
   showBusinessName,
 }: {
   canViewContacts: boolean;
   entry: BusinessContentCardEntry;
   labels: BusinessContentCardLabels;
+  locale: Locale;
   showBusinessName: boolean;
 }) {
   const { business, item } = entry;
@@ -216,7 +284,16 @@ function ContentCardBody({
         />
       ) : null}
       <div className="grid gap-3 p-5">
-        <ContentBadges item={item} labels={labels} />
+        <div className="flex items-start justify-between gap-3">
+          <ContentBadges item={item} labels={labels} />
+          <ShareLinkButton
+            className="shrink-0"
+            href={getContentShareHref(entry)}
+            locale={locale}
+            text={getContentShareText(entry, locale)}
+            title={item.title}
+          />
+        </div>
         <div>
           {showBusinessName && business ? (
             <p className="mb-2 line-clamp-1 text-sm font-semibold text-muted-foreground">
@@ -245,23 +322,35 @@ function ContentDetail({
   canViewContacts,
   entry,
   labels,
+  locale,
   nextPath,
 }: {
   canViewContacts: boolean;
   entry: BusinessContentCardEntry;
   labels: BusinessContentCardLabels;
+  locale: Locale;
   nextPath: string;
 }) {
   const { business, item } = entry;
-  const hasLockedContacts = !canViewContacts && Boolean(item.location || item.linkUrl);
+  const businessContacts = getBusinessContactItems(business);
+  const hasLockedContacts =
+    !canViewContacts &&
+    Boolean(item.location || item.linkUrl || businessContacts.length);
   const imageUrls = getContentImageUrls(item);
 
   return (
     <div className="grid gap-5">
       <ContentImageGallery imageUrls={imageUrls} />
       <DialogHeader>
-        <div className="mb-2 flex flex-wrap items-center gap-2">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
           <ContentBadges item={item} labels={labels} />
+          <ShareLinkButton
+            href={getContentShareHref(entry)}
+            locale={locale}
+            text={getContentShareText(entry, locale)}
+            title={item.title}
+            variant="full"
+          />
         </div>
         <DialogTitle className="text-3xl font-black tracking-normal">
           {item.title}
@@ -286,6 +375,13 @@ function ContentDetail({
         item={item}
         labels={labels}
       />
+      {businessContacts.length > 0 ? (
+        <BusinessContactBlock
+          businessContacts={businessContacts}
+          canViewContacts={canViewContacts}
+          labels={labels}
+        />
+      ) : null}
       {hasLockedContacts ? (
         <LockedContentContacts labels={labels} nextPath={nextPath} />
       ) : null}
@@ -358,8 +454,13 @@ function ContentBadges({
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Badge variant="outline" className="bg-background">
-        {item.type === "event" ? labels.event : labels.service}
+        {getContentTypeLabel(item, labels)}
       </Badge>
+      {item.type === "product" ? (
+        <Badge variant={item.isAvailable ? "green" : "outline"}>
+          {item.isAvailable ? labels.available : labels.outOfStock}
+        </Badge>
+      ) : null}
       {item.isFree ? (
         <Badge variant="green">{labels.free}</Badge>
       ) : item.price ? (
@@ -373,6 +474,45 @@ function ContentBadges({
           {labels.online}
         </Badge>
       ) : null}
+    </div>
+  );
+}
+
+function BusinessContactBlock({
+  businessContacts,
+  canViewContacts,
+  labels,
+}: {
+  businessContacts: BusinessContactItem[];
+  canViewContacts: boolean;
+  labels: BusinessContentCardLabels;
+}) {
+  if (!canViewContacts) {
+    return null;
+  }
+
+  return (
+    <div className="grid gap-3 rounded-md border bg-muted/40 p-4 text-sm">
+      <h3 className="font-black">
+        {labels.businessContacts ?? "Business contacts"}
+      </h3>
+      <div className="grid gap-2">
+        {businessContacts.map((contact) => (
+          <a
+            className="flex min-w-0 items-center gap-2 rounded-md border bg-background px-3 py-2 font-semibold text-foreground transition hover:border-hover-blue-border hover:bg-hover-blue"
+            href={contact.href}
+            key={`${contact.type}-${contact.value}`}
+            rel={contact.external ? "noreferrer" : undefined}
+            target={contact.external ? "_blank" : undefined}
+          >
+            {contact.icon}
+            <span className="truncate">{contact.value}</span>
+            {contact.external ? (
+              <ExternalLink className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            ) : null}
+          </a>
+        ))}
+      </div>
     </div>
   );
 }
@@ -495,6 +635,30 @@ function LockedContentContacts({
   );
 }
 
+function getContentShareHref(entry: BusinessContentCardEntry) {
+  const businessSlug = entry.business?.slug?.trim();
+
+  if (businessSlug) {
+    return `/business/${encodeURIComponent(
+      businessSlug,
+    )}?content=${encodeURIComponent(entry.item.id)}`;
+  }
+
+  return `/search?query=${encodeURIComponent(entry.item.title)}`;
+}
+
+function getContentShareText(entry: BusinessContentCardEntry, locale: Locale) {
+  if (locale === "uk") {
+    return entry.business
+      ? `Подивись ${entry.item.title} від ${entry.business.name} у Kolo`
+      : `Подивись ${entry.item.title} у Kolo`;
+  }
+
+  return entry.business
+    ? `Check out ${entry.item.title} by ${entry.business.name} on Kolo`
+    : `Check out ${entry.item.title} on Kolo`;
+}
+
 function formatContentDate(value: string) {
   const date = new Date(value);
 
@@ -516,6 +680,82 @@ function formatMapLink(value: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     value,
   )}`;
+}
+
+type BusinessContactItem = {
+  external?: boolean;
+  href: string;
+  icon: ReactNode;
+  type: "phone" | "website" | "instagram" | "address";
+  value: string;
+};
+
+function getBusinessContactItems(
+  business: BusinessContentCardEntry["business"],
+): BusinessContactItem[] {
+  if (!business) {
+    return [];
+  }
+
+  const contacts: BusinessContactItem[] = [];
+
+  if (business.phone) {
+    contacts.push({
+      href: `tel:${business.phone}`,
+      icon: <Phone className="h-4 w-4 shrink-0 text-primary" />,
+      type: "phone",
+      value: business.phone,
+    });
+  }
+
+  if (business.website) {
+    contacts.push({
+      external: true,
+      href: formatContentLink(business.website),
+      icon: <Globe2 className="h-4 w-4 shrink-0 text-primary" />,
+      type: "website",
+      value: formatExternalUrl(business.website),
+    });
+  }
+
+  if (business.instagram) {
+    contacts.push({
+      external: true,
+      href: getInstagramUrl(business.instagram),
+      icon: <Instagram className="h-4 w-4 shrink-0 text-primary" />,
+      type: "instagram",
+      value: formatInstagramHandle(business.instagram),
+    });
+  }
+
+  if (business.address) {
+    contacts.push({
+      external: true,
+      href: formatMapLink(
+        business.city ? `${business.address}, ${business.city}` : business.address,
+      ),
+      icon: <MapPin className="h-4 w-4 shrink-0 text-primary" />,
+      type: "address",
+      value: business.address,
+    });
+  }
+
+  return contacts;
+}
+
+function getContentTypeLabel(
+  item: BusinessContentItem,
+  labels: BusinessContentCardLabels,
+) {
+  if (item.type === "event") {
+    return labels.event;
+  }
+
+  if (item.type === "product") {
+    return labels.product;
+  }
+
+  return labels.service;
 }
 
 function getContentImageUrls(item: BusinessContentItem) {

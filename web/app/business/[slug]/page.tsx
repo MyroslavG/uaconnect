@@ -119,6 +119,9 @@ export default async function BusinessProfilePage({
   const eventItems = (business.contentItems ?? []).filter(
     (item) => item.type === "event",
   );
+  const productItems = (business.contentItems ?? []).filter(
+    (item) => item.type === "product",
+  );
 
   return (
     <article>
@@ -198,6 +201,7 @@ export default async function BusinessProfilePage({
                 canViewContacts={canViewContacts}
                 items={serviceItems}
                 labels={contentLabels}
+                locale={locale}
                 nextPath={nextPath}
                 title={contentLabels.services}
               />
@@ -208,8 +212,20 @@ export default async function BusinessProfilePage({
                 canViewContacts={canViewContacts}
                 items={eventItems}
                 labels={contentLabels}
+                locale={locale}
                 nextPath={nextPath}
                 title={contentLabels.events}
+              />
+            ) : null}
+            {productItems.length > 0 ? (
+              <BusinessContentSection
+                business={business}
+                canViewContacts={canViewContacts}
+                items={productItems}
+                labels={contentLabels}
+                locale={locale}
+                nextPath={nextPath}
+                title={contentLabels.products}
               />
             ) : null}
             <div>
@@ -356,13 +372,18 @@ function BusinessContentSection({
   canViewContacts,
   items,
   labels,
+  locale,
   nextPath,
   title,
 }: {
-  business: Pick<Business, "name" | "slug">;
+  business: Pick<
+    Business,
+    "address" | "city" | "instagram" | "name" | "phone" | "slug" | "website"
+  >;
   canViewContacts: boolean;
   items: BusinessContentItem[];
   labels: ReturnType<typeof getBusinessContentLabels>;
+  locale: "uk" | "en";
   nextPath: string;
   title: string;
 }) {
@@ -374,6 +395,7 @@ function BusinessContentSection({
           canViewContacts={canViewContacts}
           entries={items.map((item) => ({ business, item }))}
           labels={labels}
+          locale={locale}
           nextPath={nextPath}
         />
       </div>
@@ -386,28 +408,38 @@ function getBusinessContentLabels(locale: "uk" | "en") {
     ? {
         services: "Послуги",
         events: "Події",
+        products: "Продукти",
         contactSignInText:
-          "Локацію та посилання видно лише після входу.",
+          "Контакти, локацію та посилання видно лише після входу.",
         contactSignInTitle: "Увійдіть, щоб побачити контакти",
         service: "Послуга",
         event: "Подія",
+        product: "Продукт",
+        available: "В наявності",
+        outOfStock: "Немає в наявності",
         free: "Безкоштовно",
         link: "Посилання",
         online: "Онлайн",
         signIn: "Увійти",
+        businessContacts: "Контакти бізнесу",
       }
     : {
         services: "Services",
         events: "Events",
+        products: "Products",
         contactSignInText:
-          "Location and external links are visible after sign-in.",
+          "Contacts, location, and external links are visible after sign-in.",
         contactSignInTitle: "Sign in to view contacts",
         service: "Service",
         event: "Event",
+        product: "Product",
+        available: "Available",
+        outOfStock: "Out of stock",
         free: "Free",
         link: "Link",
         online: "Online",
         signIn: "Sign in",
+        businessContacts: "Business contacts",
       };
 }
 

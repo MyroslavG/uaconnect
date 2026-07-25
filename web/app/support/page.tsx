@@ -62,7 +62,7 @@ const text = {
       {
         icon: "business",
         title: "Business Profiles",
-        text: "Questions about adding a business, editing descriptions, contacts, logos, services, or events.",
+        text: "Questions about adding a business, editing descriptions, contacts, logos, services, products, or events.",
       },
       {
         icon: "safety",

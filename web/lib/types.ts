@@ -15,7 +15,7 @@ export type Category = {
   description: string;
 };
 
-export type BusinessContentType = "service" | "event";
+export type BusinessContentType = "service" | "event" | "product";
 
 export type BusinessContentItem = {
   id: string;
@@ -28,6 +28,7 @@ export type BusinessContentItem = {
   imageUrls?: string[];
   isFree: boolean;
   isOnline: boolean;
+  isAvailable: boolean;
   price?: string;
   startsAt?: string;
   location?: string;
@@ -41,6 +42,7 @@ export type BusinessRankingSignals = {
   contentCount: number;
   eventCount: number;
   latestContentAt?: string;
+  productCount: number;
   serviceCount: number;
   upcomingEventCount: number;
 };

@@ -139,6 +139,7 @@ function getActivityScore(business: Business, now: number) {
   const contentScore =
     Math.min(signals.serviceCount, 3) * 7 +
     Math.min(signals.eventCount, 3) * 6 +
+    Math.min(signals.productCount, 3) * 5 +
     Math.min(signals.upcomingEventCount, 2) * 10;
   const latestActivityScore = getRecencyScore(signals.latestActivityAt, now, {
     fourteenDays: 18,
@@ -178,6 +179,9 @@ function getActivitySignals(business: Business, now: number) {
     serviceCount:
       business.rankingSignals?.serviceCount ??
       contentItems.filter((item) => item.type === "service").length,
+    productCount:
+      business.rankingSignals?.productCount ??
+      contentItems.filter((item) => item.type === "product").length,
     upcomingEventCount:
       business.rankingSignals?.upcomingEventCount ??
       contentItems.filter((item) => isUpcomingEvent(item, now)).length,

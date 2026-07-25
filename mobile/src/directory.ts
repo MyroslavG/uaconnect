@@ -81,6 +81,7 @@ type BusinessContentRow = {
   description: string;
   image_url: string | null;
   image_urls?: string[] | null;
+  is_available?: boolean | null;
   is_free: boolean | null;
   is_online: boolean | null;
   price: string | null;
@@ -282,14 +283,23 @@ export async function createBusinessContentItem(
       content_type: input.type,
       description: input.description.trim(),
       image_url: null,
-      is_free: input.isFree,
-      is_online: input.isOnline,
-      link_url: normalizeNullable(input.linkUrl),
-      location: normalizeNullable(input.location),
+      is_available: input.type === "product" ? input.isAvailable !== false : true,
+      is_free: input.type === "product" ? false : input.isFree,
+      is_online: input.type === "event" && input.isOnline,
+      link_url:
+        input.type === "event" || input.type === "product"
+          ? normalizeNullable(input.linkUrl)
+          : null,
+      location:
+        input.type === "event" ? normalizeNullable(input.location) : null,
       owner_id: ownerId,
-      price: input.isFree ? null : normalizeNullable(input.price),
+      price:
+        input.type !== "product" && input.isFree
+          ? null
+          : normalizeNullable(input.price),
       registration_id: input.registrationId,
-      starts_at: normalizeNullable(input.startsAt),
+      starts_at:
+        input.type === "event" ? normalizeNullable(input.startsAt) : null,
       status: "published",
       title: input.title.trim(),
     })
@@ -368,11 +378,18 @@ export async function updateBusinessContentItem(
   const payload: Partial<BusinessContentRow> = {
     content_type: input.type,
     description: input.description.trim(),
-    is_free: input.isFree,
+    is_available: input.type === "product" ? input.isAvailable !== false : true,
+    is_free: input.type === "product" ? false : input.isFree,
     is_online: input.type === "event" && input.isOnline,
-    link_url: input.type === "event" ? normalizeNullable(input.linkUrl) : null,
+    link_url:
+      input.type === "event" || input.type === "product"
+        ? normalizeNullable(input.linkUrl)
+        : null,
     location: input.type === "event" ? normalizeNullable(input.location) : null,
-    price: input.isFree ? null : normalizeNullable(input.price),
+    price:
+      input.type !== "product" && input.isFree
+        ? null
+        : normalizeNullable(input.price),
     starts_at: input.type === "event" ? normalizeNullable(input.startsAt) : null,
     title: input.title.trim(),
   };
@@ -866,6 +883,7 @@ function mapBusinessContentItem(row: BusinessContentRow): BusinessContentItem {
     id: row.id,
     imageUrl: imageUrls[0],
     imageUrls,
+    isAvailable: row.is_available ?? true,
     isFree: Boolean(row.is_free),
     isOnline: Boolean(row.is_online),
     linkUrl: row.link_url ?? undefined,
