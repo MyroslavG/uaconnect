@@ -216,6 +216,60 @@ create table if not exists public.notification_dismissals (
 create index if not exists notification_dismissals_user_idx
 on public.notification_dismissals (user_id, dismissed_at desc);
 
+create table if not exists public.analytics_events (
+  id uuid primary key default gen_random_uuid(),
+  event_type text not null check (
+    event_type in (
+      'app_open',
+      'business_profile_view',
+      'contact_click',
+      'content_view',
+      'page_view',
+      'search',
+      'share',
+      'signup'
+    )
+  ),
+  platform text not null check (platform in ('mobile', 'server', 'web')),
+  user_id uuid references auth.users(id) on delete set null,
+  anonymous_id text,
+  session_id text,
+  business_id uuid references public.businesses(id) on delete set null,
+  business_slug text,
+  business_name text,
+  content_item_id uuid references public.business_content_items(id) on delete set null,
+  content_type public.business_content_type,
+  contact_type text check (
+    contact_type is null
+    or contact_type in ('address', 'instagram', 'link', 'phone', 'route', 'website')
+  ),
+  search_query text,
+  city text,
+  category_slug text,
+  metadata jsonb not null default '{}'::jsonb,
+  occurred_at timestamptz not null default now()
+);
+
+create index if not exists analytics_events_occurred_at_idx
+on public.analytics_events (occurred_at desc);
+
+create index if not exists analytics_events_type_time_idx
+on public.analytics_events (event_type, occurred_at desc);
+
+create index if not exists analytics_events_user_time_idx
+on public.analytics_events (user_id, occurred_at desc);
+
+create index if not exists analytics_events_business_time_idx
+on public.analytics_events (business_id, occurred_at desc);
+
+create index if not exists analytics_events_search_city_idx
+on public.analytics_events (city, occurred_at desc)
+where event_type = 'search';
+
+create index if not exists analytics_events_search_category_idx
+on public.analytics_events (category_slug, occurred_at desc)
+where event_type = 'search';
+
 insert into storage.buckets (
   id,
   name,
@@ -353,6 +407,22 @@ begin
     contact_email = coalesce(public.profiles.contact_email, excluded.contact_email),
     full_name = coalesce(public.profiles.full_name, excluded.full_name),
     avatar_url = coalesce(public.profiles.avatar_url, excluded.avatar_url);
+
+  insert into public.analytics_events (
+    event_type,
+    platform,
+    user_id,
+    metadata
+  )
+  values (
+    'signup',
+    'server',
+    new.id,
+    jsonb_build_object(
+      'provider',
+      coalesce(new.raw_app_meta_data ->> 'provider', 'unknown')
+    )
+  );
 
   return new;
 end;
@@ -701,6 +771,7 @@ alter table public.business_content_items enable row level security;
 alter table public.saved_businesses enable row level security;
 alter table public.app_notifications enable row level security;
 alter table public.notification_dismissals enable row level security;
+alter table public.analytics_events enable row level security;
 
 drop policy if exists "Profiles are visible to owner and admins" on public.profiles;
 create policy "Profiles are visible to owner and admins"
@@ -898,6 +969,21 @@ on public.notification_dismissals for delete
 to authenticated
 using ((select auth.uid()) = user_id or public.is_admin());
 
+drop policy if exists "Clients can record analytics events" on public.analytics_events;
+create policy "Clients can record analytics events"
+on public.analytics_events for insert
+to anon, authenticated
+with check (
+  user_id is null
+  or (select auth.uid()) = user_id
+);
+
+drop policy if exists "Admins can view analytics events" on public.analytics_events;
+create policy "Admins can view analytics events"
+on public.analytics_events for select
+to authenticated
+using (public.is_admin());
+
 drop policy if exists "Anyone can view business logos" on storage.objects;
 create policy "Anyone can view business logos"
 on storage.objects for select
@@ -945,6 +1031,8 @@ grant execute on function public.claim_business_with_token(text) to authenticate
 grant execute on function public.sync_owned_business_from_registration(uuid) to authenticated;
 grant execute on function public.get_public_business_owners(uuid[]) to anon, authenticated;
 grant execute on function public.delete_current_user_account() to authenticated;
+grant insert on table public.analytics_events to anon, authenticated;
+grant select on table public.analytics_events to authenticated;
 
 notify pgrst, 'reload schema';
 

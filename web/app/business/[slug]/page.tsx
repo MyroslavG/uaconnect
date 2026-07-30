@@ -14,7 +14,9 @@ import {
 import { BusinessContentCards } from "@/components/business-content-cards";
 import { BusinessLogo } from "@/components/business-logo";
 import { BusinessProfileActions } from "@/components/business-profile-actions";
+import { BusinessViewTracker } from "@/components/business-view-tracker";
 import { ContactAccessCard } from "@/components/contact-access-card";
+import { AnalyticsLink } from "@/components/analytics-link";
 import { MapEmbed } from "@/components/map-embed";
 import { SaveBusinessButton } from "@/components/save-business-button";
 import { ShareBusinessButton } from "@/components/share-business-button";
@@ -25,6 +27,7 @@ import { copy, localizeBusiness } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/locale";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import {
+  formatExternalUrl,
   formatInstagramHandle,
   formatLocationParts,
   getInstagramUrl,
@@ -94,6 +97,9 @@ export default async function BusinessProfilePage({
   const instagramUrl = rawBusiness.instagram
     ? getInstagramUrl(rawBusiness.instagram)
     : "";
+  const websiteUrl = rawBusiness.website
+    ? getWebsiteUrl(rawBusiness.website)
+    : "";
   const instagramHandle = rawBusiness.instagram
     ? formatInstagramHandle(rawBusiness.instagram)
     : "";
@@ -125,6 +131,13 @@ export default async function BusinessProfilePage({
 
   return (
     <article>
+      <BusinessViewTracker
+        businessId={rawBusiness.id}
+        businessName={rawBusiness.name}
+        businessSlug={rawBusiness.slug}
+        categorySlug={rawBusiness.categorySlug}
+        city={rawBusiness.city}
+      />
       <section className="container py-6">
         <div className="mb-5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <Link href="/" className="hover:text-hover-blue-foreground dark:hover:text-hover-blue">
@@ -255,7 +268,13 @@ export default async function BusinessProfilePage({
               <h2 className="text-2xl font-bold">{labels.business.location}</h2>
               {business.address && canViewContacts ? (
                 <>
-                  <a
+                  <AnalyticsLink
+                    analytics={{
+                      businessId: rawBusiness.id,
+                      businessName: business.name,
+                      businessSlug: business.slug,
+                      contactType: "route",
+                    }}
                     className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition hover:text-primary"
                     href={addressMapUrl}
                     rel="noreferrer"
@@ -263,7 +282,7 @@ export default async function BusinessProfilePage({
                   >
                     {business.address}
                     <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
+                  </AnalyticsLink>
                   <div className="mt-4 overflow-hidden rounded-lg border bg-card">
                     <MapEmbed
                       query={rawBusiness.address}
@@ -310,16 +329,46 @@ export default async function BusinessProfilePage({
             {canViewContacts ? (
               <div className="mt-4 grid gap-3 text-sm">
                 {business.phone ? (
-                  <a
+                  <AnalyticsLink
+                    analytics={{
+                      businessId: rawBusiness.id,
+                      businessName: business.name,
+                      businessSlug: business.slug,
+                      contactType: "phone",
+                    }}
                     href={`tel:${business.phone}`}
                     className="flex items-center gap-3 rounded-md border bg-background p-3 transition hover:border-hover-blue-border hover:bg-hover-blue/35"
                   >
                     <Phone className="h-4 w-4 text-primary" />
                     {business.phone}
-                  </a>
+                  </AnalyticsLink>
+                ) : null}
+                {business.website && websiteUrl ? (
+                  <AnalyticsLink
+                    analytics={{
+                      businessId: rawBusiness.id,
+                      businessName: business.name,
+                      businessSlug: business.slug,
+                      contactType: "website",
+                    }}
+                    className="flex items-center gap-3 rounded-md border bg-background p-3 transition hover:border-hover-blue-border hover:bg-hover-blue/35"
+                    href={websiteUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <Globe2 className="h-4 w-4 text-primary" />
+                    {formatExternalUrl(business.website)}
+                    <ExternalLink className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+                  </AnalyticsLink>
                 ) : null}
                 {business.instagram ? (
-                  <a
+                  <AnalyticsLink
+                    analytics={{
+                      businessId: rawBusiness.id,
+                      businessName: business.name,
+                      businessSlug: business.slug,
+                      contactType: "instagram",
+                    }}
                     href={instagramUrl}
                     target="_blank"
                     rel="noreferrer"
@@ -328,10 +377,16 @@ export default async function BusinessProfilePage({
                     <Instagram className="h-4 w-4 text-primary" />
                     {instagramHandle}
                     <ExternalLink className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
-                  </a>
+                  </AnalyticsLink>
                 ) : null}
                 {business.address ? (
-                  <a
+                  <AnalyticsLink
+                    analytics={{
+                      businessId: rawBusiness.id,
+                      businessName: business.name,
+                      businessSlug: business.slug,
+                      contactType: "route",
+                    }}
                     className="flex items-start gap-3 rounded-md border bg-background p-3 transition hover:border-hover-blue-border hover:bg-hover-blue/35"
                     href={addressMapUrl}
                     rel="noreferrer"
@@ -340,7 +395,7 @@ export default async function BusinessProfilePage({
                     <MapPin className="mt-0.5 h-4 w-4 text-primary" />
                     <span>{business.address}</span>
                     <ExternalLink className="ml-auto mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
-                  </a>
+                  </AnalyticsLink>
                 ) : null}
               </div>
             ) : (
@@ -378,7 +433,14 @@ function BusinessContentSection({
 }: {
   business: Pick<
     Business,
-    "address" | "city" | "instagram" | "name" | "phone" | "slug" | "website"
+    | "address"
+    | "city"
+    | "id"
+    | "instagram"
+    | "name"
+    | "phone"
+    | "slug"
+    | "website"
   >;
   canViewContacts: boolean;
   items: BusinessContentItem[];
@@ -447,4 +509,16 @@ function getGoogleMapsSearchUrl(value: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     value,
   )}`;
+}
+
+function getWebsiteUrl(value: string) {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "";
+  }
+
+  return /^https?:\/\//i.test(trimmedValue)
+    ? trimmedValue
+    : `https://${trimmedValue}`;
 }

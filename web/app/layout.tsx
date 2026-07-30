@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 
 import "@/app/globals.css";
+import { AnalyticsTracker } from "@/components/analytics-tracker";
 import { ClientErrorReporter } from "@/components/client-error-reporter";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -50,6 +52,9 @@ export default async function RootLayout({
       <body>
         <ThemeProvider>
           <ClientErrorReporter />
+          <Suspense fallback={null}>
+            <AnalyticsTracker />
+          </Suspense>
           <div className="flex min-h-screen flex-col">
             <SiteHeader locale={locale} />
             <main className="flex-1">{children}</main>

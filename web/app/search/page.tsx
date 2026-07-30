@@ -160,8 +160,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         radiusInKm,
       });
   const localizedResults = localizeBusinesses(results, locale);
-  const mapResults = localizedResults.map(({ address, name, slug }) => ({
+  const mapResults = localizedResults.map(({ address, id, name, slug }) => ({
     address,
+    id,
     name,
     slug,
   }));

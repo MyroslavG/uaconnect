@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { ExternalLink, MapPin } from "lucide-react";
 
+import { AnalyticsLink } from "@/components/analytics-link";
 import { Button } from "@/components/ui/button";
 import type { Business } from "@/lib/types";
 
-type ResultsMapBusiness = Pick<Business, "address" | "name" | "slug">;
+type ResultsMapBusiness = Pick<Business, "address" | "id" | "name" | "slug">;
 
 type ResultsMapProps = {
   businesses: ResultsMapBusiness[];
@@ -84,10 +84,20 @@ export function ResultsMap({ businesses, title, labels }: ResultsMapProps) {
           ))}
         </div>
         <Button asChild variant="outline" className="mt-4 w-full justify-between">
-          <Link href={externalMapUrl} target="_blank">
+          <AnalyticsLink
+            analytics={{
+              businessId: selectedBusiness.id,
+              businessName: selectedBusiness.name,
+              businessSlug: selectedBusiness.slug,
+              contactType: "route",
+            }}
+            href={externalMapUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
             {labels.openInMaps}
             <ExternalLink className="h-4 w-4" />
-          </Link>
+          </AnalyticsLink>
         </Button>
       </div>
     </div>

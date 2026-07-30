@@ -12,6 +12,23 @@ export type BusinessStatus = "published" | "hidden";
 export type BusinessContentType = "service" | "event" | "product";
 export type BusinessContentStatus = "draft" | "published";
 export type AppNotificationStatus = "draft" | "published";
+export type AnalyticsContactType =
+  | "address"
+  | "instagram"
+  | "link"
+  | "phone"
+  | "route"
+  | "website";
+export type AnalyticsEventType =
+  | "app_open"
+  | "business_profile_view"
+  | "contact_click"
+  | "content_view"
+  | "page_view"
+  | "search"
+  | "share"
+  | "signup";
+export type AnalyticsPlatform = "mobile" | "server" | "web";
 
 export type Database = {
   public: {
@@ -370,6 +387,66 @@ export type Database = {
           notification_id?: string;
           user_id?: string;
           dismissed_at?: string;
+        };
+        Relationships: [];
+      };
+      analytics_events: {
+        Row: {
+          id: string;
+          event_type: AnalyticsEventType;
+          platform: AnalyticsPlatform;
+          user_id: string | null;
+          anonymous_id: string | null;
+          session_id: string | null;
+          business_id: string | null;
+          business_slug: string | null;
+          business_name: string | null;
+          content_item_id: string | null;
+          content_type: BusinessContentType | null;
+          contact_type: AnalyticsContactType | null;
+          search_query: string | null;
+          city: string | null;
+          category_slug: string | null;
+          metadata: Json;
+          occurred_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_type: AnalyticsEventType;
+          platform: AnalyticsPlatform;
+          user_id?: string | null;
+          anonymous_id?: string | null;
+          session_id?: string | null;
+          business_id?: string | null;
+          business_slug?: string | null;
+          business_name?: string | null;
+          content_item_id?: string | null;
+          content_type?: BusinessContentType | null;
+          contact_type?: AnalyticsContactType | null;
+          search_query?: string | null;
+          city?: string | null;
+          category_slug?: string | null;
+          metadata?: Json;
+          occurred_at?: string;
+        };
+        Update: {
+          id?: string;
+          event_type?: AnalyticsEventType;
+          platform?: AnalyticsPlatform;
+          user_id?: string | null;
+          anonymous_id?: string | null;
+          session_id?: string | null;
+          business_id?: string | null;
+          business_slug?: string | null;
+          business_name?: string | null;
+          content_item_id?: string | null;
+          content_type?: BusinessContentType | null;
+          contact_type?: AnalyticsContactType | null;
+          search_query?: string | null;
+          city?: string | null;
+          category_slug?: string | null;
+          metadata?: Json;
+          occurred_at?: string;
         };
         Relationships: [];
       };

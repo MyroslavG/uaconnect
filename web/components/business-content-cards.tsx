@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { signInWithGoogle } from "@/app/auth/actions";
+import { AnalyticsLink } from "@/components/analytics-link";
 import { ShareLinkButton } from "@/components/share-link-button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -26,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { trackAnalyticsEvent } from "@/lib/analytics";
 import type { Business, BusinessContentItem } from "@/lib/types";
 import {
   formatExternalUrl,
@@ -59,6 +61,7 @@ export type BusinessContentCardEntry = {
     Business,
     | "address"
     | "city"
+    | "id"
     | "instagram"
     | "name"
     | "phone"
@@ -231,6 +234,24 @@ function ContentDetailDialog({
   onClose: () => void;
   selectedEntry: BusinessContentCardEntry | null;
 }) {
+  useEffect(() => {
+    if (!selectedEntry) {
+      return;
+    }
+
+    void trackAnalyticsEvent({
+      business_id: selectedEntry.business?.id,
+      business_name: selectedEntry.business?.name,
+      business_slug: selectedEntry.business?.slug,
+      content_item_id: selectedEntry.item.id,
+      content_type: selectedEntry.item.type,
+      event_type: "content_view",
+      metadata: {
+        title: selectedEntry.item.title,
+      },
+    });
+  }, [selectedEntry]);
+
   return (
     <Dialog
       open={Boolean(selectedEntry)}
@@ -371,6 +392,7 @@ function ContentDetail({
         {item.description}
       </p>
       <ContentMeta
+        business={business}
         canViewContacts={canViewContacts}
         item={item}
         labels={labels}
@@ -498,7 +520,13 @@ function BusinessContactBlock({
       </h3>
       <div className="grid gap-2">
         {businessContacts.map((contact) => (
-          <a
+          <AnalyticsLink
+            analytics={{
+              businessId: contact.businessId,
+              businessName: contact.businessName,
+              businessSlug: contact.businessSlug,
+              contactType: contact.type,
+            }}
             className="flex min-w-0 items-center gap-2 rounded-md border bg-background px-3 py-2 font-semibold text-foreground transition hover:border-hover-blue-border hover:bg-hover-blue"
             href={contact.href}
             key={`${contact.type}-${contact.value}`}
@@ -510,7 +538,7 @@ function BusinessContactBlock({
             {contact.external ? (
               <ExternalLink className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             ) : null}
-          </a>
+          </AnalyticsLink>
         ))}
       </div>
     </div>
@@ -518,11 +546,13 @@ function BusinessContactBlock({
 }
 
 function ContentMeta({
+  business,
   canViewContacts,
   compact = false,
   item,
   labels,
 }: {
+  business?: BusinessContentCardEntry["business"];
   canViewContacts: boolean;
   compact?: boolean;
   item: BusinessContentItem;
@@ -562,7 +592,15 @@ function ContentMeta({
             {item.location}
           </span>
         ) : (
-          <a
+          <AnalyticsLink
+            analytics={{
+              businessId: business?.id,
+              businessName: business?.name,
+              businessSlug: business?.slug,
+              contactType: "route",
+              contentItemId: item.id,
+              contentType: item.type,
+            }}
             className="flex items-center gap-2 text-foreground transition hover:text-primary"
             href={formatMapLink(item.location)}
             rel="noreferrer"
@@ -571,7 +609,7 @@ function ContentMeta({
             <MapPin className="h-4 w-4 text-primary" />
             {item.location}
             <ExternalLink className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
-          </a>
+          </AnalyticsLink>
         )
       ) : null}
       {linkUrl && compact ? (
@@ -580,7 +618,15 @@ function ContentMeta({
           <span className="truncate">{formatExternalUrl(item.linkUrl ?? "")}</span>
         </span>
       ) : linkUrl ? (
-        <a
+        <AnalyticsLink
+          analytics={{
+            businessId: business?.id,
+            businessName: business?.name,
+            businessSlug: business?.slug,
+            contactType: "link",
+            contentItemId: item.id,
+            contentType: item.type,
+          }}
           className="flex min-w-0 items-center gap-2 text-foreground transition hover:text-primary"
           href={linkUrl}
           onClick={(event) => event.stopPropagation()}
@@ -590,7 +636,7 @@ function ContentMeta({
           <LinkIcon className="h-4 w-4 shrink-0 text-primary" />
           <span className="truncate">{formatExternalUrl(item.linkUrl ?? "")}</span>
           <ExternalLink className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        </a>
+        </AnalyticsLink>
       ) : null}
       {hasLockedContacts && compact ? (
         <span className="flex items-center gap-2">
@@ -683,10 +729,13 @@ function formatMapLink(value: string) {
 }
 
 type BusinessContactItem = {
+  businessId?: string;
+  businessName?: string;
+  businessSlug?: string;
   external?: boolean;
   href: string;
   icon: ReactNode;
-  type: "phone" | "website" | "instagram" | "address";
+  type: "phone" | "website" | "instagram" | "route";
   value: string;
 };
 
@@ -701,6 +750,9 @@ function getBusinessContactItems(
 
   if (business.phone) {
     contacts.push({
+      businessId: business.id,
+      businessName: business.name,
+      businessSlug: business.slug,
       href: `tel:${business.phone}`,
       icon: <Phone className="h-4 w-4 shrink-0 text-primary" />,
       type: "phone",
@@ -710,6 +762,9 @@ function getBusinessContactItems(
 
   if (business.website) {
     contacts.push({
+      businessId: business.id,
+      businessName: business.name,
+      businessSlug: business.slug,
       external: true,
       href: formatContentLink(business.website),
       icon: <Globe2 className="h-4 w-4 shrink-0 text-primary" />,
@@ -720,6 +775,9 @@ function getBusinessContactItems(
 
   if (business.instagram) {
     contacts.push({
+      businessId: business.id,
+      businessName: business.name,
+      businessSlug: business.slug,
       external: true,
       href: getInstagramUrl(business.instagram),
       icon: <Instagram className="h-4 w-4 shrink-0 text-primary" />,
@@ -730,12 +788,15 @@ function getBusinessContactItems(
 
   if (business.address) {
     contacts.push({
+      businessId: business.id,
+      businessName: business.name,
+      businessSlug: business.slug,
       external: true,
       href: formatMapLink(
         business.city ? `${business.address}, ${business.city}` : business.address,
       ),
       icon: <MapPin className="h-4 w-4 shrink-0 text-primary" />,
-      type: "address",
+      type: "route",
       value: business.address,
     });
   }

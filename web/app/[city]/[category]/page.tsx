@@ -138,8 +138,9 @@ export default async function ExplorePage({
 
     return businessWithoutListingSignals;
   });
-  const mapBusinesses = exploreBusinesses.map(({ address, name, slug }) => ({
+  const mapBusinesses = exploreBusinesses.map(({ address, id, name, slug }) => ({
     address,
+    id,
     name,
     slug,
   }));

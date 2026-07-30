@@ -75,6 +75,7 @@ import {
   type ProfileUpdateInput,
   type UserProfile,
 } from "./src/account";
+import { trackMobileAnalyticsEvent } from "./src/analytics";
 import {
   createBusinessContentItem,
   createBusinessRegistration,
@@ -765,6 +766,8 @@ export default function App() {
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [selectedContentEntry, setSelectedContentEntry] =
     useState<ContentDetailEntry | null>(null);
+  const hasTrackedAppOpen = useRef(false);
+  const lastTrackedSearchKey = useRef("");
   const [contentReturnBusiness, setContentReturnBusiness] =
     useState<Business | null>(null);
   const [pendingBusinessSlug, setPendingBusinessSlug] = useState<string | null>(
@@ -1290,6 +1293,100 @@ export default function App() {
   const profileName = getProfileDisplayName(currentProfile, session);
 
   useEffect(() => {
+    if (hasTrackedAppOpen.current) {
+      return;
+    }
+
+    hasTrackedAppOpen.current = true;
+    void trackMobileAnalyticsEvent({
+      eventType: "app_open",
+      metadata: {
+        source: "mobile",
+      },
+      userId: session?.user.id,
+    });
+  }, [session?.user.id]);
+
+  useEffect(() => {
+    if (
+      activeTab !== "search" ||
+      isDirectoryLoading ||
+      !hasResolvedInitialLocation
+    ) {
+      return;
+    }
+
+    const searchQuery = getEffectiveSearchQuery(query);
+    const searchKey = JSON.stringify({
+      category: selectedCategory,
+      localOnly,
+      location,
+      query: searchQuery,
+      resultCount: results.length,
+    });
+
+    if (lastTrackedSearchKey.current === searchKey) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      lastTrackedSearchKey.current = searchKey;
+      void trackMobileAnalyticsEvent({
+        categorySlug:
+          selectedCategory === "all" ? undefined : selectedCategory,
+        city: location.trim() || undefined,
+        eventType: "search",
+        metadata: {
+          localOnly,
+          resultCount: results.length,
+        },
+        searchQuery: searchQuery || undefined,
+        userId: session?.user.id,
+      });
+    }, 700);
+
+    return () => clearTimeout(timeout);
+  }, [
+    activeTab,
+    hasResolvedInitialLocation,
+    isDirectoryLoading,
+    localOnly,
+    location,
+    query,
+    results.length,
+    selectedCategory,
+    session?.user.id,
+  ]);
+
+  useEffect(() => {
+    if (!selectedBusiness) {
+      return;
+    }
+
+    void trackMobileAnalyticsEvent({
+      business: selectedBusiness,
+      eventType: "business_profile_view",
+      userId: session?.user.id,
+    });
+  }, [selectedBusiness?.id, session?.user.id]);
+
+  useEffect(() => {
+    if (!selectedContentEntry) {
+      return;
+    }
+
+    void trackMobileAnalyticsEvent({
+      business: selectedContentEntry.business,
+      contentItem: selectedContentEntry.item,
+      eventType: "content_view",
+      metadata: {
+        title: selectedContentEntry.item.title,
+      },
+      userId: session?.user.id,
+    });
+  }, [selectedContentEntry?.item.id, session?.user.id]);
+
+  useEffect(() => {
     if (!pendingBusinessSlug || isDirectoryLoading) {
       return;
     }
@@ -1742,6 +1839,14 @@ export default function App() {
         title: business.name,
         url: shareUrl,
       });
+      void trackMobileAnalyticsEvent({
+        business,
+        eventType: "share",
+        metadata: {
+          shareTarget: "business",
+        },
+        userId: session?.user.id,
+      });
     } catch (error) {
       console.error("[kolo:mobile-share]", error);
       Alert.alert(labels.shareBusiness, labels.shareFailed);
@@ -1762,10 +1867,43 @@ export default function App() {
         title: entry.item.title,
         url: shareUrl,
       });
+      void trackMobileAnalyticsEvent({
+        business: entry.business,
+        contentItem: entry.item,
+        eventType: "share",
+        metadata: {
+          shareTarget: entry.item.type,
+        },
+        userId: session?.user.id,
+      });
     } catch (error) {
       console.error("[kolo:mobile-content-share]", error);
       Alert.alert(labels.shareBusiness, labels.shareFailed);
     }
+  }
+
+  function handleBusinessContactPress(contact: ContactItem) {
+    void trackMobileAnalyticsEvent({
+      businessId: contact.businessId,
+      businessName: contact.businessName,
+      businessSlug: contact.businessSlug,
+      contactType: contact.contactType,
+      eventType: "contact_click",
+      userId: session?.user.id,
+    });
+  }
+
+  function handleContentContactPress(
+    entry: ContentDetailEntry,
+    contactType: ContactItem["contactType"],
+  ) {
+    void trackMobileAnalyticsEvent({
+      business: entry.business,
+      contactType,
+      contentItem: entry.item,
+      eventType: "contact_click",
+      userId: session?.user.id,
+    });
   }
 
   const canViewContacts = Boolean(session);
@@ -1982,6 +2120,7 @@ export default function App() {
         labels={labels}
         locale={locale}
         onClose={() => setSelectedBusiness(null)}
+        onContactPress={handleBusinessContactPress}
         onRequireSignIn={() => {
           setSelectedBusiness(null);
           setActiveProfilePanel("account");
@@ -2003,6 +2142,8 @@ export default function App() {
         entry={selectedContentEntry}
         isDarkMode={isDarkMode}
         labels={labels}
+        onContactPress={handleBusinessContactPress}
+        onContentContactPress={handleContentContactPress}
         onShareContent={handleShareContent}
         onBusinessPress={(business) => {
           setSelectedContentEntry(null);
@@ -5930,6 +6071,8 @@ function BusinessContentModal({
   labels,
   onBusinessPress,
   onClose,
+  onContactPress,
+  onContentContactPress,
   onRequireSignIn,
   onShareContent,
 }: {
@@ -5939,6 +6082,11 @@ function BusinessContentModal({
   labels: Record<string, string>;
   onBusinessPress: (business: Business) => void;
   onClose: () => void;
+  onContactPress: (contact: ContactItem) => void;
+  onContentContactPress: (
+    entry: ContentDetailEntry,
+    contactType: ContactItem["contactType"],
+  ) => void;
   onRequireSignIn: () => void;
   onShareContent: (entry: ContentDetailEntry) => Promise<void>;
 }) {
@@ -6112,6 +6260,7 @@ function BusinessContentModal({
                       disabled={!locationUrl}
                       onPress={() => {
                         if (locationUrl) {
+                          onContentContactPress(entry, "address");
                           void openContactUrl(locationUrl);
                         }
                       }}
@@ -6132,6 +6281,7 @@ function BusinessContentModal({
                       accessibilityLabel={`${labels.contentLink}: ${item.linkUrl}`}
                       accessibilityRole="link"
                       onPress={() => {
+                        onContentContactPress(entry, "link");
                         void openContactUrl(contentLinkUrl);
                       }}
                       style={styles.contentDetailMetaRow}
@@ -6176,6 +6326,7 @@ function BusinessContentModal({
                       contact={contact}
                       isDarkMode={isDarkMode}
                       key={contact.key}
+                      onContactPress={onContactPress}
                     />
                   ))}
                 </View>
@@ -6283,6 +6434,7 @@ function BusinessModal({
   labels,
   locale,
   onClose,
+  onContactPress,
   onContentPress,
   onManage,
   onRequireSignIn,
@@ -6297,6 +6449,7 @@ function BusinessModal({
   labels: Record<string, string>;
   locale: Locale;
   onClose: () => void;
+  onContactPress: (contact: ContactItem) => void;
   onContentPress: (entry: ContentDetailEntry) => void;
   onManage: () => void;
   onRequireSignIn: () => void;
@@ -6490,6 +6643,7 @@ function BusinessModal({
                             contact={contact}
                             isDarkMode={isDarkMode}
                             key={contact.key}
+                            onContactPress={onContactPress}
                           />
                         ))
                       ) : (
@@ -6584,6 +6738,10 @@ function BusinessModal({
 
 type ContactItem = {
   Icon: LucideIcon;
+  businessId?: string;
+  businessName?: string;
+  businessSlug?: string;
+  contactType: "address" | "instagram" | "link" | "phone" | "route" | "website";
   key: string;
   label: string;
   url: string;
@@ -6626,9 +6784,11 @@ function ContactSignInPrompt({
 function ContactRow({
   contact,
   isDarkMode,
+  onContactPress,
 }: {
   contact: ContactItem;
   isDarkMode: boolean;
+  onContactPress?: (contact: ContactItem) => void;
 }) {
   const Icon = contact.Icon;
 
@@ -6636,6 +6796,7 @@ function ContactRow({
     <Pressable
       accessibilityRole="link"
       onPress={() => {
+        onContactPress?.(contact);
         void openContactUrl(contact.url);
       }}
       style={[styles.contactRow, isDarkMode ? styles.darkSettingRow : null]}
@@ -7235,6 +7396,10 @@ function getBusinessContacts(
   if (business.phone && phoneUrl) {
     contacts.push({
       Icon: Phone,
+      businessId: business.id,
+      businessName: business.name,
+      businessSlug: business.slug,
+      contactType: "phone",
       key: "phone",
       label: labels.phone,
       url: phoneUrl,
@@ -7245,6 +7410,10 @@ function getBusinessContacts(
   if (business.website && websiteUrl) {
     contacts.push({
       Icon: ExternalLink,
+      businessId: business.id,
+      businessName: business.name,
+      businessSlug: business.slug,
+      contactType: "website",
       key: "website",
       label: labels.website,
       url: websiteUrl,
@@ -7255,6 +7424,10 @@ function getBusinessContacts(
   if (business.instagram && instagramUrl) {
     contacts.push({
       Icon: ExternalLink,
+      businessId: business.id,
+      businessName: business.name,
+      businessSlug: business.slug,
+      contactType: "instagram",
       key: "instagram",
       label: labels.instagram,
       url: instagramUrl,
@@ -7265,6 +7438,10 @@ function getBusinessContacts(
   if (business.address && addressUrl) {
     contacts.push({
       Icon: MapPin,
+      businessId: business.id,
+      businessName: business.name,
+      businessSlug: business.slug,
+      contactType: "route",
       key: "address",
       label: labels.address,
       url: addressUrl,
