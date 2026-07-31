@@ -6,6 +6,7 @@ import { AnalyticsTracker } from "@/components/analytics-tracker";
 import { ClientErrorReporter } from "@/components/client-error-reporter";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { SupportWidget } from "@/components/support-widget";
 import { ThemeProvider } from "@/components/theme-provider";
 import { getRequestLocale } from "@/lib/locale";
 import { Analytics } from "@vercel/analytics/next";
@@ -60,6 +61,7 @@ export default async function RootLayout({
             <main className="flex-1">{children}</main>
             <SiteFooter locale={locale} />
           </div>
+          <SupportWidget locale={locale} />
         </ThemeProvider>
         <Analytics />
       </body>
