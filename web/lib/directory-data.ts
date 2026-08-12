@@ -259,6 +259,7 @@ async function getPublishedBusinessContentItems(
   limit?: number,
 ) {
   const itemsByRegistrationId = new Map<string, BusinessContentItem[]>();
+  const now = Date.now();
 
   if (registrationIds.length === 0) {
     return itemsByRegistrationId;
@@ -270,6 +271,7 @@ async function getPublishedBusinessContentItems(
     .select("*")
     .in("registration_id", registrationIds)
     .eq("status", "published")
+    .or(getPublicContentVisibilityFilter())
     .order("created_at", { ascending: false });
 
   if (typeof limit === "number" && Number.isFinite(limit) && limit > 0) {
@@ -283,6 +285,10 @@ async function getPublishedBusinessContentItems(
   }
 
   for (const row of data as BusinessContentRow[]) {
+    if (!isPublicBusinessContentRowVisible(row, now)) {
+      continue;
+    }
+
     const items = itemsByRegistrationId.get(row.registration_id) ?? [];
     items.push(mapBusinessContentItem(row));
     itemsByRegistrationId.set(row.registration_id, items);
@@ -303,7 +309,8 @@ async function getPublishedBusinessContentSignals(registrationIds: string[]) {
     .from("business_content_items")
     .select("registration_id, content_type, starts_at, created_at, updated_at")
     .in("registration_id", registrationIds)
-    .eq("status", "published");
+    .eq("status", "published")
+    .or(getPublicContentVisibilityFilter());
 
   if (error || !data) {
     return signalsByRegistrationId;
@@ -312,6 +319,10 @@ async function getPublishedBusinessContentSignals(registrationIds: string[]) {
   const now = Date.now();
 
   for (const row of data as BusinessContentSignalRow[]) {
+    if (!isPublicBusinessContentRowVisible(row, now)) {
+      continue;
+    }
+
     const signals = signalsByRegistrationId.get(row.registration_id) ?? {
       contentCount: 0,
       eventCount: 0,
@@ -362,6 +373,17 @@ function getLatestDate(values: Array<string | undefined | null>) {
   const latestTimestamp = Math.max(0, ...values.map(getTimestamp));
 
   return latestTimestamp ? new Date(latestTimestamp).toISOString() : undefined;
+}
+
+function getPublicContentVisibilityFilter() {
+  return `content_type.neq.event,starts_at.gte.${new Date().toISOString()}`;
+}
+
+function isPublicBusinessContentRowVisible(
+  row: Pick<BusinessContentRow, "content_type" | "starts_at">,
+  now: number,
+) {
+  return row.content_type !== "event" || getTimestamp(row.starts_at) >= now;
 }
 
 function getTimestamp(value: string | undefined | null) {

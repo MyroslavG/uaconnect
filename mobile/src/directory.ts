@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from "./supabase";
+import { getPublicBusinessContentItems } from "./contentVisibility";
 import type {
   Business,
   BusinessContentImageInput,
@@ -570,6 +571,7 @@ async function fetchOwnerProfiles(ownerIds: string[]) {
 async function fetchPublishedBusinessContent(registrationIds: string[]) {
   const uniqueRegistrationIds = Array.from(new Set(registrationIds));
   const contentMap = new Map<string, BusinessContentItem[]>();
+  const now = Date.now();
 
   if (!uniqueRegistrationIds.length) {
     return contentMap;
@@ -580,6 +582,7 @@ async function fetchPublishedBusinessContent(registrationIds: string[]) {
     .select("*")
     .in("registration_id", uniqueRegistrationIds)
     .eq("status", "published")
+    .or(getPublicContentVisibilityFilter())
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -590,14 +593,19 @@ async function fetchPublishedBusinessContent(registrationIds: string[]) {
     throw error;
   }
 
-  for (const item of ((data ?? []) as BusinessContentRow[]).map(
-    mapBusinessContentItem,
+  for (const item of getPublicBusinessContentItems(
+    ((data ?? []) as BusinessContentRow[]).map(mapBusinessContentItem),
+    now,
   )) {
     const currentItems = contentMap.get(item.registrationId) ?? [];
     contentMap.set(item.registrationId, [...currentItems, item]);
   }
 
   return contentMap;
+}
+
+function getPublicContentVisibilityFilter() {
+  return `content_type.neq.event,starts_at.gte.${new Date().toISOString()}`;
 }
 
 function normalizeNullable(value?: string) {

@@ -1,4 +1,5 @@
 import type { Business, BusinessContentItem } from "./types";
+import { getPublicBusinessContentItems } from "./contentVisibility";
 
 type RankBusinessesOptions = {
   categorySlug?: string;
@@ -141,7 +142,10 @@ function getProfileCompletenessScore(business: Business) {
 }
 
 function getActivityScore(business: Business, now: number) {
-  const contentItems = business.contentItems ?? [];
+  const contentItems = getPublicBusinessContentItems(
+    business.contentItems,
+    now,
+  );
   const serviceCount = contentItems.filter((item) => item.type === "service").length;
   const eventCount = contentItems.filter((item) => item.type === "event").length;
   const productCount = contentItems.filter((item) => item.type === "product").length;

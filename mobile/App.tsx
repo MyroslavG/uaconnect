@@ -97,6 +97,7 @@ import {
   fetchVisibleAnnouncements,
   type AppAnnouncement,
 } from "./src/notifications";
+import { getPublicBusinessContentItems } from "./src/contentVisibility";
 import type {
   Business,
   BusinessContentImageInput,
@@ -155,8 +156,21 @@ const ANDROID_BOTTOM_NAVIGATION_INSET =
 const PUBLIC_WEB_URL = (
   process.env.EXPO_PUBLIC_WEB_URL ?? "https://koloapp.ca"
 ).replace(/\/+$/, "");
+const KOLO_SUMMER_PARTY_EVENTBRITE_URL =
+  "https://www.eventbrite.ca/e/kolo-summer-party-tickets-1997616640145";
+const KOLO_SUMMER_PARTY_LOCATION = "Crestview Outdoor Pool, Ottawa, ON";
+const KOLO_SUMMER_PARTY_MAP_URL = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+  KOLO_SUMMER_PARTY_LOCATION,
+)}`;
+const KOLO_SUMMER_PARTY_END_AT = "2026-08-30T01:00:00.000Z";
+const KOLO_SUMMER_PARTY_IMAGE = require("./assets/summer-party.jpg") as number;
 const THEME_STORAGE_KEY = "kolo-theme";
 const WALKTHROUGH_STORAGE_KEY = "kolo-walkthrough-seen";
+
+function isKoloSummerPartyVisible(now = Date.now()) {
+  return now < new Date(KOLO_SUMMER_PARTY_END_AT).getTime();
+}
+
 const copy = {
   uk: {
     addBusiness: "Додати",
@@ -250,6 +264,26 @@ const copy = {
     events: "Події",
     eventsNearYou: "Події поруч",
     eventsIntro: "Дивіться події від українських бізнесів за містом або локацією поруч.",
+    officialEvent: "Подія Kolo",
+    summerPartyTitle: "KOLO Summer Party",
+    summerPartyHost: "KOLO × Mykyta Zakharchenko",
+    summerPartySummary:
+      "Сімейна зустріч з басейном, конкурсами, дитячим ярмарком, шоу-програмою та лотереєю.",
+    summerPartyDate: "Субота, 29 серпня · 16:30–21:00",
+    summerPartyLocation: "Crestview Outdoor Pool · Ottawa, ON",
+    summerPartyEventbrite: "Eventbrite",
+    summerPartyMaps: "Google Maps",
+    summerPartyOverviewTitle: "Завершуємо літо разом",
+    summerPartyOverview:
+      "29 серпня KOLO × Mykyta Zakharchenko запрошують вас на теплу сімейну зустріч, де поєднаємо відпочинок біля басейну та літню вечірку в парку.",
+    summerPartyOverviewMore:
+      "Подія складатиметься з двох частин: спочатку проведемо час біля басейну, а потім продовжимо вечір у парку з активностями, спілкуванням та сімейною атмосферою.",
+    summerPartySafety:
+      "Під час частини заходу біля басейну будуть присутні рятувальники. Якщо плануєте плавати, візьміть купальники, рушники, воду та невеликі снеки.",
+    summerPartyContest:
+      "Участь у сімейному конкурсі проходить за попереднім записом, оскільки кількість місць обмежена.",
+    summerPartyHighlights:
+      "Басейн|Аеробіка у воді|Сімейний конкурс|Шоу-програма для дітей|Активності в парку|Нові знайомства",
     find: "Знайти",
     free: "Безкоштовно",
     googleEmail: "Google email",
@@ -469,6 +503,26 @@ const copy = {
     events: "Events",
     eventsNearYou: "Events near you",
     eventsIntro: "Browse events from Ukrainian businesses by city or nearby location.",
+    officialEvent: "Kolo event",
+    summerPartyTitle: "KOLO Summer Party",
+    summerPartyHost: "KOLO × Mykyta Zakharchenko",
+    summerPartySummary:
+      "A family meetup with pool time, contests, a kids market, a show program, and a raffle.",
+    summerPartyDate: "Saturday, August 29 · 4:30 PM - 9 PM",
+    summerPartyLocation: "Crestview Outdoor Pool · Ottawa, ON",
+    summerPartyEventbrite: "Eventbrite",
+    summerPartyMaps: "Google Maps",
+    summerPartyOverviewTitle: "Closing summer together",
+    summerPartyOverview:
+      "On August 29, KOLO × Mykyta Zakharchenko invites families to a warm community meetup with pool time and a summer party in the park.",
+    summerPartyOverviewMore:
+      "The event has two parts: time by the pool first, then an evening in the park with activities, conversation, and a family-friendly atmosphere.",
+    summerPartySafety:
+      "Lifeguards will be present during the pool portion. If you plan to swim, bring swimwear, towels, water, and light snacks.",
+    summerPartyContest:
+      "Family contest participation requires advance registration because spots are limited.",
+    summerPartyHighlights:
+      "Pool time|Water aerobics|Family contest|Kids show|Park activities|New connections",
     find: "Search",
     free: "Free",
     googleEmail: "Google email",
@@ -1239,7 +1293,7 @@ export default function App() {
                 ...ownedBusiness,
                 id: business.id,
                 registrationId: business.registrationId ?? ownedBusiness.id,
-                contentItems: ownedContentItems,
+                contentItems: getPublicBusinessContentItems(ownedContentItems),
               }
             : business,
         ),
@@ -2373,6 +2427,300 @@ function SearchScreen({
   );
 }
 
+function OfficialKoloEventCard({
+  isDarkMode,
+  labels,
+}: {
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const highlights = labels.summerPartyHighlights
+    .split("|")
+    .filter(Boolean);
+
+  if (!isKoloSummerPartyVisible()) {
+    return null;
+  }
+
+  return (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => setIsOpen(true)}
+        style={[styles.officialEventCard, isDarkMode ? styles.darkCard : null]}
+      >
+        <View style={styles.officialEventImageFrame}>
+          <Image
+            accessibilityLabel={labels.summerPartyTitle}
+            resizeMode="cover"
+            source={KOLO_SUMMER_PARTY_IMAGE}
+            style={styles.officialEventImage}
+          />
+        </View>
+        <View style={styles.officialEventBody}>
+          <View style={styles.officialEventHeader}>
+            <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
+              {labels.officialEvent}
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={[styles.officialEventHost, isDarkMode ? styles.darkMutedText : null]}
+            >
+              {labels.summerPartyHost}
+            </Text>
+          </View>
+          <Text style={[styles.officialEventTitle, isDarkMode ? styles.darkText : null]}>
+            {labels.summerPartyTitle}
+          </Text>
+          <Text style={[styles.officialEventSummary, isDarkMode ? styles.darkMutedText : null]}>
+            {labels.summerPartySummary}
+          </Text>
+          <View style={styles.officialEventMetaList}>
+            <View style={styles.officialEventMetaRow}>
+              <CalendarDays
+                color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+                size={16}
+                strokeWidth={2.5}
+              />
+              <Text style={[styles.officialEventMetaText, isDarkMode ? styles.darkText : null]}>
+                {labels.summerPartyDate}
+              </Text>
+            </View>
+            <View style={styles.officialEventMetaRow}>
+              <MapPin
+                color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+                size={16}
+                strokeWidth={2.5}
+              />
+              <Text style={[styles.officialEventMetaText, isDarkMode ? styles.darkText : null]}>
+                {labels.summerPartyLocation}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.officialEventActions}>
+            <Pressable
+              accessibilityRole="link"
+              onPress={(event) => {
+                event.stopPropagation();
+                void openContactUrl(KOLO_SUMMER_PARTY_EVENTBRITE_URL);
+              }}
+              style={styles.officialEventPrimaryButton}
+            >
+              <CalendarDays color="#FFFFFF" size={16} strokeWidth={2.7} />
+              <Text style={styles.officialEventPrimaryButtonText}>
+                {labels.summerPartyEventbrite}
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="link"
+              onPress={(event) => {
+                event.stopPropagation();
+                void openContactUrl(KOLO_SUMMER_PARTY_MAP_URL);
+              }}
+              style={[
+                styles.officialEventSecondaryButton,
+                isDarkMode ? styles.darkSecondaryButton : null,
+              ]}
+            >
+              <MapPin
+                color={isDarkMode ? "#F5F5F7" : "#111111"}
+                size={16}
+                strokeWidth={2.7}
+              />
+              <Text
+                style={[
+                  styles.officialEventSecondaryButtonText,
+                  isDarkMode ? styles.darkSecondaryButtonText : null,
+                ]}
+              >
+                {labels.summerPartyMaps}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Pressable>
+
+      <Modal
+        animationType="slide"
+        onRequestClose={() => setIsOpen(false)}
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        transparent
+        visible={isOpen}
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setIsOpen(false)}
+            style={styles.modalDismissLayer}
+          />
+          <View style={[styles.modalSheet, isDarkMode ? styles.darkModalSheet : null]}>
+            <ScrollView
+              bounces
+              contentInsetAdjustmentBehavior="automatic"
+              contentContainerStyle={styles.modalContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              style={styles.modalScroll}
+            >
+              <View style={styles.modalHeader}>
+                <View style={styles.flex}>
+                  <Text style={[styles.modalTitle, isDarkMode ? styles.darkText : null]}>
+                    {labels.summerPartyTitle}
+                  </Text>
+                  <Text style={[styles.officialEventHost, isDarkMode ? styles.darkMutedText : null]}>
+                    {labels.summerPartyHost}
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityLabel={labels.close}
+                  accessibilityRole="button"
+                  onPress={() => setIsOpen(false)}
+                  style={[styles.modalCloseButton, isDarkMode ? styles.darkSettingRow : null]}
+                >
+                  <X
+                    color={isDarkMode ? "#E5E5EA" : "#111111"}
+                    size={19}
+                    strokeWidth={2.7}
+                  />
+                </Pressable>
+              </View>
+
+              <View style={styles.contentDetailImageFrame}>
+                <Image
+                  accessibilityLabel={labels.summerPartyTitle}
+                  resizeMode="contain"
+                  source={KOLO_SUMMER_PARTY_IMAGE}
+                  style={styles.contentDetailImage}
+                />
+              </View>
+
+              <View style={styles.contentDetailPillRow}>
+                <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
+                  {labels.officialEvent}
+                </Text>
+                <Text style={[styles.onlineBadge, isDarkMode ? styles.darkOnlineBadge : null]}>
+                  {labels.summerPartyDate}
+                </Text>
+              </View>
+
+              <View style={styles.officialEventMetaList}>
+                <View style={styles.officialEventMetaRow}>
+                  <CalendarDays
+                    color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+                    size={17}
+                    strokeWidth={2.5}
+                  />
+                  <Text style={[styles.officialEventMetaText, isDarkMode ? styles.darkText : null]}>
+                    {labels.summerPartyDate}
+                  </Text>
+                </View>
+                <View style={styles.officialEventMetaRow}>
+                  <MapPin
+                    color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+                    size={17}
+                    strokeWidth={2.5}
+                  />
+                  <Text style={[styles.officialEventMetaText, isDarkMode ? styles.darkText : null]}>
+                    {labels.summerPartyLocation}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.officialEventModalSection}>
+                <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+                  {labels.summerPartyOverviewTitle}
+                </Text>
+                <Text style={[styles.modalBody, isDarkMode ? styles.darkMutedText : null]}>
+                  {labels.summerPartyOverview}
+                </Text>
+                <Text style={[styles.modalBody, isDarkMode ? styles.darkMutedText : null]}>
+                  {labels.summerPartyOverviewMore}
+                </Text>
+              </View>
+
+              <View style={styles.officialEventHighlightGrid}>
+                {highlights.map((highlight) => (
+                  <View
+                    key={highlight}
+                    style={[
+                      styles.officialEventHighlightPill,
+                      isDarkMode ? styles.darkSettingRow : null,
+                    ]}
+                  >
+                    <Sparkles
+                      color={isDarkMode ? "#E5E5EA" : "#111111"}
+                      size={15}
+                      strokeWidth={2.6}
+                    />
+                    <Text
+                      style={[
+                        styles.officialEventHighlightText,
+                        isDarkMode ? styles.darkText : null,
+                      ]}
+                    >
+                      {highlight}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              <View style={[styles.contactCard, isDarkMode ? styles.darkSettingRow : null]}>
+                <Text style={[styles.modalBody, isDarkMode ? styles.darkMutedText : null]}>
+                  {labels.summerPartySafety}
+                </Text>
+                <Text style={[styles.modalBody, isDarkMode ? styles.darkMutedText : null]}>
+                  {labels.summerPartyContest}
+                </Text>
+              </View>
+
+              <View style={styles.officialEventActions}>
+                <Pressable
+                  accessibilityRole="link"
+                  onPress={() => {
+                    void openContactUrl(KOLO_SUMMER_PARTY_EVENTBRITE_URL);
+                  }}
+                  style={styles.officialEventPrimaryButton}
+                >
+                  <CalendarDays color="#FFFFFF" size={16} strokeWidth={2.7} />
+                  <Text style={styles.officialEventPrimaryButtonText}>
+                    {labels.summerPartyEventbrite}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="link"
+                  onPress={() => {
+                    void openContactUrl(KOLO_SUMMER_PARTY_MAP_URL);
+                  }}
+                  style={[
+                    styles.officialEventSecondaryButton,
+                    isDarkMode ? styles.darkSecondaryButton : null,
+                  ]}
+                >
+                  <MapPin
+                    color={isDarkMode ? "#F5F5F7" : "#111111"}
+                    size={16}
+                    strokeWidth={2.7}
+                  />
+                  <Text
+                    style={[
+                      styles.officialEventSecondaryButtonText,
+                      isDarkMode ? styles.darkSecondaryButtonText : null,
+                    ]}
+                  >
+                    {labels.summerPartyMaps}
+                  </Text>
+                </Pressable>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
 function EventsScreen({
   businesses,
   canViewContacts,
@@ -2464,6 +2812,7 @@ function EventsScreen({
       (first, second) =>
         getContentTimestamp(second.item) - getContentTimestamp(first.item),
     );
+  const officialEventCount = isKoloSummerPartyVisible() ? 1 : 0;
 
   return (
     <KeyboardAwareScreen>
@@ -2500,12 +2849,14 @@ function EventsScreen({
         </View>
       </View>
 
+      <OfficialKoloEventCard isDarkMode={isDarkMode} labels={labels} />
+
       <View style={styles.resultsHeader}>
         <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
           {selectedLocation || labels.allCanada}
         </Text>
         <Text style={[styles.resultCount, isDarkMode ? styles.darkBadge : null]}>
-          {eventEntries.length}
+          {eventEntries.length + officialEventCount}
         </Text>
       </View>
 
@@ -2525,11 +2876,11 @@ function EventsScreen({
             showBusinessName
           />
         ))
-      ) : (
+      ) : officialEventCount === 0 ? (
         <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
           {labels.noContentItems}
         </Text>
-      )}
+      ) : null}
     </KeyboardAwareScreen>
   );
 }
@@ -2700,6 +3051,8 @@ function HomeScreen({
           </View>
         </Pressable>
       </View>
+
+      <OfficialKoloEventCard isDarkMode={isDarkMode} labels={labels} />
 
       <View style={styles.homeSectionHeader}>
         <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
@@ -8924,6 +9277,135 @@ const styles = StyleSheet.create({
   featuredBusinessRail: {
     gap: 12,
     paddingRight: 20,
+  },
+  officialEventActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  officialEventBody: {
+    gap: 12,
+    padding: 16,
+  },
+  officialEventCard: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 24,
+    borderWidth: 1,
+    overflow: "hidden",
+    shadowColor: "#111111",
+    shadowOffset: { height: 12, width: 0 },
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+  },
+  officialEventHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  officialEventHost: {
+    color: "#6E6E73",
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.2,
+    textTransform: "uppercase",
+  },
+  officialEventImageFrame: {
+    backgroundColor: "#F5F5F7",
+    height: 278,
+    overflow: "hidden",
+    width: "100%",
+  },
+  officialEventImage: {
+    backgroundColor: "#F5F5F7",
+    height: 306,
+    marginTop: 10,
+    width: "100%",
+  },
+  officialEventMetaList: {
+    gap: 8,
+  },
+  officialEventMetaRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  officialEventMetaText: {
+    color: "#111111",
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "800",
+    lineHeight: 19,
+  },
+  officialEventHighlightGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  officialEventHighlightPill: {
+    alignItems: "center",
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+  },
+  officialEventHighlightText: {
+    color: "#111111",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  officialEventModalSection: {
+    gap: 10,
+  },
+  officialEventPrimaryButton: {
+    alignItems: "center",
+    backgroundColor: "#111111",
+    borderRadius: 14,
+    flexDirection: "row",
+    flexGrow: 1,
+    gap: 8,
+    justifyContent: "center",
+    minHeight: 48,
+    paddingHorizontal: 14,
+  },
+  officialEventPrimaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  officialEventSecondaryButton: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    flexGrow: 1,
+    gap: 8,
+    justifyContent: "center",
+    minHeight: 48,
+    paddingHorizontal: 14,
+  },
+  officialEventSecondaryButtonText: {
+    color: "#111111",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  officialEventSummary: {
+    color: "#6E6E73",
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  officialEventTitle: {
+    color: "#111111",
+    fontSize: 25,
+    fontWeight: "900",
+    lineHeight: 30,
   },
   homeHero: {
     backgroundColor: "#FFFFFF",

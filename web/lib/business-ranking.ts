@@ -161,7 +161,9 @@ function getNewBusinessScore(business: Business, now: number) {
 }
 
 function getActivitySignals(business: Business, now: number) {
-  const contentItems = business.contentItems ?? [];
+  const contentItems = (business.contentItems ?? []).filter((item) =>
+    isPublicContentItemVisible(item, now),
+  );
   const latestContentItemAt = getLatestContentItemAt(contentItems);
 
   return {
@@ -196,6 +198,10 @@ function getLatestContentItemAt(contentItems: BusinessContentItem[]) {
 
 function isUpcomingEvent(item: BusinessContentItem, now: number) {
   return item.type === "event" && getTimestamp(item.startsAt) >= now;
+}
+
+function isPublicContentItemVisible(item: BusinessContentItem, now: number) {
+  return item.type !== "event" || isUpcomingEvent(item, now);
 }
 
 function getRecencyScore(

@@ -14,6 +14,7 @@ import {
   BusinessContentPulseList,
 } from "@/components/business-content-cards";
 import { CategoryGrid } from "@/components/category-grid";
+import { OfficialKoloEventCard } from "@/components/official-kolo-event-card";
 import { SearchPanel } from "@/components/search-panel";
 import { Badge } from "@/components/ui/badge";
 import { categories, cities } from "@/lib/data";
@@ -21,6 +22,7 @@ import { rankBusinesses } from "@/lib/business-ranking";
 import { getDirectoryBusinesses } from "@/lib/directory-data";
 import { copy, localizeCategories, localizeCities } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/locale";
+import { isKoloSummerPartyVisible } from "@/lib/official-events";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import type { Business } from "@/lib/types";
 
@@ -46,6 +48,7 @@ export default async function HomePage() {
     localizedCities.length,
     locale,
   );
+  const hasOfficialEvent = isKoloSummerPartyVisible();
   const quickPlans = getQuickPlans(locale);
 
   return (
@@ -106,12 +109,18 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {hasOfficialEvent ? (
+        <section className="container py-10 md:py-12">
+          <OfficialKoloEventCard locale={locale} />
+        </section>
+      ) : null}
+
       <section className="container py-10 md:py-12">
         <div className="grid gap-4 md:grid-cols-3">
           {quickPlans.map((plan, index) => (
             <Link
               className="group rounded-lg border bg-card p-5 shadow-sm transition hover:-translate-y-1 hover:border-hover-blue-border hover:shadow-lift"
-              href={`/search?category=${plan.categorySlug}`}
+              href={plan.href ?? `/search?category=${plan.categorySlug}`}
               key={plan.title}
             >
               <span className="flex h-12 w-12 items-center justify-center rounded-md bg-primary text-primary-foreground transition group-hover:bg-hover-blue group-hover:text-hover-blue-foreground">
@@ -345,6 +354,7 @@ function getQuickPlans(locale: "uk" | "en") {
         {
           categorySlug: "events",
           cta: "Подивитись події",
+          href: "/events",
           text: "Івенти, туризм, квіти, декор і цікаві місця на вихідні.",
           title: "Плани на вихідні",
         },
@@ -365,6 +375,7 @@ function getQuickPlans(locale: "uk" | "en") {
         {
           categorySlug: "events",
           cta: "Browse events",
+          href: "/events",
           text: "Events, travel, flowers, decor, and interesting weekend places.",
           title: "Weekend plans",
         },
