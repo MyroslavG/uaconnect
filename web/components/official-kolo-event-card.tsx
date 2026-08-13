@@ -36,10 +36,10 @@ export function OfficialKoloEventCard({
   return (
     <article className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-soft">
       <div className="grid gap-0 lg:grid-cols-[0.95fr_1.05fr]">
-        <div className="relative min-h-[280px] overflow-hidden bg-secondary md:min-h-[360px]">
+        <div className="relative min-h-[280px] overflow-hidden bg-secondary dark:bg-black md:min-h-[360px]">
           <Image
             alt={labels.imageAlt}
-            className="object-cover"
+            className="object-contain"
             fill
             priority={isFull}
             sizes="(min-width: 1024px) 48vw, 100vw"
@@ -52,7 +52,7 @@ export function OfficialKoloEventCard({
             <Badge variant="outline" className="bg-background text-foreground">
               {labels.badge}
             </Badge>
-            <Badge variant="secondary">{labels.host}</Badge>
+            {labels.host ? <Badge variant="secondary">{labels.host}</Badge> : null}
           </div>
 
           <h2 className="mt-5 text-balance text-3xl font-black tracking-normal md:text-5xl">

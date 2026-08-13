@@ -158,12 +158,13 @@ const PUBLIC_WEB_URL = (
 ).replace(/\/+$/, "");
 const KOLO_SUMMER_PARTY_EVENTBRITE_URL =
   "https://www.eventbrite.ca/e/kolo-summer-party-tickets-1997616640145";
-const KOLO_SUMMER_PARTY_LOCATION = "Crestview Outdoor Pool, Ottawa, ON";
+const KOLO_SUMMER_PARTY_LOCATION =
+  "Bob Mitchell Park / Crestview Outdoor Pool, Ottawa, ON";
 const KOLO_SUMMER_PARTY_MAP_URL = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
   KOLO_SUMMER_PARTY_LOCATION,
 )}`;
 const KOLO_SUMMER_PARTY_END_AT = "2026-08-30T01:00:00.000Z";
-const KOLO_SUMMER_PARTY_IMAGE = require("./assets/summer-party.jpg") as number;
+const KOLO_SUMMER_PARTY_IMAGE = require("./assets/summer-party2.jpeg") as number;
 const THEME_STORAGE_KEY = "kolo-theme";
 const WALKTHROUGH_STORAGE_KEY = "kolo-walkthrough-seen";
 
@@ -265,25 +266,25 @@ const copy = {
     eventsNearYou: "Події поруч",
     eventsIntro: "Дивіться події від українських бізнесів за містом або локацією поруч.",
     officialEvent: "Подія Kolo",
-    summerPartyTitle: "KOLO Summer Party",
-    summerPartyHost: "KOLO × Mykyta Zakharchenko",
+    summerPartyTitle: "Summer Pool Party",
+    summerPartyHost: "",
     summerPartySummary:
-      "Сімейна зустріч з басейном, конкурсами, дитячим ярмарком, шоу-програмою та лотереєю.",
+      "Запрошуємо на сімейну вечірку біля басейну, де ми разом завершимо літо яскраво, весело та у хорошій компанії.",
     summerPartyDate: "Субота, 29 серпня · 16:30–21:00",
-    summerPartyLocation: "Crestview Outdoor Pool · Ottawa, ON",
+    summerPartyLocation: "Bob Mitchell Park / Crestview Outdoor Pool",
     summerPartyEventbrite: "Eventbrite",
     summerPartyMaps: "Google Maps",
-    summerPartyOverviewTitle: "Завершуємо літо разом",
+    summerPartyOverviewTitle: "Summer Pool Party вже скоро! ☀️💦",
     summerPartyOverview:
-      "29 серпня KOLO × Mykyta Zakharchenko запрошують вас на теплу сімейну зустріч, де поєднаємо відпочинок біля басейну та літню вечірку в парку.",
+      "Запрошуємо на сімейну вечірку біля басейну, де ми разом завершимо літо яскраво, весело та у хорошій компанії.",
     summerPartyOverviewMore:
-      "Подія складатиметься з двох частин: спочатку проведемо час біля басейну, а потім продовжимо вечір у парку з активностями, спілкуванням та сімейною атмосферою.",
+      "На вас чекають басейн, дитяча шоу-програма, сімейні конкурси, музика, фотозона, аквааеробіка та багато гарного настрою.",
     summerPartySafety:
-      "Під час частини заходу біля басейну будуть присутні рятувальники. Якщо плануєте плавати, візьміть купальники, рушники, воду та невеликі снеки.",
+      "29 серпня · 16:30–21:00 · Bob Mitchell Park / Crestview Outdoor Pool.",
     summerPartyContest:
-      "Участь у сімейному конкурсі проходить за попереднім записом, оскільки кількість місць обмежена.",
+      "Квитки та деталі доступні на Eventbrite.",
     summerPartyHighlights:
-      "Басейн|Аеробіка у воді|Сімейний конкурс|Шоу-програма для дітей|Активності в парку|Нові знайомства",
+      "Басейн|Дитяча шоу-програма|Сімейні конкурси|Музика|Фотозона|Аквааеробіка",
     find: "Знайти",
     free: "Безкоштовно",
     googleEmail: "Google email",
@@ -504,25 +505,25 @@ const copy = {
     eventsNearYou: "Events near you",
     eventsIntro: "Browse events from Ukrainian businesses by city or nearby location.",
     officialEvent: "Kolo event",
-    summerPartyTitle: "KOLO Summer Party",
-    summerPartyHost: "KOLO × Mykyta Zakharchenko",
+    summerPartyTitle: "Summer Pool Party",
+    summerPartyHost: "",
     summerPartySummary:
-      "A family meetup with pool time, contests, a kids market, a show program, and a raffle.",
+      "Join a family pool party where we close the summer brightly, joyfully, and in good company.",
     summerPartyDate: "Saturday, August 29 · 4:30 PM - 9 PM",
-    summerPartyLocation: "Crestview Outdoor Pool · Ottawa, ON",
+    summerPartyLocation: "Bob Mitchell Park / Crestview Outdoor Pool",
     summerPartyEventbrite: "Eventbrite",
     summerPartyMaps: "Google Maps",
-    summerPartyOverviewTitle: "Closing summer together",
+    summerPartyOverviewTitle: "Summer Pool Party is coming soon! ☀️💦",
     summerPartyOverview:
-      "On August 29, KOLO × Mykyta Zakharchenko invites families to a warm community meetup with pool time and a summer party in the park.",
+      "Join a family pool party where we close the summer brightly, joyfully, and in good company.",
     summerPartyOverviewMore:
-      "The event has two parts: time by the pool first, then an evening in the park with activities, conversation, and a family-friendly atmosphere.",
+      "Expect the pool, a kids show program, family contests, music, a photo zone, aqua aerobics, and lots of good energy.",
     summerPartySafety:
-      "Lifeguards will be present during the pool portion. If you plan to swim, bring swimwear, towels, water, and light snacks.",
+      "August 29 · 4:30 PM - 9 PM · Bob Mitchell Park / Crestview Outdoor Pool.",
     summerPartyContest:
-      "Family contest participation requires advance registration because spots are limited.",
+      "Tickets and details are available on Eventbrite.",
     summerPartyHighlights:
-      "Pool time|Water aerobics|Family contest|Kids show|Park activities|New connections",
+      "Pool|Kids show|Family contests|Music|Photo zone|Aqua aerobics",
     find: "Search",
     free: "Free",
     googleEmail: "Google email",
@@ -2450,12 +2451,20 @@ function OfficialKoloEventCard({
         onPress={() => setIsOpen(true)}
         style={[styles.officialEventCard, isDarkMode ? styles.darkCard : null]}
       >
-        <View style={styles.officialEventImageFrame}>
+        <View
+          style={[
+            styles.officialEventImageFrame,
+            isDarkMode ? styles.darkOfficialEventImageSurface : null,
+          ]}
+        >
           <Image
             accessibilityLabel={labels.summerPartyTitle}
-            resizeMode="cover"
+            resizeMode="contain"
             source={KOLO_SUMMER_PARTY_IMAGE}
-            style={styles.officialEventImage}
+            style={[
+              styles.officialEventImage,
+              isDarkMode ? styles.darkOfficialEventImageSurface : null,
+            ]}
           />
         </View>
         <View style={styles.officialEventBody}>
@@ -2463,12 +2472,14 @@ function OfficialKoloEventCard({
             <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
               {labels.officialEvent}
             </Text>
-            <Text
-              numberOfLines={1}
-              style={[styles.officialEventHost, isDarkMode ? styles.darkMutedText : null]}
-            >
-              {labels.summerPartyHost}
-            </Text>
+            {labels.summerPartyHost ? (
+              <Text
+                numberOfLines={1}
+                style={[styles.officialEventHost, isDarkMode ? styles.darkMutedText : null]}
+              >
+                {labels.summerPartyHost}
+              </Text>
+            ) : null}
           </View>
           <Text style={[styles.officialEventTitle, isDarkMode ? styles.darkText : null]}>
             {labels.summerPartyTitle}
@@ -2569,9 +2580,11 @@ function OfficialKoloEventCard({
                   <Text style={[styles.modalTitle, isDarkMode ? styles.darkText : null]}>
                     {labels.summerPartyTitle}
                   </Text>
-                  <Text style={[styles.officialEventHost, isDarkMode ? styles.darkMutedText : null]}>
-                    {labels.summerPartyHost}
-                  </Text>
+                  {labels.summerPartyHost ? (
+                    <Text style={[styles.officialEventHost, isDarkMode ? styles.darkMutedText : null]}>
+                      {labels.summerPartyHost}
+                    </Text>
+                  ) : null}
                 </View>
                 <Pressable
                   accessibilityLabel={labels.close}
@@ -2587,7 +2600,14 @@ function OfficialKoloEventCard({
                 </Pressable>
               </View>
 
-              <View style={styles.contentDetailImageFrame}>
+              <View
+                style={[
+                  styles.contentDetailImageFrame,
+                  isDarkMode
+                    ? styles.darkOfficialEventImageSurface
+                    : styles.lightOfficialEventImageSurface,
+                ]}
+              >
                 <Image
                   accessibilityLabel={labels.summerPartyTitle}
                   resizeMode="contain"
@@ -8889,6 +8909,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#111111",
     borderColor: "#2C2C2E",
   },
+  darkOfficialEventImageSurface: {
+    backgroundColor: "#000000",
+  },
+  lightOfficialEventImageSurface: {
+    backgroundColor: "#FFFFFF",
+  },
   darkEmptyState: {
     backgroundColor: "#1C1C1E",
     color: "#A1A1A6",
@@ -9313,14 +9339,13 @@ const styles = StyleSheet.create({
   },
   officialEventImageFrame: {
     backgroundColor: "#F5F5F7",
-    height: 278,
+    height: 320,
     overflow: "hidden",
     width: "100%",
   },
   officialEventImage: {
     backgroundColor: "#F5F5F7",
-    height: 306,
-    marginTop: 10,
+    height: "100%",
     width: "100%",
   },
   officialEventMetaList: {

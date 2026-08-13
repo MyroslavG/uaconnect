@@ -4,10 +4,10 @@ export const koloSummerParty = {
   endAt: "2026-08-30T01:00:00.000Z",
   eventbriteUrl:
     "https://www.eventbrite.ca/e/kolo-summer-party-tickets-1997616640145",
-  imageUrl: "/summer-party.jpg",
-  location: "Crestview Outdoor Pool, Ottawa, ON",
+  imageUrl: "/summer-party2.jpeg",
+  location: "Bob Mitchell Park / Crestview Outdoor Pool, Ottawa, ON",
   mapUrl:
-    "https://www.google.com/maps/search/?api=1&query=Crestview%20Outdoor%20Pool%2C%20Ottawa%2C%20ON",
+    "https://www.google.com/maps/search/?api=1&query=Bob%20Mitchell%20Park%20%2F%20Crestview%20Outdoor%20Pool%2C%20Ottawa%2C%20ON",
   startAt: "2026-08-29T20:30:00.000Z",
 } as const;
 
@@ -19,62 +19,62 @@ export function getKoloSummerPartyCopy(locale: Locale) {
   return locale === "uk"
     ? {
         badge: "Подія Kolo",
-        title: "KOLO Summer Party",
-        host: "KOLO × Mykyta Zakharchenko",
+        title: "Summer Pool Party",
+        host: "",
         summary:
-          "Сімейний Summer Party з басейном, конкурсами, дитячим ярмарком, шоу-програмою та лотереєю.",
+          "Запрошуємо на сімейну вечірку біля басейну, де ми разом завершимо літо яскраво, весело та у хорошій компанії.",
         date: "Субота, 29 серпня · 16:30–21:00",
-        location: "Crestview Outdoor Pool · Ottawa, ON",
-        imageAlt: "KOLO Summer Party біля басейну в Ottawa",
+        location: "Bob Mitchell Park / Crestview Outdoor Pool",
+        imageAlt: "Summer Pool Party біля басейну в Ottawa",
         eventbrite: "Відкрити Eventbrite",
         maps: "Відкрити Google Maps",
         details: "Деталі події",
-        overviewTitle: "Завершуємо літо разом",
+        overviewTitle: "Summer Pool Party вже скоро! ☀️💦",
         overview:
-          "29 серпня KOLO × Mykyta Zakharchenko запрошують вас на теплу сімейну зустріч, де поєднаємо відпочинок біля басейну та літню вечірку в парку.",
+          "Запрошуємо на сімейну вечірку біля басейну, де ми разом завершимо літо яскраво, весело та у хорошій компанії.",
         secondPart:
-          "Подія складатиметься з двох частин: спочатку проведемо час біля басейну, а потім продовжимо вечір у парку з активностями, спілкуванням та сімейною атмосферою.",
+          "На вас чекають басейн, дитяча шоу-програма, сімейні конкурси, музика, фотозона, аквааеробіка та багато гарного настрою.",
         safety:
-          "Під час частини заходу біля басейну будуть присутні рятувальники. Якщо плануєте плавати, візьміть купальники, рушники, воду та невеликі снеки.",
+          "29 серпня · 16:30–21:00 · Bob Mitchell Park / Crestview Outdoor Pool.",
         registration:
-          "Участь у сімейному конкурсі проходить за попереднім записом, оскільки кількість місць обмежена.",
+          "Квитки та деталі доступні на Eventbrite.",
         highlights: [
-          "Відпочинок біля басейну",
-          "Аеробіка у воді",
-          "Сімейний конкурс",
-          "Шоу-програма для дітей",
-          "Вечірка та активності в парку",
-          "Нові знайомства та тепла сімейна атмосфера",
+          "Басейн",
+          "Дитяча шоу-програма",
+          "Сімейні конкурси",
+          "Музика",
+          "Фотозона",
+          "Аквааеробіка",
         ],
       }
     : {
         badge: "Kolo event",
-        title: "KOLO Summer Party",
-        host: "KOLO × Mykyta Zakharchenko",
+        title: "Summer Pool Party",
+        host: "",
         summary:
-          "A family summer meetup with pool time, contests, a kids market, a show program, and a raffle.",
+          "Join a family pool party where we close the summer brightly, joyfully, and in good company.",
         date: "Saturday, August 29 · 4:30 PM - 9 PM",
-        location: "Crestview Outdoor Pool · Ottawa, ON",
-        imageAlt: "KOLO Summer Party by the pool in Ottawa",
+        location: "Bob Mitchell Park / Crestview Outdoor Pool",
+        imageAlt: "Summer Pool Party by the pool in Ottawa",
         eventbrite: "Open Eventbrite",
         maps: "Open Google Maps",
         details: "Event details",
-        overviewTitle: "Closing summer together",
+        overviewTitle: "Summer Pool Party is coming soon! ☀️💦",
         overview:
-          "On August 29, KOLO × Mykyta Zakharchenko invites families to a warm community meetup with pool time and a summer party in the park.",
+          "Join a family pool party where we close the summer brightly, joyfully, and in good company.",
         secondPart:
-          "The event has two parts: time by the pool first, then an evening in the park with activities, conversation, and a family-friendly atmosphere.",
+          "Expect the pool, a kids show program, family contests, music, a photo zone, aqua aerobics, and lots of good energy.",
         safety:
-          "Lifeguards will be present during the pool portion. If you plan to swim, bring swimwear, towels, water, and light snacks.",
+          "August 29 · 4:30 PM - 9 PM · Bob Mitchell Park / Crestview Outdoor Pool.",
         registration:
-          "Family contest participation requires advance registration because spots are limited.",
+          "Tickets and details are available on Eventbrite.",
         highlights: [
-          "Pool time",
-          "Water aerobics",
-          "Family contest",
-          "Kids show program",
-          "Park party and activities",
-          "New connections and a warm family atmosphere",
+          "Pool",
+          "Kids show",
+          "Family contests",
+          "Music",
+          "Photo zone",
+          "Aqua aerobics",
         ],
       };
 }
