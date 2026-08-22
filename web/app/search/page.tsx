@@ -232,18 +232,24 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         query={query}
         radius={resolvedSearchParams.radius}
       />
-      <section className="sticky top-16 z-30 border-b bg-background/95 py-4 backdrop-blur-xl">
+      <section className="sticky top-16 z-30 border-b bg-background/95 py-3 backdrop-blur-xl">
         <div className="container">
-          <Badge variant="accent">{labels.kicker as string}</Badge>
-          <h1 className="mt-3 text-3xl font-black tracking-normal md:text-4xl">
-            {shouldShowDiscovery
-              ? (labels.discoverTitle as string)
-              : (labels.title as string)}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {summaryText}
-          </p>
-          <div className="mt-4">
+          <div className="mb-3 flex min-w-0 items-end justify-between gap-3">
+            <div className="min-w-0">
+              <Badge variant="accent" className="hidden sm:inline-flex">
+                {labels.kicker as string}
+              </Badge>
+              <h1 className="mt-0 truncate text-xl font-black tracking-normal sm:mt-2 md:text-2xl">
+                {shouldShowDiscovery
+                  ? (labels.discoverTitle as string)
+                  : (labels.title as string)}
+              </h1>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground sm:text-sm">
+                {summaryText}
+              </p>
+            </div>
+          </div>
+          <div>
             <SearchPanel
               cities={localizedCities}
               categories={localizedCategories}

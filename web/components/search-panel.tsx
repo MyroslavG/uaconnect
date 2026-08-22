@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { Search, Tags } from "lucide-react";
+import { Search, SlidersHorizontal, Tags } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { CategoryCombobox } from "@/components/category-combobox";
@@ -58,6 +58,7 @@ export function SearchPanel({
 }: SearchPanelProps) {
   const router = useRouter();
   const labels = copy[locale];
+  const filtersLabel = locale === "uk" ? "Фільтри" : "Filters";
   const initialCitySlug = defaultCity ?? "";
   const initialCityName = defaultCity
     ? cities.find((city) => city.slug === initialCitySlug)?.name ?? ""
@@ -73,6 +74,8 @@ export function SearchPanel({
   );
   const [localOnly, setLocalOnly] = useState(defaultLocalOnly);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [areFiltersOpen, setAreFiltersOpen] = useState(variant !== "compact");
+  const isCompact = variant === "compact";
 
   useEffect(() => {
     setQuery(defaultQuery);
@@ -85,6 +88,10 @@ export function SearchPanel({
   useEffect(() => {
     setLocalOnly(defaultLocalOnly);
   }, [defaultLocalOnly]);
+
+  useEffect(() => {
+    setAreFiltersOpen(variant !== "compact");
+  }, [variant]);
 
   useEffect(() => {
     const nextCitySlug = defaultCity ?? "";
@@ -139,25 +146,8 @@ export function SearchPanel({
     }
   }
 
-  return (
-    <form
-      onSubmit={handleSubmit}
-      className={
-        variant === "hero"
-          ? "premium-panel grid w-full max-w-full items-stretch gap-2 rounded-lg p-2 text-foreground md:grid-cols-2"
-          : "grid w-full max-w-full items-stretch gap-2 rounded-lg border bg-card/90 p-2 shadow-sm backdrop-blur md:grid-cols-2 xl:grid-cols-[minmax(210px,1fr)_minmax(240px,1.05fr)_minmax(210px,0.9fr)_minmax(150px,0.62fr)_auto]"
-      }
-    >
-      <label className={fieldShellClass}>
-        <span className={fieldLabelClass}>{labels.search.label}</span>
-        <Search className={fieldIconClass} />
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          className={fieldControlClass}
-          placeholder={labels.search.placeholder}
-        />
-      </label>
+  const advancedFilters = (
+    <>
       <LocationField
         cities={cities}
         value={location}
@@ -193,7 +183,7 @@ export function SearchPanel({
           triggerClassName={selectTriggerClass}
         />
       </div>
-      <label className="group flex h-16 cursor-pointer items-center gap-3 rounded-md border border-border/70 bg-background/90 px-4 py-3 text-sm font-black shadow-sm transition hover:border-hover-blue-border hover:bg-hover-blue/35">
+      <label className="group flex h-16 min-w-0 cursor-pointer items-center gap-3 rounded-md border border-border/70 bg-background/90 px-4 py-3 text-sm font-black shadow-sm transition hover:border-hover-blue-border hover:bg-hover-blue/35">
         <input
           checked={localOnly}
           className="h-4 w-4 accent-primary"
@@ -202,6 +192,69 @@ export function SearchPanel({
         />
         <span className="leading-tight">{labels.search.localOnly}</span>
       </label>
+    </>
+  );
+
+  if (isCompact) {
+    return (
+      <form onSubmit={handleSubmit} className="grid w-full max-w-full gap-2">
+        <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+          <label className={fieldShellClass}>
+            <span className={fieldLabelClass}>{labels.search.label}</span>
+            <Search className={fieldIconClass} />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className={fieldControlClass}
+              placeholder={labels.search.placeholder}
+            />
+          </label>
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="h-16 rounded-md px-4"
+            aria-expanded={areFiltersOpen}
+            onClick={() => setAreFiltersOpen((isOpen) => !isOpen)}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            <span className="hidden sm:inline">{filtersLabel}</span>
+          </Button>
+          <Button
+            type="submit"
+            size="lg"
+            className="h-16 rounded-md px-5 shadow-glow hover:bg-hover-blue hover:text-hover-blue-foreground"
+            disabled={isSubmitting}
+          >
+            <Search className="h-4 w-4" />
+            {labels.search.submit}
+          </Button>
+        </div>
+        {areFiltersOpen ? (
+          <div className="grid min-w-0 items-stretch gap-2 rounded-lg border bg-card/95 p-2 shadow-sm backdrop-blur md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:grid-cols-[minmax(240px,1.1fr)_minmax(220px,0.9fr)_minmax(150px,0.62fr)]">
+            {advancedFilters}
+          </div>
+        ) : null}
+      </form>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="premium-panel grid w-full max-w-full min-w-0 items-stretch gap-2 overflow-visible rounded-lg p-2 text-foreground sm:grid-cols-2"
+    >
+      <label className={fieldShellClass}>
+        <span className={fieldLabelClass}>{labels.search.label}</span>
+        <Search className={fieldIconClass} />
+        <Input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          className={fieldControlClass}
+          placeholder={labels.search.placeholder}
+        />
+      </label>
+      {advancedFilters}
       <Button
         type="submit"
         size="lg"
