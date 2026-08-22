@@ -6,7 +6,7 @@ import { BusinessCard } from "@/components/business-card";
 import { BusinessContentTiles } from "@/components/business-content-cards";
 import { ContactAccessCard } from "@/components/contact-access-card";
 import { ResultsMap } from "@/components/results-map";
-import { SearchPanel } from "@/components/search-panel";
+import { SearchLauncher } from "@/components/search-launcher";
 import { SearchLocationAutoFilter } from "@/components/search-location-auto-filter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -232,10 +232,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         query={query}
         radius={resolvedSearchParams.radius}
       />
-      <section className="sticky top-16 z-30 border-b bg-background/95 py-3 backdrop-blur-xl">
-        <div className="container">
-          <div className="mb-3 flex min-w-0 items-end justify-between gap-3">
-            <div className="min-w-0">
+      <section className="sticky top-16 z-30 border-b bg-background/95 py-2 backdrop-blur-xl">
+        <div className="container flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-end justify-between gap-3">
+            <div className="min-w-0 sm:max-w-xs md:max-w-sm lg:max-w-md">
               <Badge variant="accent" className="hidden sm:inline-flex">
                 {labels.kicker as string}
               </Badge>
@@ -249,17 +249,16 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               </p>
             </div>
           </div>
-          <div>
-            <SearchPanel
-              cities={localizedCities}
+          <div className="min-w-0 sm:w-[min(42vw,28rem)]">
+            <SearchLauncher
               categories={localizedCategories}
+              cities={localizedCities}
               defaultCity={city?.slug}
               defaultCategory={category?.slug ?? "all"}
-              defaultQuery={query}
-              defaultLocation={near}
               defaultCoordinates={coordinates}
               defaultLocalOnly={localOnly}
-              variant="compact"
+              defaultLocation={near}
+              defaultQuery={query}
               locale={locale}
             />
           </div>

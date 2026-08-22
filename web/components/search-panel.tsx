@@ -17,6 +17,7 @@ type SearchPanelProps = {
   cities: City[];
   categories: Category[];
   variant?: "hero" | "compact";
+  defaultFiltersOpen?: boolean;
   defaultCity?: string;
   defaultCategory?: string;
   defaultLocalOnly?: boolean;
@@ -24,6 +25,7 @@ type SearchPanelProps = {
   defaultLocation?: string;
   defaultCoordinates?: Coordinates;
   locale: Locale;
+  onSubmitted?: () => void;
 };
 
 const fieldShellClass =
@@ -48,6 +50,7 @@ export function SearchPanel({
   cities,
   categories,
   variant = "hero",
+  defaultFiltersOpen = false,
   defaultCity,
   defaultCategory,
   defaultLocalOnly = false,
@@ -55,6 +58,7 @@ export function SearchPanel({
   defaultLocation,
   defaultCoordinates,
   locale,
+  onSubmitted,
 }: SearchPanelProps) {
   const router = useRouter();
   const labels = copy[locale];
@@ -74,7 +78,9 @@ export function SearchPanel({
   );
   const [localOnly, setLocalOnly] = useState(defaultLocalOnly);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [areFiltersOpen, setAreFiltersOpen] = useState(variant !== "compact");
+  const [areFiltersOpen, setAreFiltersOpen] = useState(
+    variant !== "compact" || defaultFiltersOpen,
+  );
   const isCompact = variant === "compact";
 
   useEffect(() => {
@@ -90,8 +96,8 @@ export function SearchPanel({
   }, [defaultLocalOnly]);
 
   useEffect(() => {
-    setAreFiltersOpen(variant !== "compact");
-  }, [variant]);
+    setAreFiltersOpen(variant !== "compact" || defaultFiltersOpen);
+  }, [variant, defaultFiltersOpen]);
 
   useEffect(() => {
     const nextCitySlug = defaultCity ?? "";
@@ -141,6 +147,7 @@ export function SearchPanel({
       }
 
       router.push(`/search${params.size ? `?${params}` : ""}`);
+      onSubmitted?.();
     } finally {
       setIsSubmitting(false);
     }

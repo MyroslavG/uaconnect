@@ -16,7 +16,7 @@ import {
 import { BusinessLogo } from "@/components/business-logo";
 import { CategoryGrid } from "@/components/category-grid";
 import { OfficialKoloEventCard } from "@/components/official-kolo-event-card";
-import { SearchPanel } from "@/components/search-panel";
+import { SearchLauncher } from "@/components/search-launcher";
 import { Badge } from "@/components/ui/badge";
 import { categories, cities } from "@/lib/data";
 import { rankBusinesses } from "@/lib/business-ranking";
@@ -56,8 +56,8 @@ export default async function HomePage() {
     <>
       <section className="relative isolate overflow-hidden border-b bg-background">
         <div className="absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_top,hsl(var(--foreground)/0.08),transparent_62%)]" />
-        <div className="container relative grid min-h-[600px] gap-8 py-12 md:py-16 lg:grid-cols-[1fr_360px] lg:items-center">
-          <div className="max-w-3xl">
+        <div className="container relative grid min-h-[540px] gap-8 py-12 md:py-16 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-center">
+          <div className="min-w-0 max-w-3xl">
             <Badge variant="outline" className="bg-card text-foreground">
               {labels.badge}
             </Badge>
@@ -67,12 +67,12 @@ export default async function HomePage() {
             <p className="mt-5 max-w-2xl text-balance text-lg leading-8 text-muted-foreground">
               {labels.intro}
             </p>
-            <div className="mt-8">
-              <SearchPanel
+            <div className="mt-8 max-w-xl">
+              <SearchLauncher
                 cities={localizedCities}
                 categories={localizedCategories}
-                variant="compact"
                 locale={locale}
+                tone="hero"
               />
             </div>
             <HomeStoryStrip businesses={featuredBusinesses} />

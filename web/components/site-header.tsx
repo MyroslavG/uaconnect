@@ -1,14 +1,22 @@
 import Link from "next/link";
 import Image from "next/image";
+import { Search } from "lucide-react";
 
 import { AuthMenu } from "@/components/auth-menu";
 import { LanguageToggle } from "@/components/language-toggle";
 import { MobileNav } from "@/components/mobile-nav";
+import { SearchLauncher } from "@/components/search-launcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UpdateNotifications } from "@/components/update-notifications";
 import { Button } from "@/components/ui/button";
 import { getVisibleAnnouncements } from "@/lib/announcements";
-import { copy, type Locale } from "@/lib/i18n";
+import { categories, cities } from "@/lib/data";
+import {
+  copy,
+  localizeCategories,
+  localizeCities,
+  type Locale,
+} from "@/lib/i18n";
 import { getCurrentUser, isCurrentUserAdmin } from "@/lib/supabase/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -26,6 +34,11 @@ export async function SiteHeader({ locale }: SiteHeaderProps) {
   const announcements = isSignedIn
     ? await getVisibleAnnouncements(user?.id)
     : [];
+  const localizedCities = localizeCities(cities, locale).map((city) => ({
+    ...city,
+    summary: "",
+  }));
+  const localizedCategories = localizeCategories(categories, locale);
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/50 bg-background/80 backdrop-blur-xl dark:border-white/10">
@@ -45,7 +58,21 @@ export async function SiteHeader({ locale }: SiteHeaderProps) {
             Kolo
           </span>
         </Link>
+        <div className="hidden min-w-0 flex-1 lg:block lg:max-w-sm">
+          <SearchLauncher
+            categories={localizedCategories}
+            cities={localizedCities}
+            locale={locale}
+            tone="header"
+          />
+        </div>
         <div className="hidden items-center gap-2 sm:flex">
+          <Button asChild className="hidden sm:inline-flex lg:hidden" variant="ghost" size="sm">
+            <Link href="/search">
+              <Search className="h-4 w-4" />
+              {labels.common.search}
+            </Link>
+          </Button>
           <Button asChild className="hidden sm:inline-flex" variant="ghost" size="sm">
             <Link href="/feed">{labels.header.feed}</Link>
           </Button>
