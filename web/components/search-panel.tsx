@@ -198,7 +198,7 @@ export function SearchPanel({
   if (isCompact) {
     return (
       <form onSubmit={handleSubmit} className="grid w-full max-w-full gap-2">
-        <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+        <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_4rem_auto] md:grid-cols-[minmax(0,1fr)_auto_auto]">
           <label className={fieldShellClass}>
             <span className={fieldLabelClass}>{labels.search.label}</span>
             <Search className={fieldIconClass} />
@@ -218,7 +218,7 @@ export function SearchPanel({
             onClick={() => setAreFiltersOpen((isOpen) => !isOpen)}
           >
             <SlidersHorizontal className="h-4 w-4" />
-            <span className="hidden sm:inline">{filtersLabel}</span>
+            <span className="hidden md:inline">{filtersLabel}</span>
           </Button>
           <Button
             type="submit"

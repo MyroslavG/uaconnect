@@ -71,6 +71,7 @@ export default async function HomePage() {
               <SearchPanel
                 cities={localizedCities}
                 categories={localizedCategories}
+                variant="compact"
                 locale={locale}
               />
             </div>
