@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker, {
   type DateTimePickerEvent,
@@ -9,45 +9,81 @@ import * as ImagePicker from "expo-image-picker";
 import * as ExpoLocation from "expo-location";
 import {
   Alert,
+  Animated,
   Dimensions,
+  Easing,
+  FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  PanResponder,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   Share as NativeShare,
   StatusBar,
+  type StyleProp,
   StyleSheet,
   Switch,
   Text,
   TextInput,
   View,
+  type KeyboardEvent,
+  type ViewStyle,
 } from "react-native";
 import {
   Bell,
   Bookmark,
+  Calculator,
   CalendarDays,
+  ArrowLeft,
+  Camera,
+  Car,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  Code2,
   ExternalLink,
+  Flower2,
+  GraduationCap,
+  Hammer,
+  HandCoins,
+  Heart,
+  HeartPulse,
   Home,
   Lock,
   MapPin,
+  Megaphone,
+  MessageCircle,
   Moon,
   Pencil,
   Phone,
+  Plane,
   Plus,
+  Scale,
   Search,
+  Send,
   Share2,
+  Scissors,
+  ShieldCheck,
+  ShoppingBag,
+  ShoppingBasket,
+  SlidersHorizontal,
   Sparkles,
   Store,
   Sun,
+  Sofa,
   Trash2,
   type LucideIcon,
+  Truck,
   Upload,
+  Utensils,
   UserRound,
+  Wrench,
   X,
 } from "lucide-react-native";
 import Svg, { Path } from "react-native-svg";
@@ -77,6 +113,15 @@ import {
 } from "./src/account";
 import { trackMobileAnalyticsEvent } from "./src/analytics";
 import {
+  createMobileFeedComment,
+  createMobileFeedPost,
+  deleteMobileFeedComment,
+  fetchMobileFeedPosts,
+  toggleMobileFeedLike,
+  updateMobileFeedComment,
+  type MobileFeedPost,
+} from "./src/feed";
+import {
   createBusinessContentItem,
   createBusinessRegistration,
   deleteBusinessContentItem,
@@ -91,6 +136,15 @@ import {
   type BusinessRegistrationInput,
 } from "./src/directory";
 import { isSupabaseConfigured, supabase } from "./src/supabase";
+import {
+  fetchBusinessConversations,
+  fetchBusinessMessages,
+  isDraftConversationId,
+  markMobileConversationRead,
+  sendMobileBusinessMessage,
+  type MobileConversation,
+  type MobileMessage,
+} from "./src/messages";
 import {
   dismissAnnouncement as dismissRemoteAnnouncement,
   dismissAnnouncements as dismissRemoteAnnouncements,
@@ -108,13 +162,25 @@ import type {
   Locale,
 } from "./src/types";
 
-type Tab = "home" | "search" | "events" | "profile";
+type MainTab = "home" | "search" | "feed" | "events" | "profile";
+type Tab = MainTab | "business" | "messages";
+type ReturnTab = MainTab | "business";
 type DashboardPanel = "profile" | "services" | "events" | "products";
 type ProfilePanel = "account" | "addBusiness" | "businessInfo";
 type ContentDetailEntry = {
   business: Business;
   item: BusinessContentItem;
 };
+type DiscoveryTile =
+  {
+    business: Business;
+    imageUrl: string;
+    item: BusinessContentItem;
+    key: string;
+    kind: "content";
+    subtitle: string;
+    title: string;
+  };
 type AppTourPhase = "focus" | "text";
 type AppTourFocus =
   | "addBusinessForm"
@@ -134,37 +200,34 @@ type AppTourStep = {
 };
 
 const BUSINESS_SHEET_HEIGHT = Math.round(Dimensions.get("window").height * 0.76);
+const DISCOVERY_GRID_GAP = 4;
+const DISCOVERY_TILE_WIDTH = Math.floor(
+  (Dimensions.get("window").width - DISCOVERY_GRID_GAP * 2) / 3,
+);
+const DISCOVERY_TILE_HEIGHT = Math.round(DISCOVERY_TILE_WIDTH * 1.16);
+const DISCOVERY_TILE_BATCH_SIZE = 15;
+const DISCOVERY_VIEWER_HEIGHT = Dimensions.get("window").height;
+const DISCOVERY_VIEWER_IMAGE_HEIGHT = Math.round(DISCOVERY_VIEWER_HEIGHT * 0.53);
 const CATEGORY_PICKER_SHEET_HEIGHT = Math.round(
   Dimensions.get("window").height * 0.62,
 );
 const LOCATION_PICKER_SHEET_HEIGHT = Math.round(
   Dimensions.get("window").height * 0.58,
 );
-const ANDROID_BOTTOM_NAVIGATION_INSET =
-  Platform.OS === "android"
-    ? Math.min(
-        96,
-        Math.max(
-          36,
-          Dimensions.get("screen").height -
-            Dimensions.get("window").height -
-            (StatusBar.currentHeight ?? 0) +
-            24,
-        ),
-      )
-    : 0;
+const MESSAGE_THREAD_BASE_BOTTOM_INSET = 108;
+const MESSAGE_THREAD_KEYBOARD_GAP = 12;
 const PUBLIC_WEB_URL = (
   process.env.EXPO_PUBLIC_WEB_URL ?? "https://koloapp.ca"
 ).replace(/\/+$/, "");
 const KOLO_SUMMER_PARTY_EVENTBRITE_URL =
-  "https://www.eventbrite.ca/e/kolo-summer-party-tickets-1997616640145";
+  "https://www.ottawaucc.ca/events-1/ukraine-week-in-ottawa";
 const KOLO_SUMMER_PARTY_LOCATION =
-  "Bob Mitchell Park / Crestview Outdoor Pool, Ottawa, ON";
+  "Lansdowne Park, Ottawa, ON";
 const KOLO_SUMMER_PARTY_MAP_URL = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
   KOLO_SUMMER_PARTY_LOCATION,
 )}`;
-const KOLO_SUMMER_PARTY_END_AT = "2026-08-30T01:00:00.000Z";
-const KOLO_SUMMER_PARTY_IMAGE = require("./assets/summer-party2.jpeg") as number;
+const KOLO_SUMMER_PARTY_END_AT = "2026-08-30T23:00:00.000Z";
+const KOLO_SUMMER_PARTY_IMAGE = require("./assets/ukraine-week.jpg") as number;
 const THEME_STORAGE_KEY = "kolo-theme";
 const WALKTHROUGH_STORAGE_KEY = "kolo-walkthrough-seen";
 
@@ -209,8 +272,8 @@ const copy = {
     walkthroughEventsTarget: "Локація та список подій",
     walkthroughProfileTitle: "Профіль",
     walkthroughProfileText:
-      "Тут знаходиться вхід, збережені бізнеси, тема, особисті дані та повторне ознайомлення.",
-    walkthroughProfileTarget: "Акаунт, тема та збережені",
+      "Тут знаходиться вхід, підписки, тема, особисті дані та повторне ознайомлення.",
+    walkthroughProfileTarget: "Акаунт, тема та підписки",
     walkthroughAddBusinessTitle: "Додати бізнес",
     walkthroughAddBusinessText:
       "Заповніть форму, додайте контакти й логотип, а потім надішліть бізнес на перевірку.",
@@ -228,9 +291,14 @@ const copy = {
     contactSignInText:
       "Телефон, сайт, Instagram та адресу видно лише після входу.",
     contactSignInTitle: "Увійдіть, щоб побачити контакти",
+    comment: "Коментувати",
+    commentPlaceholder: "Напишіть коментар...",
+    comments: "Коментарі",
+    noComments: "Коментарів поки немає.",
     contentDescription: "Опис",
     contentItems: "записів",
     contentLink: "Посилання",
+    community: "Спільнота",
     contentPhoto: "Фото",
     contentPhotoHint: "PNG, JPG, WebP або GIF до 5 MB.",
     contentPhotoPermission:
@@ -251,6 +319,8 @@ const copy = {
     deleteAccountTitle: "Видалити акаунт?",
     deleteContentMessage: "Цей запис буде видалено з профілю бізнесу.",
     deleteContentTitle: "Видалити запис?",
+    deleteCommentMessage: "Цей коментар буде видалено зі стрічки.",
+    deleteCommentTitle: "Видалити коментар?",
     description: "Опис",
     done: "Готово",
     edit: "Редагувати",
@@ -265,26 +335,34 @@ const copy = {
     events: "Події",
     eventsNearYou: "Події поруч",
     eventsIntro: "Дивіться події від українських бізнесів за містом або локацією поруч.",
-    officialEvent: "Подія Kolo",
-    summerPartyTitle: "Summer Pool Party",
+    feed: "Стрічка",
+    feedEmpty: "У стрічці ще тихо.",
+    feedIntro: "Оновлення від користувачів і бізнесів Kolo.",
+    feedPostAs: "Опублікувати як",
+    feedPostAsBusiness: "Як бізнес",
+    feedPostAsMe: "Як мій профіль",
+    feedPostPlaceholder: "Напишіть коротке повідомлення...",
+    feedPublish: "Опублікувати",
+    officialEvent: "Подія",
+    summerPartyTitle: "Ukraine Week in Ottawa",
     summerPartyHost: "",
     summerPartySummary:
-      "Запрошуємо на сімейну вечірку біля басейну, де ми разом завершимо літо яскраво, весело та у хорошій компанії.",
-    summerPartyDate: "Субота, 29 серпня · 16:30–21:00",
-    summerPartyLocation: "Bob Mitchell Park / Crestview Outdoor Pool",
-    summerPartyEventbrite: "Eventbrite",
+      "Тиждень подій до 35-річчя Незалежності України: культура, спільнота, забіг, молитва, майстер-класи й фестивальна програма.",
+    summerPartyDate: "23–30 серпня 2026",
+    summerPartyLocation: "Ottawa, ON · різні локації",
+    summerPartyEventbrite: "Деталі події",
     summerPartyMaps: "Google Maps",
-    summerPartyOverviewTitle: "Summer Pool Party вже скоро! ☀️💦",
+    summerPartyOverviewTitle: "Ukraine Week in Ottawa",
     summerPartyOverview:
-      "Запрошуємо на сімейну вечірку біля басейну, де ми разом завершимо літо яскраво, весело та у хорошій компанії.",
+      "З 23 до 30 серпня Ottawa відзначатиме 35 років Незалежності України серією подій про спадщину, культуру та спільноту.",
     summerPartyOverviewMore:
-      "На вас чекають басейн, дитяча шоу-програма, сімейні конкурси, музика, фотозона, аквааеробіка та багато гарного настрою.",
+      "У програмі: Solidarity Run, підняття прапора, молитва за Україну, майстер-класи, кіновечір і сімейна фестивальна програма з Capital Ukrainian Festival.",
     summerPartySafety:
-      "29 серпня · 16:30–21:00 · Bob Mitchell Park / Crestview Outdoor Pool.",
+      "23–30 серпня 2026 · Ottawa, ON. Частина програми 29–30 серпня відбудеться в Lansdowne Park.",
     summerPartyContest:
-      "Квитки та деталі доступні на Eventbrite.",
+      "Деталі часу й окремих локацій оновлюються організаторами.",
     summerPartyHighlights:
-      "Басейн|Дитяча шоу-програма|Сімейні конкурси|Музика|Фотозона|Аквааеробіка",
+      "Solidarity Run|Підняття прапора|Молитва за Україну|Майстер-класи|Кіновечір|Фестиваль у Lansdowne",
     find: "Знайти",
     free: "Безкоштовно",
     googleEmail: "Google email",
@@ -315,6 +393,8 @@ const copy = {
     statCategories: "категорій",
     statCities: "міст",
     location: "Локація",
+    like: "Лайк",
+    liked: "Вподобано",
     manageProfile: "Керувати профілем",
     myLocation: "Моя локація",
     name: "Назва бізнесу",
@@ -358,6 +438,15 @@ const copy = {
     logoPermission: "Дозвольте доступ до фото, щоб вибрати логотип.",
     logoSelected: "Логотип вибрано",
     logoUpload: "Завантажити логотип",
+    messageBusiness: "Написати",
+    messagePlaceholder: "Напишіть повідомлення...",
+    messages: "Повідомлення",
+    messagesEmpty: "Розмов поки немає.",
+    messagesIntro: "Пишіть бізнесам і відповідайте клієнтам напряму в Kolo.",
+    messageStartHint: "Відкрийте бізнес і натисніть «Написати».",
+    messageUnavailable: "Повідомлення для цього бізнесу поки недоступні.",
+    messageRead: "Прочитано",
+    messageUnread: "Непрочитано",
     missingBusinessFields:
       "Заповніть назву бізнесу, місто або локацію та опис.",
     missingContentFields: "Заповніть назву та опис.",
@@ -367,20 +456,29 @@ const copy = {
     save: "Зберегти",
     saveChanges: "Зберегти зміни",
     saved: "Зміни збережено",
-    saveBusiness: "Зберегти",
-    savedBusiness: "Збережено",
-    savedBusinesses: "Збережені бізнеси",
+    saveBusiness: "Стежити",
+    savedBusiness: "Ви стежите",
+    savedBusinesses: "Підписки",
+    followers: "підписників",
+    followerOne: "підписник",
+    user: "Користувач",
     shareBusiness: "Поділитися",
     shareFailed: "Не вдалося відкрити поширення.",
     profileSaved: "Профіль оновлено",
     removeSavedBusiness: "Прибрати",
-    signInToSave: "Увійдіть, щоб зберегти бізнес.",
-    noSavedBusinesses: "Поки що немає збережених бізнесів.",
+    signInToSave: "Увійдіть, щоб стежити за бізнесом.",
+    noSavedBusinesses: "Поки що немає бізнесів, за якими ви стежите.",
     settings: "Налаштування",
     seeAll: "Усі",
     search: "Пошук",
+    discover: "Огляд",
+    discoverIntro: "Пости, події, послуги й продукти від спільноти Kolo.",
+    businessSearch: "Пошук бізнесів",
+    searchBusinesses: "Знайти бізнес",
+    searchStartHint: "Почніть вводити назву, послугу або виберіть категорію.",
     searchPlaceholder: "Назва, послуга або категорія",
     selected: "Вибрано",
+    sendMessage: "Надіслати",
     serviceTitle: "Назва послуги",
     services: "Послуги",
     accountDeleted: "Акаунт видалено.",
@@ -449,8 +547,8 @@ const copy = {
     walkthroughEventsTarget: "Location and events list",
     walkthroughProfileTitle: "Profile",
     walkthroughProfileText:
-      "Profile contains sign-in, saved businesses, theme, personal details, and this introduction.",
-    walkthroughProfileTarget: "Account, theme, and saved businesses",
+      "Profile contains sign-in, following, theme, personal details, and this introduction.",
+    walkthroughProfileTarget: "Account, theme, and following",
     walkthroughAddBusinessTitle: "Add business",
     walkthroughAddBusinessText:
       "Fill out the form, add contacts and a logo, then submit the business for review.",
@@ -468,9 +566,14 @@ const copy = {
     contactSignInText:
       "Phone, website, Instagram, and address are visible after sign-in.",
     contactSignInTitle: "Sign in to view contacts",
+    comment: "Comment",
+    commentPlaceholder: "Write a comment...",
+    comments: "Comments",
+    noComments: "No comments yet.",
     contentDescription: "Description",
     contentItems: "items",
     contentLink: "Link",
+    community: "Community",
     contentPhoto: "Photo",
     contentPhotoHint: "PNG, JPG, WebP, or GIF up to 5 MB.",
     contentPhotoPermission: "Allow photo access to choose an image.",
@@ -490,6 +593,8 @@ const copy = {
     deleteAccountTitle: "Delete account?",
     deleteContentMessage: "This item will be removed from the business profile.",
     deleteContentTitle: "Delete item?",
+    deleteCommentMessage: "This comment will be removed from the feed.",
+    deleteCommentTitle: "Delete comment?",
     description: "Description",
     done: "Done",
     edit: "Edit",
@@ -504,26 +609,34 @@ const copy = {
     events: "Events",
     eventsNearYou: "Events near you",
     eventsIntro: "Browse events from Ukrainian businesses by city or nearby location.",
-    officialEvent: "Kolo event",
-    summerPartyTitle: "Summer Pool Party",
+    feed: "Feed",
+    feedEmpty: "The feed is quiet for now.",
+    feedIntro: "Updates from Kolo users and businesses.",
+    feedPostAs: "Post as",
+    feedPostAsBusiness: "As business",
+    feedPostAsMe: "As my profile",
+    feedPostPlaceholder: "Write a short message...",
+    feedPublish: "Publish",
+    officialEvent: "Event",
+    summerPartyTitle: "Ukraine Week in Ottawa",
     summerPartyHost: "",
     summerPartySummary:
-      "Join a family pool party where we close the summer brightly, joyfully, and in good company.",
-    summerPartyDate: "Saturday, August 29 · 4:30 PM - 9 PM",
-    summerPartyLocation: "Bob Mitchell Park / Crestview Outdoor Pool",
-    summerPartyEventbrite: "Eventbrite",
+      "A week of events marking 35 years of Ukrainian Independence through culture, community, workshops, prayer, and festival programming.",
+    summerPartyDate: "August 23–30, 2026",
+    summerPartyLocation: "Ottawa, ON · various locations",
+    summerPartyEventbrite: "Event details",
     summerPartyMaps: "Google Maps",
-    summerPartyOverviewTitle: "Summer Pool Party is coming soon! ☀️💦",
+    summerPartyOverviewTitle: "Ukraine Week in Ottawa",
     summerPartyOverview:
-      "Join a family pool party where we close the summer brightly, joyfully, and in good company.",
+      "From August 23 to 30, Ottawa marks 35 years of Ukrainian Independence with a week of heritage, culture, and community events.",
     summerPartyOverviewMore:
-      "Expect the pool, a kids show program, family contests, music, a photo zone, aqua aerobics, and lots of good energy.",
+      "The program includes a Solidarity Run, flag raising, prayer for Ukraine, workshops, a movie night, and family programming with Capital Ukrainian Festival.",
     summerPartySafety:
-      "August 29 · 4:30 PM - 9 PM · Bob Mitchell Park / Crestview Outdoor Pool.",
+      "August 23–30, 2026 · Ottawa, ON. Part of the August 29–30 programming takes place at Lansdowne Park.",
     summerPartyContest:
-      "Tickets and details are available on Eventbrite.",
+      "Times and individual locations are being updated by the organizers.",
     summerPartyHighlights:
-      "Pool|Kids show|Family contests|Music|Photo zone|Aqua aerobics",
+      "Solidarity Run|Flag raising|Prayer for Ukraine|Workshops|Movie night|Lansdowne festival",
     find: "Search",
     free: "Free",
     googleEmail: "Google email",
@@ -554,6 +667,8 @@ const copy = {
     statCategories: "categories",
     statCities: "cities",
     location: "Location",
+    like: "Like",
+    liked: "Liked",
     manageProfile: "Manage profile",
     myLocation: "My location",
     name: "Business name",
@@ -597,6 +712,15 @@ const copy = {
     logoPermission: "Allow photo access to choose a logo.",
     logoSelected: "Logo selected",
     logoUpload: "Upload logo",
+    messageBusiness: "Message",
+    messagePlaceholder: "Write a message...",
+    messages: "Messages",
+    messagesEmpty: "No conversations yet.",
+    messagesIntro: "Message businesses and reply to customers directly in Kolo.",
+    messageStartHint: "Open a business and tap “Message.”",
+    messageUnavailable: "Messaging is not available for this business yet.",
+    messageRead: "Read",
+    messageUnread: "Unread",
     missingBusinessFields:
       "Fill in the business name, city or location, and description.",
     missingContentFields: "Fill in the title and description.",
@@ -606,20 +730,29 @@ const copy = {
     save: "Save",
     saveChanges: "Save changes",
     saved: "Changes saved",
-    saveBusiness: "Save",
-    savedBusiness: "Saved",
-    savedBusinesses: "Saved businesses",
+    saveBusiness: "Follow",
+    savedBusiness: "Following",
+    savedBusinesses: "Following",
+    followers: "followers",
+    followerOne: "follower",
+    user: "User",
     shareBusiness: "Share",
     shareFailed: "Could not open sharing.",
     profileSaved: "Profile updated",
     removeSavedBusiness: "Remove",
-    signInToSave: "Sign in to save this business.",
-    noSavedBusinesses: "No saved businesses yet.",
+    signInToSave: "Sign in to follow this business.",
+    noSavedBusinesses: "You are not following any businesses yet.",
     settings: "Settings",
     seeAll: "All",
     search: "Search",
+    discover: "Explore",
+    discoverIntro: "Posts, events, services, and products from the Kolo community.",
+    businessSearch: "Business search",
+    searchBusinesses: "Find a business",
+    searchStartHint: "Start typing a name, service, or choose a category.",
     searchPlaceholder: "Name, service, or category",
     selected: "Selected",
+    sendMessage: "Send",
     serviceTitle: "Service title",
     services: "Services",
     accountDeleted: "Account deleted.",
@@ -805,6 +938,8 @@ const defaultOwnedBusiness =
 export default function App() {
   const [locale, setLocale] = useState<Locale>("uk");
   const [activeTab, setActiveTab] = useState<Tab>("home");
+  const [businessReturnTab, setBusinessReturnTab] = useState<MainTab>("home");
+  const [messagesReturnTab, setMessagesReturnTab] = useState<ReturnTab>("feed");
   const [activeProfilePanel, setActiveProfilePanel] =
     useState<ProfilePanel>("account");
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -812,6 +947,7 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState("");
   const hasAppliedInitialLocation = useRef(false);
+  const hasAppliedHomeLocation = useRef(false);
   const [hasResolvedInitialLocation, setHasResolvedInitialLocation] =
     useState(false);
   const [isResolvingCurrentLocation, setIsResolvingCurrentLocation] =
@@ -821,10 +957,12 @@ export default function App() {
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [selectedContentEntry, setSelectedContentEntry] =
     useState<ContentDetailEntry | null>(null);
+  const [discoveryReturnPostKey, setDiscoveryReturnPostKey] = useState<
+    string | null
+  >(null);
+  const [selectedFeedPostId, setSelectedFeedPostId] = useState<string | null>(null);
   const hasTrackedAppOpen = useRef(false);
   const lastTrackedSearchKey = useRef("");
-  const [contentReturnBusiness, setContentReturnBusiness] =
-    useState<Business | null>(null);
   const [pendingBusinessSlug, setPendingBusinessSlug] = useState<string | null>(
     null,
   );
@@ -855,6 +993,27 @@ export default function App() {
   const [savedBusyBusinessId, setSavedBusyBusinessId] = useState<string | null>(
     null,
   );
+  const [conversations, setConversations] = useState<MobileConversation[]>([]);
+  const [selectedConversationId, setSelectedConversationId] = useState<
+    string | null
+  >(null);
+  const [isMessageThreadOpen, setIsMessageThreadOpen] = useState(false);
+  const [conversationMessages, setConversationMessages] = useState<
+    MobileMessage[]
+  >([]);
+  const [isMessagesLoading, setIsMessagesLoading] = useState(false);
+  const [isMessageSending, setIsMessageSending] = useState(false);
+  const [messageDraft, setMessageDraft] = useState("");
+  const [messageRefreshKey, setMessageRefreshKey] = useState(0);
+  const [feedPosts, setFeedPosts] = useState<MobileFeedPost[]>([]);
+  const [feedDraft, setFeedDraft] = useState("");
+  const [feedCommentDrafts, setFeedCommentDrafts] = useState<
+    Record<string, string>
+  >({});
+  const [feedPostAsBusiness, setFeedPostAsBusiness] = useState(false);
+  const [isFeedLoading, setIsFeedLoading] = useState(false);
+  const [isFeedSubmitting, setIsFeedSubmitting] = useState(false);
+  const [feedRefreshKey, setFeedRefreshKey] = useState(0);
   const labels = { ...copy[locale], ...connectionCopy[locale] };
   const walkthroughSteps = getWalkthroughSteps(labels);
   const activeWalkthroughStep =
@@ -993,6 +1152,26 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (
+      activeTab !== "home" ||
+      !hasResolvedInitialLocation ||
+      hasAppliedHomeLocation.current ||
+      isResolvingCurrentLocation ||
+      location.trim()
+    ) {
+      return;
+    }
+
+    hasAppliedHomeLocation.current = true;
+    void applyCurrentLocation(true);
+  }, [
+    activeTab,
+    hasResolvedInitialLocation,
+    isResolvingCurrentLocation,
+    location,
+  ]);
+
+  useEffect(() => {
     if (!isSupabaseConfigured || !session?.user.id) {
       setCurrentProfile(null);
       return;
@@ -1051,6 +1230,203 @@ export default function App() {
       isMounted = false;
     };
   }, [session?.user.id]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!isSupabaseConfigured || !session?.user.id) {
+      setConversations([]);
+      setConversationMessages([]);
+      setSelectedConversationId(null);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const userId = session.user.id;
+
+    async function loadConversations() {
+      try {
+        const nextConversations = await fetchBusinessConversations(userId);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setConversations((currentConversations) =>
+          mergeConversationsWithOptimisticDrafts(
+            nextConversations,
+            currentConversations,
+          ),
+        );
+        setSelectedConversationId((currentId) =>
+          currentId &&
+          (isDraftConversationId(currentId) ||
+            nextConversations.some((conversation) => conversation.id === currentId))
+            ? currentId
+            : nextConversations[0]?.id ?? currentId ?? null,
+        );
+      } catch (error) {
+        console.error("[kolo:mobile-messages]", error);
+
+        if (isMounted) {
+          setConversations([]);
+        }
+      }
+    }
+
+    void loadConversations();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [messageRefreshKey, session?.user.id]);
+
+  const selectedConversation = useMemo(
+    () =>
+      conversations.find((conversation) => conversation.id === selectedConversationId) ??
+      null,
+    [conversations, selectedConversationId],
+  );
+  const unreadMessageCount = useMemo(
+    () =>
+      conversations.reduce(
+        (total, conversation) => total + conversation.unreadCount,
+        0,
+      ),
+    [conversations],
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (
+      !isSupabaseConfigured ||
+      !session?.user.id ||
+      !selectedConversation ||
+      !isMessageThreadOpen
+    ) {
+      setConversationMessages([]);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const userId = session.user.id;
+    const activeConversation = selectedConversation;
+
+    async function loadMessages() {
+      try {
+        setIsMessagesLoading(true);
+        const nextMessages = await fetchBusinessMessages(
+          activeConversation.id,
+          userId,
+          activeConversation,
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (activeConversation.isUnread) {
+          const readAt = await markMobileConversationRead(
+            activeConversation,
+            userId,
+          );
+          setConversationMessages(
+            nextMessages.map((message) =>
+              message.senderId === userId
+                ? message
+                : {
+                    ...message,
+                    isUnread: false,
+                  },
+            ),
+          );
+          setConversations((currentConversations) =>
+            currentConversations.map((conversation) =>
+              conversation.id === activeConversation.id
+                ? {
+                    ...conversation,
+                    customerLastReadAt:
+                      conversation.businessOwnerId === userId
+                        ? conversation.customerLastReadAt
+                        : readAt,
+                    isUnread: false,
+                    ownerLastReadAt:
+                      conversation.businessOwnerId === userId
+                        ? readAt
+                        : conversation.ownerLastReadAt,
+                    unreadCount: 0,
+                  }
+                : conversation,
+            ),
+          );
+        } else {
+          setConversationMessages(nextMessages);
+        }
+      } catch (error) {
+        console.error("[kolo:mobile-message-thread]", error);
+
+        if (isMounted) {
+          setConversationMessages([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsMessagesLoading(false);
+        }
+      }
+    }
+
+    void loadMessages();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    isMessageThreadOpen,
+    selectedConversation?.id,
+    selectedConversation?.lastMessageAt,
+    session?.user.id,
+  ]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!isSupabaseConfigured) {
+      setFeedPosts([]);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    async function loadFeed() {
+      try {
+        setIsFeedLoading(true);
+        const posts = await fetchMobileFeedPosts();
+
+        if (isMounted) {
+          setFeedPosts(posts);
+        }
+      } catch (error) {
+        console.error("[kolo:mobile-feed]", error);
+
+        if (isMounted) {
+          setFeedPosts([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsFeedLoading(false);
+        }
+      }
+    }
+
+    void loadFeed();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [feedRefreshKey, session?.user.id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1295,6 +1671,7 @@ export default function App() {
                 id: business.id,
                 registrationId: business.registrationId ?? ownedBusiness.id,
                 contentItems: getPublicBusinessContentItems(ownedContentItems),
+                followerCount: business.followerCount,
               }
             : business,
         ),
@@ -1308,6 +1685,23 @@ export default function App() {
   const savedBusinesses = useMemo(
     () => businesses.filter((business) => business.isSaved),
     [businesses],
+  );
+  const feedPostingBusiness = useMemo(
+    () =>
+      businesses.find(
+        (business) =>
+          business.ownedByCurrentUser &&
+          Boolean(session?.user.id) &&
+          business.ownerId === session?.user.id,
+      ) ?? null,
+    [businesses, session?.user.id],
+  );
+  const selectedFeedPost = useMemo(
+    () =>
+      selectedFeedPostId
+        ? feedPosts.find((post) => post.id === selectedFeedPostId) ?? null
+        : null,
+    [feedPosts, selectedFeedPostId],
   );
 
   const results = useMemo(
@@ -1452,6 +1846,8 @@ export default function App() {
 
     if (linkedBusiness) {
       setSelectedBusiness(linkedBusiness);
+      setBusinessReturnTab("home");
+      setActiveTab("business");
       setPendingBusinessSlug(null);
     }
   }, [businesses, isDirectoryLoading, pendingBusinessSlug]);
@@ -1631,7 +2027,14 @@ export default function App() {
     const applySavedState = (currentBusinesses: Business[]) =>
       currentBusinesses.map((currentBusiness) =>
         isSameBusinessReference(currentBusiness, business)
-          ? { ...currentBusiness, isSaved: nextIsSaved }
+          ? {
+              ...currentBusiness,
+              followerCount: getNextFollowerCount(
+                currentBusiness.followerCount,
+                nextIsSaved,
+              ),
+              isSaved: nextIsSaved,
+            }
           : currentBusiness,
       );
 
@@ -1641,7 +2044,14 @@ export default function App() {
       setDirectoryBusinesses(applySavedState);
       setSelectedBusiness((currentBusiness) =>
         currentBusiness && isSameBusinessReference(currentBusiness, business)
-          ? { ...currentBusiness, isSaved: nextIsSaved }
+          ? {
+              ...currentBusiness,
+              followerCount: getNextFollowerCount(
+                currentBusiness.followerCount,
+                nextIsSaved,
+              ),
+              isSaved: nextIsSaved,
+            }
           : currentBusiness,
       );
 
@@ -1656,17 +2066,459 @@ export default function App() {
       setDirectoryBusinesses((currentBusinesses) =>
         currentBusinesses.map((currentBusiness) =>
           isSameBusinessReference(currentBusiness, business)
-            ? { ...currentBusiness, isSaved: Boolean(business.isSaved) }
+            ? {
+                ...currentBusiness,
+                followerCount: business.followerCount,
+                isSaved: Boolean(business.isSaved),
+              }
             : currentBusiness,
         ),
       );
       setSelectedBusiness((currentBusiness) =>
         currentBusiness && isSameBusinessReference(currentBusiness, business)
-          ? { ...currentBusiness, isSaved: Boolean(business.isSaved) }
+          ? {
+              ...currentBusiness,
+              followerCount: business.followerCount,
+              isSaved: Boolean(business.isSaved),
+            }
           : currentBusiness,
       );
     } finally {
       setSavedBusyBusinessId(null);
+    }
+  }
+
+  async function handleMessageBusiness(business: Business) {
+    if (!business.ownerId) {
+      Alert.alert(labels.messages, labels.messageUnavailable);
+      return;
+    }
+
+    if (!isSupabaseConfigured || !session?.user.id) {
+      setSelectedBusiness(null);
+      setActiveProfilePanel("account");
+      setActiveTab("profile");
+      return;
+    }
+
+    try {
+      const existingConversation = conversations.find(
+        (conversation) =>
+          conversation.businessId === business.id &&
+          conversation.customerId === session.user.id &&
+          hasConversationMessages(conversation),
+      );
+      const conversationId =
+        existingConversation?.id ??
+        createDraftConversationId(business.id, session.user.id);
+      const optimisticConversation =
+        existingConversation ??
+        createOptimisticConversationFromBusiness({
+          business,
+          conversationId,
+          customerEmail: session.user.email,
+          customerId: session.user.id,
+          customerName: getProfileDisplayName(currentProfile, session),
+        });
+
+      if (activeTab !== "business") {
+        setSelectedBusiness(null);
+      }
+      setConversationMessages([]);
+      setConversations((currentConversations) => {
+        if (
+          currentConversations.some(
+            (conversation) => conversation.id === conversationId,
+          )
+        ) {
+          return currentConversations;
+        }
+
+        return [optimisticConversation, ...currentConversations];
+      });
+      setSelectedConversationId(conversationId);
+      setIsMessageThreadOpen(true);
+      setMessagesReturnTab(
+        activeTab === "messages"
+          ? messagesReturnTab
+          : activeTab === "business"
+            ? "business"
+            : activeTab,
+      );
+      setActiveTab("messages");
+    } catch (error) {
+      console.error("[kolo:mobile-message-start]", error);
+      Alert.alert(labels.messages, getErrorMessage(error));
+    }
+  }
+
+  async function handleSendConversationMessage() {
+    if (!session?.user.id || !selectedConversation || isMessageSending) {
+      return;
+    }
+
+    const trimmedDraft = messageDraft.trim();
+
+    if (!trimmedDraft) {
+      return;
+    }
+
+    try {
+      setIsMessageSending(true);
+      const sentMessage = await sendMobileBusinessMessage({
+        body: trimmedDraft,
+        conversation: selectedConversation,
+        customerEmail: session.user.email,
+        customerName: getProfileDisplayName(currentProfile, session),
+      });
+      const sentAt = new Date().toISOString();
+      const nextConversationId = sentMessage.conversationId;
+      setMessageDraft("");
+      setSelectedConversationId(nextConversationId);
+      setConversations((currentConversations) =>
+        currentConversations.map((conversation) =>
+          conversation.id === selectedConversation.id
+            ? {
+                ...conversation,
+                customerLastReadAt:
+                  conversation.businessOwnerId === session.user.id
+                    ? conversation.customerLastReadAt
+                    : sentAt,
+                lastMessageAt: sentAt,
+                lastMessagePreview: trimmedDraft.slice(0, 180),
+                lastSenderId: session.user.id,
+                id: nextConversationId,
+                ownerLastReadAt:
+                  conversation.businessOwnerId === session.user.id
+                    ? sentAt
+                    : conversation.ownerLastReadAt,
+              }
+            : conversation,
+        ),
+      );
+      const nextMessages = await fetchBusinessMessages(
+        nextConversationId,
+        session.user.id,
+        {
+          ...selectedConversation,
+          customerLastReadAt:
+            selectedConversation.businessOwnerId === session.user.id
+              ? selectedConversation.customerLastReadAt
+              : sentAt,
+          id: nextConversationId,
+          lastMessageAt: sentAt,
+          lastMessagePreview: trimmedDraft.slice(0, 180),
+          lastSenderId: session.user.id,
+          ownerLastReadAt:
+            selectedConversation.businessOwnerId === session.user.id
+              ? sentAt
+              : selectedConversation.ownerLastReadAt,
+        },
+      );
+      setConversationMessages(nextMessages);
+      setMessageRefreshKey((value) => value + 1);
+    } catch (error) {
+      console.error("[kolo:mobile-message-send]", error);
+      Alert.alert(labels.messages, getErrorMessage(error));
+    } finally {
+      setIsMessageSending(false);
+    }
+  }
+
+  async function handleCreateFeedPost() {
+    if (!session?.user.id) {
+      setActiveProfilePanel("account");
+      setActiveTab("profile");
+      return false;
+    }
+
+    const body = feedDraft.trim();
+
+    if (!body || isFeedSubmitting) {
+      return false;
+    }
+
+    try {
+      setIsFeedSubmitting(true);
+      await createMobileFeedPost({
+        authorId: session.user.id,
+        body,
+        businessId:
+          feedPostAsBusiness && feedPostingBusiness
+            ? feedPostingBusiness.id
+            : null,
+      });
+      setFeedDraft("");
+      setFeedRefreshKey((value) => value + 1);
+      return true;
+    } catch (error) {
+      console.error("[kolo:mobile-feed-create]", error);
+      Alert.alert(labels.feed, getErrorMessage(error));
+      return false;
+    } finally {
+      setIsFeedSubmitting(false);
+    }
+  }
+
+  async function handleToggleFeedLike(post: MobileFeedPost) {
+    if (!session?.user.id) {
+      setActiveProfilePanel("account");
+      setActiveTab("profile");
+      return;
+    }
+
+    const nextLikedState = !post.likedByCurrentUser;
+    const likeDelta = nextLikedState ? 1 : -1;
+
+    setFeedPosts((currentPosts) =>
+      currentPosts.map((feedPost) =>
+        feedPost.id === post.id
+          ? {
+              ...feedPost,
+              likedByCurrentUser: nextLikedState,
+              likeCount: Math.max(0, feedPost.likeCount + likeDelta),
+            }
+          : feedPost,
+      ),
+    );
+
+    try {
+      await toggleMobileFeedLike({
+        isLiked: post.likedByCurrentUser,
+        postId: post.id,
+        userId: session.user.id,
+      });
+    } catch (error) {
+      setFeedPosts((currentPosts) =>
+        currentPosts.map((feedPost) =>
+          feedPost.id === post.id
+            ? {
+                ...feedPost,
+                likedByCurrentUser: post.likedByCurrentUser,
+                likeCount: post.likeCount,
+              }
+            : feedPost,
+        ),
+      );
+      console.error("[kolo:mobile-feed-like]", error);
+      Alert.alert(labels.feed, getErrorMessage(error));
+    }
+  }
+
+  async function handleCreateFeedComment(post: MobileFeedPost) {
+    if (!session?.user.id) {
+      setActiveProfilePanel("account");
+      setActiveTab("profile");
+      return;
+    }
+
+    const body = (feedCommentDrafts[post.id] ?? "").trim();
+
+    if (!body) {
+      return;
+    }
+
+    const temporaryCommentId = `local-comment-${Date.now()}`;
+    const createdAt = new Date().toISOString();
+    const optimisticComment: MobileFeedPost["comments"][number] = {
+      author: {
+        author_avatar_url: getProfileAvatarUrl(currentProfile, session) || null,
+        author_id: session.user.id,
+        author_name: profileName || session.user.email || null,
+      },
+      author_id: session.user.id,
+      body,
+      created_at: createdAt,
+      id: temporaryCommentId,
+      post_id: post.id,
+      updated_at: createdAt,
+    };
+
+    setFeedCommentDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [post.id]: "",
+    }));
+    setFeedPosts((currentPosts) =>
+      currentPosts.map((feedPost) =>
+        feedPost.id === post.id
+          ? {
+              ...feedPost,
+              commentCount: feedPost.commentCount + 1,
+              comments: [...feedPost.comments, optimisticComment],
+            }
+          : feedPost,
+      ),
+    );
+
+    try {
+      const savedCommentId = await createMobileFeedComment({
+        authorId: session.user.id,
+        body,
+        postId: post.id,
+      });
+
+      if (savedCommentId) {
+        setFeedPosts((currentPosts) =>
+          currentPosts.map((feedPost) =>
+            feedPost.id === post.id
+              ? {
+                  ...feedPost,
+                  comments: feedPost.comments.map((comment) =>
+                    comment.id === temporaryCommentId
+                      ? { ...comment, id: savedCommentId }
+                      : comment,
+                  ),
+                }
+              : feedPost,
+          ),
+        );
+      }
+    } catch (error) {
+      setFeedPosts((currentPosts) =>
+        currentPosts.map((feedPost) => {
+          if (feedPost.id !== post.id) {
+            return feedPost;
+          }
+
+          return {
+            ...feedPost,
+            commentCount: Math.max(0, feedPost.commentCount - 1),
+            comments: feedPost.comments.filter(
+              (comment) => comment.id !== temporaryCommentId,
+            ),
+          };
+        }),
+      );
+      setFeedCommentDrafts((currentDrafts) => ({
+        ...currentDrafts,
+        [post.id]: body,
+      }));
+      console.error("[kolo:mobile-feed-comment]", error);
+      Alert.alert(labels.feed, getErrorMessage(error));
+    }
+  }
+
+  async function handleUpdateFeedComment(
+    comment: MobileFeedPost["comments"][number],
+    body: string,
+  ) {
+    if (!session?.user.id || comment.author_id !== session.user.id) {
+      setActiveProfilePanel("account");
+      setActiveTab("profile");
+      return;
+    }
+
+    const trimmedBody = body.trim();
+
+    if (!trimmedBody) {
+      return;
+    }
+
+    setFeedPosts((currentPosts) =>
+      currentPosts.map((post) => ({
+        ...post,
+        comments: post.comments.map((postComment) =>
+          postComment.id === comment.id
+            ? { ...postComment, body: trimmedBody }
+            : postComment,
+        ),
+      })),
+    );
+
+    try {
+      await updateMobileFeedComment({
+        authorId: session.user.id,
+        body: trimmedBody,
+        commentId: comment.id,
+      });
+    } catch (error) {
+      setFeedPosts((currentPosts) =>
+        currentPosts.map((post) => ({
+          ...post,
+          comments: post.comments.map((postComment) =>
+            postComment.id === comment.id ? comment : postComment,
+          ),
+        })),
+      );
+      console.error("[kolo:mobile-feed-comment-update]", error);
+      Alert.alert(labels.feed, getErrorMessage(error));
+    }
+  }
+
+  function handleDeleteFeedComment(
+    comment: MobileFeedPost["comments"][number],
+  ) {
+    if (!session?.user.id || comment.author_id !== session.user.id) {
+      setActiveProfilePanel("account");
+      setActiveTab("profile");
+      return;
+    }
+
+    Alert.alert(labels.deleteCommentTitle, labels.deleteCommentMessage, [
+      {
+        style: "cancel",
+        text: labels.cancel,
+      },
+      {
+        onPress: () => {
+          void deleteFeedComment(comment);
+        },
+        style: "destructive",
+        text: labels.delete,
+      },
+    ]);
+  }
+
+  async function deleteFeedComment(
+    comment: MobileFeedPost["comments"][number],
+  ) {
+    if (!session?.user.id || comment.author_id !== session.user.id) {
+      return;
+    }
+
+    setFeedPosts((currentPosts) =>
+      currentPosts.map((post) => {
+        const hasComment = post.comments.some(
+          (postComment) => postComment.id === comment.id,
+        );
+
+        if (!hasComment) {
+          return post;
+        }
+
+        return {
+          ...post,
+          commentCount: Math.max(0, post.commentCount - 1),
+          comments: post.comments.filter(
+            (postComment) => postComment.id !== comment.id,
+          ),
+        };
+      }),
+    );
+
+    try {
+      await deleteMobileFeedComment({
+        authorId: session.user.id,
+        commentId: comment.id,
+      });
+    } catch (error) {
+      setFeedPosts((currentPosts) =>
+        currentPosts.map((post) =>
+          post.id === comment.post_id
+            ? {
+                ...post,
+                commentCount: post.commentCount + 1,
+                comments: [...post.comments, comment].sort(
+                  (firstComment, secondComment) =>
+                    new Date(firstComment.created_at).getTime() -
+                    new Date(secondComment.created_at).getTime(),
+                ),
+              }
+            : post,
+        ),
+      );
+      console.error("[kolo:mobile-feed-comment-delete]", error);
+      Alert.alert(labels.feed, getErrorMessage(error));
     }
   }
 
@@ -1858,31 +2710,15 @@ export default function App() {
   }
 
   function handleStandaloneContentPress(entry: ContentDetailEntry) {
-    setContentReturnBusiness(null);
     setSelectedContentEntry(entry);
   }
 
   function handleBusinessModalContentPress(entry: ContentDetailEntry) {
-    setContentReturnBusiness(entry.business);
-    setSelectedBusiness(null);
-    setSelectedContentEntry(null);
-
-    setTimeout(() => {
-      setSelectedContentEntry(entry);
-    }, 180);
+    setSelectedContentEntry(entry);
   }
 
   function handleContentModalClose() {
     setSelectedContentEntry(null);
-
-    if (contentReturnBusiness) {
-      const businessToRestore = contentReturnBusiness;
-      setContentReturnBusiness(null);
-
-      setTimeout(() => {
-        setSelectedBusiness(businessToRestore);
-      }, 180);
-    }
   }
 
   async function handleShareBusiness(business: Business) {
@@ -1961,19 +2797,81 @@ export default function App() {
     });
   }
 
+  function getActiveMainTab() {
+    if (activeTab === "business") {
+      return businessReturnTab;
+    }
+
+    if (activeTab === "messages") {
+      return messagesReturnTab === "business" ? businessReturnTab : messagesReturnTab;
+    }
+
+    return activeTab;
+  }
+
+  function openBusinessScreen(business: Business, returnTab = getActiveMainTab()) {
+    setBusinessReturnTab(returnTab);
+    setSelectedBusiness(business);
+    setActiveTab("business");
+  }
+
+  function openBusinessFromDiscoveryPost(business: Business, tileKey: string) {
+    setDiscoveryReturnPostKey(tileKey);
+    openBusinessScreen(business, "search");
+  }
+
+  function closeBusinessScreen() {
+    setSelectedBusiness(null);
+    setActiveTab(businessReturnTab);
+  }
+
+  function openMessagesInbox(returnTab: ReturnTab = "feed") {
+    setIsMessageThreadOpen(false);
+    setMessageDraft("");
+    setMessagesReturnTab(returnTab);
+    setActiveTab("messages");
+  }
+
+  function openMessageThread(conversationId: string) {
+    setSelectedConversationId(conversationId);
+    setIsMessageThreadOpen(true);
+  }
+
+  function handleMessagesBack() {
+    if (isMessageThreadOpen) {
+      setIsMessageThreadOpen(false);
+      setMessageDraft("");
+
+      if (messagesReturnTab === "business") {
+        setActiveTab("business");
+      }
+
+      return;
+    }
+
+    setMessageDraft("");
+    setActiveTab(messagesReturnTab === "business" ? "business" : messagesReturnTab);
+  }
+
+  function openMainTab(tab: MainTab) {
+    setDiscoveryReturnPostKey(null);
+    setSelectedBusiness(null);
+    setIsMessageThreadOpen(false);
+    setMessageDraft("");
+    setActiveTab(tab);
+  }
+
   const canViewContacts = Boolean(session);
+  const activeMainTab = getActiveMainTab();
 
   return (
-    <SafeAreaView style={[styles.safeArea, isDarkMode ? styles.darkSafeArea : null]}>
-      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
-      <View
-        style={[
-          styles.appShell,
-          ANDROID_BOTTOM_NAVIGATION_INSET
-            ? { paddingBottom: ANDROID_BOTTOM_NAVIGATION_INSET }
-            : null,
-        ]}
-      >
+    <View style={[styles.safeArea, isDarkMode ? styles.darkSafeArea : null]}>
+      <StatusBar
+        backgroundColor="transparent"
+        barStyle={isDarkMode ? "light-content" : "dark-content"}
+        translucent
+      />
+      <View style={styles.appShell}>
         <AnnouncementCenter
           announcements={visibleAnnouncements}
           isDarkMode={isDarkMode}
@@ -1986,33 +2884,31 @@ export default function App() {
           {activeTab === "home" ? (
             <HomeScreen
               businesses={businesses}
-              canViewContacts={canViewContacts}
-              isDataReady={!isDirectoryLoading}
+              feedPosts={feedPosts}
+              isDataReady={!isDirectoryLoading && hasResolvedInitialLocation}
               isDarkMode={isDarkMode}
               labels={labels}
               locale={locale}
-              onBusinessPress={setSelectedBusiness}
+              location={location}
+              onBusinessPress={openBusinessScreen}
               onContentPress={handleStandaloneContentPress}
+              onFeedPostPress={(post) => setSelectedFeedPostId(post.id)}
               onCategoryPress={(categorySlug) => {
                 setSelectedCategory(categorySlug);
                 setQuery("");
                 setActiveTab("search");
               }}
-              onLocationPress={(nextLocation) => {
-                setLocation(nextLocation);
-                setQuery("");
-                setActiveTab("search");
-              }}
-              onShareBusiness={handleShareBusiness}
               onShareContent={handleShareContent}
-              onSearchPress={() => setActiveTab("search")}
-              onToggleSavedBusiness={handleToggleSavedBusiness}
-              savedBusyBusinessId={savedBusyBusinessId}
+              profile={currentProfile}
+              query={query}
+              selectedCategory={selectedCategory}
+              session={session}
             />
           ) : null}
 
           {activeTab === "search" ? (
             <SearchScreen
+              businesses={businesses}
               canViewContacts={canViewContacts}
               dataMessage={dataMessage}
               isDataReady={!isDirectoryLoading && hasResolvedInitialLocation}
@@ -2028,19 +2924,61 @@ export default function App() {
                 setLocalOnly(false);
               }}
               onUseCurrentLocation={applyCurrentLocation}
+              onOpenBusinessFromDiscovery={openBusinessFromDiscoveryPost}
               localOnly={localOnly}
               query={query}
+              restoreDiscoveryTileKey={discoveryReturnPostKey}
               results={results}
               selectedCategory={selectedCategory}
               setLocation={setLocation}
               setLocalOnly={setLocalOnly}
               setQuery={setQuery}
-              setSelectedBusiness={setSelectedBusiness}
+              setSelectedBusiness={openBusinessScreen}
               setSelectedCategory={setSelectedCategory}
+              onShareContent={handleShareContent}
               onShareBusiness={handleShareBusiness}
               onToggleSavedBusiness={handleToggleSavedBusiness}
               savedBusyBusinessId={savedBusyBusinessId}
               totalCount={totalBusinessesCount}
+              onRestoreDiscoveryTile={() => setDiscoveryReturnPostKey(null)}
+            />
+          ) : null}
+
+          {activeTab === "feed" ? (
+            <FeedScreen
+              commentDrafts={feedCommentDrafts}
+              draft={feedDraft}
+              unreadMessageCount={unreadMessageCount}
+              isDarkMode={isDarkMode}
+              isLoading={isFeedLoading}
+              isSubmitting={isFeedSubmitting}
+              labels={labels}
+              profile={currentProfile}
+              onCommentDraftChange={(postId, value) =>
+                setFeedCommentDrafts((currentDrafts) => ({
+                  ...currentDrafts,
+                  [postId]: value,
+                }))
+              }
+              onCreateComment={handleCreateFeedComment}
+              onDeleteComment={handleDeleteFeedComment}
+              onCreatePost={handleCreateFeedPost}
+              onOpenPost={(post) => setSelectedFeedPostId(post.id)}
+              onOpenMessages={() => {
+                openMessagesInbox("feed");
+              }}
+              onPostAsBusinessChange={setFeedPostAsBusiness}
+              onRequireSignIn={() => {
+                setActiveProfilePanel("account");
+                setActiveTab("profile");
+              }}
+              onToggleLike={handleToggleFeedLike}
+              onUpdateComment={handleUpdateFeedComment}
+              ownedBusiness={feedPostingBusiness}
+              postAsBusiness={feedPostAsBusiness}
+              posts={feedPosts}
+              session={session}
+              setDraft={setFeedDraft}
             />
           ) : null}
 
@@ -2052,13 +2990,62 @@ export default function App() {
               isDarkMode={isDarkMode}
               isResolvingCurrentLocation={isResolvingCurrentLocation}
               labels={labels}
-              localOnly={localOnly}
               location={location}
               onContentPress={handleStandaloneContentPress}
               onShareContent={handleShareContent}
               onUseCurrentLocation={applyCurrentLocation}
               setLocation={setLocation}
-              setLocalOnly={setLocalOnly}
+            />
+          ) : null}
+
+          {activeTab === "messages" ? (
+            <MessagesScreen
+              conversations={conversations}
+              isDarkMode={isDarkMode}
+              isLoading={isMessagesLoading}
+              isSending={isMessageSending}
+              labels={labels}
+              messageDraft={messageDraft}
+              messages={conversationMessages}
+              isThreadOpen={isMessageThreadOpen}
+              onRequireSignIn={() => {
+                setActiveProfilePanel("account");
+                setActiveTab("profile");
+              }}
+              onBack={handleMessagesBack}
+              onSelectConversation={openMessageThread}
+              onSendMessage={handleSendConversationMessage}
+              selectedConversation={selectedConversation}
+              session={session}
+              setMessageDraft={setMessageDraft}
+            />
+          ) : null}
+
+          {activeTab === "business" && selectedBusiness ? (
+            <BusinessScreen
+              business={selectedBusiness}
+              canViewContacts={canViewContacts}
+              isDarkMode={isDarkMode}
+              labels={labels}
+              locale={locale}
+              onBack={closeBusinessScreen}
+              onContactPress={handleBusinessContactPress}
+              onRequireSignIn={() => {
+                setSelectedBusiness(null);
+                setActiveProfilePanel("account");
+                setActiveTab("profile");
+              }}
+              onContentPress={handleBusinessModalContentPress}
+              onMessageBusiness={handleMessageBusiness}
+              onShareBusiness={handleShareBusiness}
+              onShareContent={handleShareContent}
+              onToggleSavedBusiness={handleToggleSavedBusiness}
+              saveBusyBusinessId={savedBusyBusinessId}
+              onManage={() => {
+                setSelectedBusiness(null);
+                setActiveProfilePanel("businessInfo");
+                setActiveTab("profile");
+              }}
             />
           ) : null}
 
@@ -2080,7 +3067,7 @@ export default function App() {
               onDeleteContent={handleBusinessContentDelete}
               onEmailSignIn={handleEmailSignIn}
               onEmailSignUp={handleEmailSignUp}
-              onBusinessPress={setSelectedBusiness}
+              onBusinessPress={openBusinessScreen}
               onBusinessSave={handleBusinessSave}
               onBusinessSubmit={handleBusinessRegistration}
               onProfileSave={handleProfileSave}
@@ -2102,34 +3089,42 @@ export default function App() {
 
         <View style={[styles.tabBar, isDarkMode ? styles.darkTabBar : null]}>
           <TabButton
-            active={activeTab === "home"}
+            active={activeMainTab === "home"}
             Icon={Home}
             isDarkMode={isDarkMode}
             label={labels.home}
-            onPress={() => setActiveTab("home")}
+            onPress={() => openMainTab("home")}
           />
           <TabButton
-            active={activeTab === "search"}
+            active={activeMainTab === "search"}
             Icon={Search}
             isDarkMode={isDarkMode}
             label={labels.search}
-            onPress={() => setActiveTab("search")}
+            onPress={() => openMainTab("search")}
           />
           <TabButton
-            active={activeTab === "events"}
+            active={activeMainTab === "feed"}
+            badgeCount={unreadMessageCount}
+            Icon={MessageCircle}
+            isDarkMode={isDarkMode}
+            label={labels.feed}
+            onPress={() => openMainTab("feed")}
+          />
+          <TabButton
+            active={activeMainTab === "events"}
             Icon={CalendarDays}
             isDarkMode={isDarkMode}
             label={labels.events}
-            onPress={() => setActiveTab("events")}
+            onPress={() => openMainTab("events")}
           />
           <TabButton
-            active={activeTab === "profile"}
+            active={activeMainTab === "profile"}
             Icon={UserRound}
             isDarkMode={isDarkMode}
             label={labels.profile}
             onPress={() => {
               setActiveProfilePanel("account");
-              setActiveTab("profile");
+              openMainTab("profile");
             }}
           />
         </View>
@@ -2168,29 +3163,38 @@ export default function App() {
         steps={walkthroughSteps}
         visible={isWalkthroughVisible}
       />
-      <BusinessModal
-        business={selectedBusiness}
-        canViewContacts={canViewContacts}
+      <FeedPostModal
+        commentDraft={
+          selectedFeedPost ? feedCommentDrafts[selectedFeedPost.id] ?? "" : ""
+        }
         isDarkMode={isDarkMode}
         labels={labels}
-        locale={locale}
-        onClose={() => setSelectedBusiness(null)}
-        onContactPress={handleBusinessContactPress}
+        onClose={() => setSelectedFeedPostId(null)}
+        onCommentDraftChange={(value) => {
+          if (!selectedFeedPost) {
+            return;
+          }
+
+          setFeedCommentDrafts((currentDrafts) => ({
+            ...currentDrafts,
+            [selectedFeedPost.id]: value,
+          }));
+        }}
+        onCreateComment={() => {
+          if (selectedFeedPost) {
+            void handleCreateFeedComment(selectedFeedPost);
+          }
+        }}
+        onDeleteComment={handleDeleteFeedComment}
         onRequireSignIn={() => {
-          setSelectedBusiness(null);
+          setSelectedFeedPostId(null);
           setActiveProfilePanel("account");
           setActiveTab("profile");
         }}
-        onContentPress={handleBusinessModalContentPress}
-        onShareBusiness={handleShareBusiness}
-        onShareContent={handleShareContent}
-        onToggleSavedBusiness={handleToggleSavedBusiness}
-        saveBusyBusinessId={savedBusyBusinessId}
-        onManage={() => {
-          setSelectedBusiness(null);
-          setActiveProfilePanel("businessInfo");
-          setActiveTab("profile");
-        }}
+        onUpdateComment={handleUpdateFeedComment}
+        post={selectedFeedPost}
+        profile={currentProfile}
+        session={session}
       />
       <BusinessContentModal
         canViewContacts={canViewContacts}
@@ -2202,23 +3206,27 @@ export default function App() {
         onShareContent={handleShareContent}
         onBusinessPress={(business) => {
           setSelectedContentEntry(null);
-          setContentReturnBusiness(null);
-          setSelectedBusiness(business);
+          openBusinessScreen(business);
         }}
         onClose={handleContentModalClose}
         onRequireSignIn={() => {
           setSelectedContentEntry(null);
           setSelectedBusiness(null);
-          setContentReturnBusiness(null);
           setActiveProfilePanel("account");
           setActiveTab("profile");
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
-function KeyboardAwareScreen({ children }: { children: React.ReactNode }) {
+function KeyboardAwareScreen({
+  children,
+  contentContainerStyle,
+}: {
+  children: React.ReactNode;
+  contentContainerStyle?: StyleProp<ViewStyle>;
+}) {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -2231,6 +3239,7 @@ function KeyboardAwareScreen({ children }: { children: React.ReactNode }) {
         contentContainerStyle={[
           styles.screenContent,
           styles.keyboardAwareContent,
+          contentContainerStyle,
         ]}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
@@ -2244,6 +3253,7 @@ function KeyboardAwareScreen({ children }: { children: React.ReactNode }) {
 }
 
 function SearchScreen({
+  businesses,
   canViewContacts,
   dataMessage,
   isDataReady,
@@ -2254,10 +3264,14 @@ function SearchScreen({
   location,
   localOnly,
   onClearFilters,
+  onOpenBusinessFromDiscovery,
+  onRestoreDiscoveryTile,
   onShareBusiness,
+  onShareContent,
   onToggleSavedBusiness,
   onUseCurrentLocation,
   query,
+  restoreDiscoveryTileKey,
   results,
   savedBusyBusinessId,
   selectedCategory,
@@ -2268,6 +3282,7 @@ function SearchScreen({
   setSelectedCategory,
   totalCount,
 }: {
+  businesses: Business[];
   canViewContacts: boolean;
   dataMessage: string;
   isDataReady: boolean;
@@ -2278,10 +3293,14 @@ function SearchScreen({
   location: string;
   localOnly: boolean;
   onClearFilters: () => void;
+  onOpenBusinessFromDiscovery: (business: Business, tileKey: string) => void;
+  onRestoreDiscoveryTile: () => void;
   onShareBusiness: (business: Business) => Promise<void>;
+  onShareContent: (entry: ContentDetailEntry) => Promise<void>;
   onToggleSavedBusiness: (business: Business) => void;
   onUseCurrentLocation: (silent?: boolean) => Promise<string | undefined>;
   query: string;
+  restoreDiscoveryTileKey: string | null;
   results: Business[];
   savedBusyBusinessId: string | null;
   selectedCategory: string;
@@ -2292,12 +3311,31 @@ function SearchScreen({
   setSelectedCategory: (value: string) => void;
   totalCount: number;
 }) {
+  const [isBusinessSearchOpen, setIsBusinessSearchOpen] = useState(false);
+  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+  const [selectedDiscoveryTileIndex, setSelectedDiscoveryTileIndex] =
+    useState<number | null>(null);
+  const [visibleDiscoveryTileCount, setVisibleDiscoveryTileCount] = useState(
+    DISCOVERY_TILE_BATCH_SIZE,
+  );
+  const searchInputRef = useRef<TextInput>(null);
+  const shouldFocusSearchInput = useRef(false);
   const hasActiveFilters = hasSearchFilters(
     query,
     location,
     selectedCategory,
     localOnly,
   );
+  const hasBusinessSearchIntent =
+    Boolean(query.trim()) || selectedCategory !== "all" || localOnly;
+  const hasSecondaryFilters =
+    Boolean(location.trim()) || selectedCategory !== "all" || localOnly;
+  const showBusinessSearch = isBusinessSearchOpen || hasBusinessSearchIntent;
+  const discoveryTiles = useMemo(
+    () => getDiscoveryTiles(businesses, labels),
+    [businesses, labels],
+  );
+  const visibleDiscoveryTiles = discoveryTiles.slice(0, visibleDiscoveryTileCount);
   const resultCountLabel =
     !isDataReady
       ? labels.loading
@@ -2308,64 +3346,327 @@ function SearchScreen({
     ? labels.detectingLocation
     : labels.loadingBusinesses;
 
+  useEffect(() => {
+    if (hasBusinessSearchIntent) {
+      setIsBusinessSearchOpen(true);
+    }
+  }, [hasBusinessSearchIntent]);
+
+  useEffect(() => {
+    if (!showBusinessSearch || !shouldFocusSearchInput.current) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      searchInputRef.current?.focus();
+      shouldFocusSearchInput.current = false;
+    }, 80);
+
+    return () => clearTimeout(timeout);
+  }, [showBusinessSearch]);
+
+  useEffect(() => {
+    setVisibleDiscoveryTileCount(DISCOVERY_TILE_BATCH_SIZE);
+    setSelectedDiscoveryTileIndex(null);
+  }, [discoveryTiles.length]);
+
+  useEffect(() => {
+    if (!restoreDiscoveryTileKey || !discoveryTiles.length) {
+      return;
+    }
+
+    const restoredIndex = discoveryTiles.findIndex(
+      (tile) => tile.key === restoreDiscoveryTileKey,
+    );
+
+    if (restoredIndex < 0) {
+      return;
+    }
+
+    const nextVisibleCount = Math.min(
+      discoveryTiles.length,
+      Math.max(
+        DISCOVERY_TILE_BATCH_SIZE,
+        Math.ceil((restoredIndex + 1) / DISCOVERY_TILE_BATCH_SIZE) *
+          DISCOVERY_TILE_BATCH_SIZE,
+      ),
+    );
+
+    setVisibleDiscoveryTileCount(nextVisibleCount);
+    setSelectedDiscoveryTileIndex(restoredIndex);
+    onRestoreDiscoveryTile();
+  }, [discoveryTiles, onRestoreDiscoveryTile, restoreDiscoveryTileKey]);
+
+  function clearBusinessSearch() {
+    onClearFilters();
+    setIsBusinessSearchOpen(false);
+    setIsFilterPanelOpen(false);
+  }
+
+  function loadMoreDiscoveryTiles() {
+    setVisibleDiscoveryTileCount((currentCount) =>
+      Math.min(discoveryTiles.length, currentCount + DISCOVERY_TILE_BATCH_SIZE),
+    );
+  }
+
+  function handleDiscoveryScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const distanceFromBottom =
+      contentSize.height - (contentOffset.y + layoutMeasurement.height);
+
+    if (distanceFromBottom < 700) {
+      loadMoreDiscoveryTiles();
+    }
+  }
+
+  if (!showBusinessSearch) {
+    return (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+        style={styles.flex}
+      >
+        <View
+          style={[
+            styles.discoveryStickyHeader,
+            isDarkMode ? styles.darkSafeArea : null,
+          ]}
+        >
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              shouldFocusSearchInput.current = true;
+              setIsBusinessSearchOpen(true);
+            }}
+            style={[
+              styles.discoverySearchButton,
+              isDarkMode ? styles.darkCard : null,
+            ]}
+          >
+            <Search
+              color={isDarkMode ? "#E5E5EA" : "#111111"}
+              size={20}
+              strokeWidth={2.7}
+            />
+            <View style={styles.flex}>
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.discoverySearchTitle,
+                  isDarkMode ? styles.darkText : null,
+                ]}
+              >
+                {labels.searchPlaceholder}
+              </Text>
+            </View>
+          </Pressable>
+        </View>
+
+        <ScrollView
+          automaticallyAdjustKeyboardInsets
+          contentInsetAdjustmentBehavior="automatic"
+          contentContainerStyle={[
+            styles.screenContent,
+            styles.discoveryScrollContent,
+          ]}
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
+          onScroll={handleDiscoveryScroll}
+          scrollEventThrottle={120}
+          style={styles.screen}
+          showsVerticalScrollIndicator={false}
+        >
+          {dataMessage ? (
+            <Text style={[styles.errorText, isDarkMode ? styles.darkAlertText : null]}>
+              {dataMessage}
+            </Text>
+          ) : null}
+
+          {!isDataReady ? (
+            <View style={[styles.loadingCard, isDarkMode ? styles.darkSettingRow : null]}>
+              <Text style={[styles.loadingTitle, isDarkMode ? styles.darkText : null]}>
+                {loadingText}
+              </Text>
+              <Text style={[styles.loadingLine, isDarkMode ? styles.darkLoadingLine : null]} />
+              <Text style={[styles.loadingLineShort, isDarkMode ? styles.darkLoadingLine : null]} />
+            </View>
+          ) : visibleDiscoveryTiles.length ? (
+            <View style={styles.discoveryGrid}>
+              {visibleDiscoveryTiles.map((tile, index) => (
+                <DiscoveryTileCard
+                  isDarkMode={isDarkMode}
+                  key={tile.key}
+                  onPress={() => {
+                    setSelectedDiscoveryTileIndex(index);
+                  }}
+                  tile={tile}
+                />
+              ))}
+            </View>
+          ) : (
+            <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
+              {labels.feedEmpty}
+            </Text>
+          )}
+        </ScrollView>
+        <DiscoveryPostViewer
+          initialIndex={selectedDiscoveryTileIndex ?? 0}
+          isDarkMode={isDarkMode}
+          labels={labels}
+          onBusinessPress={onOpenBusinessFromDiscovery}
+          onClose={() => setSelectedDiscoveryTileIndex(null)}
+          onEndReached={loadMoreDiscoveryTiles}
+          onShareContent={onShareContent}
+          tiles={visibleDiscoveryTiles}
+          visible={selectedDiscoveryTileIndex !== null}
+        />
+      </KeyboardAvoidingView>
+    );
+  }
+
   return (
-    <KeyboardAwareScreen>
-      <View style={[styles.searchPanel, isDarkMode ? styles.darkCard : null]}>
-        <Field isDarkMode={isDarkMode} label={labels.search}>
+    <ScrollView
+      contentContainerStyle={[
+        styles.screenContent,
+        styles.searchScreenContent,
+      ]}
+      keyboardDismissMode="interactive"
+      keyboardShouldPersistTaps="handled"
+      style={styles.screen}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.searchModeHeader}>
+        <Text style={[styles.searchModeTitle, isDarkMode ? styles.darkText : null]}>
+          {labels.businessSearch}
+        </Text>
+        <Pressable
+          accessibilityLabel={labels.close}
+          accessibilityRole="button"
+          onPress={clearBusinessSearch}
+          style={[
+            styles.modalCloseButton,
+            isDarkMode ? styles.darkSettingRow : null,
+          ]}
+        >
+          <X
+            color={isDarkMode ? "#E5E5EA" : "#111111"}
+            size={19}
+            strokeWidth={2.7}
+          />
+        </Pressable>
+      </View>
+
+      <View style={styles.searchCompactPanel}>
+        <View style={[styles.searchKeywordRow, isDarkMode ? styles.darkInput : null]}>
+          <Search
+            color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+            size={19}
+            strokeWidth={2.7}
+          />
           <TextInput
             autoCapitalize="none"
             onChangeText={setQuery}
             placeholder={labels.searchPlaceholder}
             placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
-            style={[styles.input, isDarkMode ? styles.darkInput : null]}
+            ref={searchInputRef}
+            style={[
+              styles.searchKeywordInput,
+              isDarkMode ? styles.darkText : null,
+            ]}
             value={query}
           />
-        </Field>
-        <Field isDarkMode={isDarkMode} label={labels.location}>
-          <LocationPicker
-            allowAll
-            isDarkMode={isDarkMode}
-            isResolvingCurrentLocation={isResolvingCurrentLocation}
-            labels={labels}
-            onChange={setLocation}
-            onUseCurrentLocation={onUseCurrentLocation}
-            placeholder={labels.city}
-            showMyLocation
-            value={location}
-          />
-        </Field>
-        <Field isDarkMode={isDarkMode} label={labels.category}>
-          <CategoryPicker
-            allowAll
-            isDarkMode={isDarkMode}
-            labels={labels}
-            locale={locale}
-            onSelect={setSelectedCategory}
-            selectedSlug={selectedCategory}
-          />
-        </Field>
-        <View style={[styles.localOnlyRow, isDarkMode ? styles.darkSettingRow : null]}>
-          <Text style={[styles.localOnlyTitle, isDarkMode ? styles.darkText : null]}>
-            {labels.localOnly}
-          </Text>
-          <Switch
-            onValueChange={setLocalOnly}
-            thumbColor={localOnly ? "#FFFFFF" : "#111111"}
-            trackColor={{ false: "#E5E5EA", true: "#111111" }}
-            value={localOnly}
-          />
+          {query.trim() ? (
+            <Pressable
+              accessibilityLabel={labels.close}
+              accessibilityRole="button"
+              onPress={() => setQuery("")}
+              style={styles.searchInlineIconButton}
+            >
+              <X
+                color={isDarkMode ? "#A1A1A6" : "#6E6E73"}
+                size={17}
+                strokeWidth={2.7}
+              />
+            </Pressable>
+          ) : null}
+          <Pressable
+            accessibilityLabel={labels.settings}
+            accessibilityRole="button"
+            onPress={() => setIsFilterPanelOpen((current) => !current)}
+            style={[
+              styles.searchFilterIconButton,
+              isDarkMode ? styles.darkIconBox : null,
+              hasSecondaryFilters ? styles.searchFilterIconButtonActive : null,
+              hasSecondaryFilters && isDarkMode
+                ? styles.darkSearchFilterIconButtonActive
+                : null,
+            ]}
+          >
+            <SlidersHorizontal
+              color={
+                hasSecondaryFilters
+                  ? isDarkMode
+                    ? "#111111"
+                    : "#FFFFFF"
+                  : isDarkMode
+                    ? "#E5E5EA"
+                    : "#111111"
+              }
+              size={18}
+              strokeWidth={2.8}
+            />
+          </Pressable>
         </View>
+
+        {isFilterPanelOpen ? (
+          <View style={[styles.searchFilterPanel, isDarkMode ? styles.darkCard : null]}>
+            <Field isDarkMode={isDarkMode} label={labels.location}>
+              <LocationPicker
+                allowAll
+                isDarkMode={isDarkMode}
+                isResolvingCurrentLocation={isResolvingCurrentLocation}
+                labels={labels}
+                onChange={setLocation}
+                onUseCurrentLocation={onUseCurrentLocation}
+                placeholder={labels.city}
+                showMyLocation
+                value={location}
+              />
+            </Field>
+            <Field isDarkMode={isDarkMode} label={labels.category}>
+              <CategoryPicker
+                allowAll
+                isDarkMode={isDarkMode}
+                labels={labels}
+                locale={locale}
+                onSelect={setSelectedCategory}
+                selectedSlug={selectedCategory}
+              />
+            </Field>
+            <View style={[styles.localOnlyRow, isDarkMode ? styles.darkSettingRow : null]}>
+              <Text style={[styles.localOnlyTitle, isDarkMode ? styles.darkText : null]}>
+                {labels.localOnly}
+              </Text>
+              <Switch
+                onValueChange={setLocalOnly}
+                thumbColor={localOnly ? "#FFFFFF" : "#111111"}
+                trackColor={{ false: "#E5E5EA", true: "#111111" }}
+                value={localOnly}
+              />
+            </View>
+          </View>
+        ) : null}
       </View>
 
-      <View style={styles.resultsHeader}>
-        <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
-          {labels.find}
-        </Text>
-        <View style={styles.resultsHeaderActions}>
-          {hasActiveFilters ? (
+      {hasBusinessSearchIntent ? (
+        <View style={styles.resultsHeader}>
+          <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+            {labels.find}
+          </Text>
+          <View style={styles.resultsHeaderActions}>
             <Pressable
               accessibilityRole="button"
-              onPress={onClearFilters}
+              onPress={clearBusinessSearch}
               style={[
                 styles.clearFiltersButton,
                 isDarkMode ? styles.darkSettingRow : null,
@@ -2382,19 +3683,37 @@ function SearchScreen({
                   isDarkMode ? styles.darkText : null,
                 ]}
               >
-                {labels.allCanada}
+                {labels.discover}
               </Text>
             </Pressable>
-          ) : null}
-          <Text style={[styles.resultCount, isDarkMode ? styles.darkBadge : null]}>
-            {resultCountLabel}
+            <Text style={[styles.resultCount, isDarkMode ? styles.darkBadge : null]}>
+              {resultCountLabel}
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
+      {dataMessage ? (
+        <Text style={[styles.errorText, isDarkMode ? styles.darkAlertText : null]}>
+          {dataMessage}
+        </Text>
+      ) : null}
+
+      {!hasBusinessSearchIntent ? (
+        <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
+          <Search
+            color={isDarkMode ? "#E5E5EA" : "#111111"}
+            size={26}
+            strokeWidth={2.7}
+          />
+          <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+            {labels.searchBusinesses}
+          </Text>
+          <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+            {labels.searchStartHint}
           </Text>
         </View>
-      </View>
-
-      {dataMessage ? <Text style={styles.errorText}>{dataMessage}</Text> : null}
-
-      {!isDataReady ? (
+      ) : !isDataReady ? (
         <View style={[styles.loadingCard, isDarkMode ? styles.darkSettingRow : null]}>
           <Text style={[styles.loadingTitle, isDarkMode ? styles.darkText : null]}>
             {loadingText}
@@ -2424,7 +3743,489 @@ function SearchScreen({
           {labels.noResults}
         </Text>
       )}
-    </KeyboardAwareScreen>
+    </ScrollView>
+  );
+}
+
+function DiscoveryTileCard({
+  isDarkMode,
+  onPress,
+  tile,
+}: {
+  isDarkMode: boolean;
+  onPress: () => void;
+  tile: DiscoveryTile;
+}) {
+  const hasImage = Boolean(tile.imageUrl);
+
+  return (
+    <Pressable
+      accessibilityLabel={tile.title}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={[
+        styles.discoveryTile,
+        isDarkMode ? styles.darkCard : null,
+      ]}
+    >
+      {hasImage ? (
+        <Image
+          resizeMode="cover"
+          source={{ uri: tile.imageUrl }}
+          style={styles.discoveryTileImage}
+        />
+      ) : null}
+    </Pressable>
+  );
+}
+
+function DiscoveryPostViewer({
+  initialIndex,
+  isDarkMode,
+  labels,
+  onBusinessPress,
+  onClose,
+  onEndReached,
+  onShareContent,
+  tiles,
+  visible,
+}: {
+  initialIndex: number;
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  onBusinessPress: (business: Business, tileKey: string) => void;
+  onClose: () => void;
+  onEndReached: () => void;
+  onShareContent: (entry: ContentDetailEntry) => Promise<void>;
+  tiles: DiscoveryTile[];
+  visible: boolean;
+}) {
+  const [isCaptionScrollActive, setIsCaptionScrollActive] = useState(false);
+  const horizontalCloseResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Math.abs(gestureState.dx) > 26 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.35,
+        onPanResponderRelease: (_, gestureState) => {
+          if (
+            Math.abs(gestureState.dx) > 82 &&
+            Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.2
+          ) {
+            onClose();
+          }
+        },
+      }),
+    [onClose],
+  );
+
+  useEffect(() => {
+    if (!visible) {
+      setIsCaptionScrollActive(false);
+    }
+  }, [visible]);
+
+  if (!visible || !tiles.length) {
+    return null;
+  }
+
+  const safeInitialIndex = Math.max(0, Math.min(initialIndex, tiles.length - 1));
+
+  return (
+    <View
+      {...horizontalCloseResponder.panHandlers}
+      style={[
+        styles.discoveryViewerShell,
+        isDarkMode ? styles.darkSafeArea : null,
+      ]}
+    >
+      <FlatList
+        data={tiles}
+        decelerationRate="fast"
+        getItemLayout={(_, index) => ({
+          index,
+          length: DISCOVERY_VIEWER_HEIGHT,
+          offset: DISCOVERY_VIEWER_HEIGHT * index,
+        })}
+        initialScrollIndex={safeInitialIndex}
+        keyExtractor={(tile) => tile.key}
+        onEndReached={onEndReached}
+        onEndReachedThreshold={0.65}
+        pagingEnabled
+        renderItem={({ item }) => (
+          <DiscoveryViewerPost
+            isDarkMode={isDarkMode}
+            labels={labels}
+            onBusinessPress={() => onBusinessPress(item.business, item.key)}
+            onClose={onClose}
+            onCaptionScrollActiveChange={setIsCaptionScrollActive}
+            onShare={() => {
+              void onShareContent({
+                business: item.business,
+                item: item.item,
+              });
+            }}
+            tile={item}
+          />
+        )}
+        scrollEnabled={!isCaptionScrollActive}
+        showsVerticalScrollIndicator={false}
+        snapToAlignment="start"
+      />
+    </View>
+  );
+}
+
+function DiscoveryViewerPost({
+  isDarkMode,
+  labels,
+  onBusinessPress,
+  onCaptionScrollActiveChange,
+  onClose,
+  onShare,
+  tile,
+}: {
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  onBusinessPress: () => void;
+  onCaptionScrollActiveChange: (isActive: boolean) => void;
+  onClose: () => void;
+  onShare: () => void;
+  tile: DiscoveryTile;
+}) {
+  const [hasLogoError, setHasLogoError] = useState(false);
+  const [isCaptionExpanded, setIsCaptionExpanded] = useState(false);
+  const [descriptionLineCount, setDescriptionLineCount] = useState(0);
+  const logoUrl = getRenderableImageUrl(
+    tile.business.logoUrl,
+    imageOptimizationPresets.logo,
+  );
+  const shouldShowLogo = Boolean(logoUrl) && !hasLogoError;
+  const description = tile.item.description.trim();
+  const viewerImageUrl =
+    getContentImageUrls(tile.item, imageOptimizationPresets.detail)[0] ||
+    tile.imageUrl;
+  const metaItems = [
+    tile.item.type === "product"
+      ? tile.item.isAvailable
+        ? labels.available
+        : labels.outOfStock
+      : undefined,
+    tile.item.isFree ? labels.free : formatPriceWithCurrency(tile.item.price),
+    tile.item.isOnline ? labels.online : undefined,
+    tile.item.startsAt ? formatContentDate(tile.item.startsAt) : undefined,
+    tile.item.location,
+  ].filter((value): value is string => Boolean(value));
+  const contentLinkUrl = tile.item.linkUrl
+    ? getWebsiteUrl(tile.item.linkUrl)
+    : null;
+  const locationUrl = getAddressUrl(tile.item.location, tile.business.city);
+  const likelyLongDescription = description.length > 140;
+  const hasLongDescription = likelyLongDescription || descriptionLineCount > 2;
+  const hasExtraDetails =
+    metaItems.length > 2 || Boolean(tile.item.linkUrl && contentLinkUrl && metaItems.length >= 2);
+  const canExpandCaption = hasLongDescription || hasExtraDetails;
+  const isCaptionOpen = isCaptionExpanded && canExpandCaption;
+  const visibleMetaItems = isCaptionOpen
+    ? metaItems
+    : canExpandCaption
+      ? metaItems.slice(0, 2)
+      : metaItems;
+  const hiddenMetaCount =
+    canExpandCaption && !isCaptionOpen
+      ? metaItems.length - visibleMetaItems.length
+      : 0;
+  const shouldShowLink =
+    Boolean(tile.item.linkUrl && contentLinkUrl) &&
+    (isCaptionOpen || visibleMetaItems.length < 2 || !canExpandCaption);
+
+  function toggleCaption() {
+    if (!canExpandCaption) {
+      return;
+    }
+
+    setIsCaptionExpanded((current) => {
+      const next = !current;
+
+      if (!next) {
+        onCaptionScrollActiveChange(false);
+      }
+
+      return next;
+    });
+  }
+
+  function setCaptionTextScrollActive(isActive: boolean) {
+    if (isCaptionOpen) {
+      onCaptionScrollActiveChange(isActive);
+    }
+  }
+
+  function renderCaptionDetails() {
+    return (
+      <>
+        {description ? (
+          <Text
+            numberOfLines={
+              hasLongDescription && !isCaptionOpen ? 2 : undefined
+            }
+            onTextLayout={(event) => {
+              const nextLineCount = event.nativeEvent.lines.length;
+              setDescriptionLineCount((currentLineCount) =>
+                Math.max(currentLineCount, nextLineCount),
+              );
+            }}
+            style={[
+              styles.discoveryViewerText,
+              isDarkMode ? styles.darkMutedText : null,
+            ]}
+          >
+            {description}
+          </Text>
+        ) : null}
+        {metaItems.length ? (
+          <View style={styles.discoveryViewerMetaRow}>
+            {visibleMetaItems.map((meta, index) => {
+              const isLocation = meta === tile.item.location && locationUrl;
+
+              if (isLocation) {
+                return (
+                  <Pressable
+                    accessibilityRole="link"
+                    key={`${meta}-${index}`}
+                    onPress={() => {
+                      void openContactUrl(isLocation);
+                    }}
+                    style={[
+                      styles.discoveryViewerMetaChip,
+                      isDarkMode ? styles.darkBadge : null,
+                    ]}
+                  >
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.discoveryViewerMetaText,
+                        isDarkMode ? styles.darkText : null,
+                      ]}
+                    >
+                      {meta}
+                    </Text>
+                  </Pressable>
+                );
+              }
+
+              return (
+                <Text
+                  key={`${meta}-${index}`}
+                  numberOfLines={1}
+                  style={[
+                    styles.discoveryViewerMetaChip,
+                    styles.discoveryViewerMetaText,
+                    isDarkMode ? styles.darkBadge : null,
+                    isDarkMode ? styles.darkText : null,
+                  ]}
+                >
+                  {meta}
+                </Text>
+              );
+            })}
+            {hiddenMetaCount > 0 ? (
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.discoveryViewerMetaChip,
+                  styles.discoveryViewerMetaText,
+                  isDarkMode ? styles.darkBadge : null,
+                  isDarkMode ? styles.darkText : null,
+                ]}
+              >
+                +{hiddenMetaCount}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+        {shouldShowLink && contentLinkUrl ? (
+          <Pressable
+            accessibilityRole="link"
+            onPress={(event) => {
+              event.stopPropagation();
+              void openContactUrl(contentLinkUrl);
+            }}
+            style={[
+              styles.discoveryViewerLink,
+              isDarkMode ? styles.darkIconBox : null,
+            ]}
+          >
+            <ExternalLink
+              color={isDarkMode ? "#E5E5EA" : "#111111"}
+              size={15}
+              strokeWidth={2.6}
+            />
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.discoveryViewerLinkText,
+                isDarkMode ? styles.darkText : null,
+              ]}
+            >
+              {tile.item.linkUrl}
+            </Text>
+          </Pressable>
+        ) : null}
+      </>
+    );
+  }
+
+  return (
+    <View style={styles.discoveryViewerPage}>
+      <View style={styles.discoveryViewerHeader}>
+        <Pressable
+          accessibilityLabel={tile.business.name}
+          accessibilityRole="button"
+          onPress={onBusinessPress}
+          style={styles.discoveryViewerBusinessButton}
+        >
+          {shouldShowLogo ? (
+            <Image
+              onError={() => setHasLogoError(true)}
+              resizeMode="cover"
+              source={{ uri: logoUrl as string }}
+              style={[
+                styles.discoveryViewerLogo,
+                isDarkMode ? styles.darkContentImageSurface : null,
+              ]}
+            />
+          ) : null}
+          <View style={styles.discoveryViewerBusinessNameBox}>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.discoveryViewerBusinessName,
+                isDarkMode ? styles.darkText : null,
+              ]}
+            >
+              {tile.business.name}
+            </Text>
+          </View>
+          <Text style={[styles.discoveryViewerKindPill, isDarkMode ? styles.darkBadge : null]}>
+            {tile.subtitle}
+          </Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel={labels.shareBusiness}
+          accessibilityRole="button"
+          onPress={onShare}
+          style={[
+            styles.discoveryViewerCloseButton,
+            isDarkMode ? styles.darkFloatingControl : null,
+          ]}
+        >
+          <Share2
+            color={isDarkMode ? "#F5F5F7" : "#111111"}
+            size={18}
+            strokeWidth={2.7}
+          />
+        </Pressable>
+        <Pressable
+          accessibilityLabel={labels.close}
+          accessibilityRole="button"
+          onPress={onClose}
+          style={[
+            styles.discoveryViewerCloseButton,
+            isDarkMode ? styles.darkFloatingControl : null,
+          ]}
+        >
+          <X
+            color={isDarkMode ? "#F5F5F7" : "#111111"}
+            size={19}
+            strokeWidth={2.8}
+          />
+        </Pressable>
+      </View>
+
+      <View style={styles.discoveryViewerImageFrame}>
+        <Image
+          resizeMode="cover"
+          source={{ uri: viewerImageUrl }}
+          style={styles.discoveryViewerImage}
+        />
+      </View>
+
+      <View
+        style={[
+          styles.discoveryViewerCaption,
+          isCaptionOpen ? styles.discoveryViewerCaptionExpanded : null,
+          isCaptionOpen && isDarkMode
+            ? styles.darkDiscoveryViewerCaptionExpanded
+            : null,
+        ]}
+      >
+        <Pressable
+          accessibilityLabel={tile.title}
+          accessibilityRole={canExpandCaption ? "button" : undefined}
+          onPress={canExpandCaption ? toggleCaption : undefined}
+          style={styles.discoveryViewerTitleRow}
+        >
+          <Text
+            numberOfLines={isCaptionOpen ? 3 : 1}
+            style={[
+              styles.discoveryViewerTitle,
+              isDarkMode ? styles.darkText : null,
+            ]}
+          >
+            {tile.title}
+          </Text>
+          {canExpandCaption ? (
+            <View
+              style={[
+                styles.discoveryViewerCaptionToggle,
+                isDarkMode ? styles.darkIconBox : null,
+              ]}
+            >
+              {isCaptionOpen ? (
+                <ChevronUp
+                  color={isDarkMode ? "#E5E5EA" : "#111111"}
+                  size={15}
+                  strokeWidth={3}
+                />
+              ) : (
+                <ChevronDown
+                  color={isDarkMode ? "#E5E5EA" : "#111111"}
+                  size={15}
+                  strokeWidth={3}
+                />
+              )}
+            </View>
+          ) : null}
+        </Pressable>
+
+        {isCaptionOpen ? (
+          <ScrollView
+            contentContainerStyle={styles.discoveryViewerCaptionScrollContent}
+            nestedScrollEnabled
+            onMomentumScrollEnd={() => setCaptionTextScrollActive(false)}
+            onScrollBeginDrag={() => setCaptionTextScrollActive(true)}
+            onScrollEndDrag={() => setCaptionTextScrollActive(false)}
+            onTouchCancel={() => setCaptionTextScrollActive(false)}
+            onTouchEnd={() => setCaptionTextScrollActive(false)}
+            onTouchStart={() => setCaptionTextScrollActive(true)}
+            scrollEnabled
+            showsVerticalScrollIndicator
+            style={styles.discoveryViewerCaptionScroll}
+          >
+            {renderCaptionDetails()}
+          </ScrollView>
+        ) : (
+          <Pressable
+            accessibilityRole={canExpandCaption ? "button" : undefined}
+            onPress={canExpandCaption ? toggleCaption : undefined}
+            style={styles.discoveryViewerCaptionScrollContent}
+          >
+            {renderCaptionDetails()}
+          </Pressable>
+        )}
+      </View>
+    </View>
   );
 }
 
@@ -2449,25 +4250,36 @@ function OfficialKoloEventCard({
       <Pressable
         accessibilityRole="button"
         onPress={() => setIsOpen(true)}
-        style={[styles.officialEventCard, isDarkMode ? styles.darkCard : null]}
+        style={[
+          styles.contentItemCard,
+          styles.eventContentCard,
+          styles.officialEventCard,
+          isDarkMode ? styles.darkSettingRow : null,
+          isDarkMode ? styles.darkEventContentCard : null,
+        ]}
       >
         <View
           style={[
+            styles.contentItemImage,
+            styles.eventContentImage,
             styles.officialEventImageFrame,
-            isDarkMode ? styles.darkOfficialEventImageSurface : null,
           ]}
         >
           <Image
             accessibilityLabel={labels.summerPartyTitle}
-            resizeMode="contain"
+            resizeMode="cover"
             source={KOLO_SUMMER_PARTY_IMAGE}
-            style={[
-              styles.officialEventImage,
-              isDarkMode ? styles.darkOfficialEventImageSurface : null,
-            ]}
+            style={styles.officialEventImage}
           />
         </View>
-        <View style={styles.officialEventBody}>
+        <View
+          style={[
+            styles.contentItemBody,
+            styles.eventContentBody,
+            styles.officialEventBody,
+            isDarkMode ? styles.darkContentItemBody : null,
+          ]}
+        >
           <View style={styles.officialEventHeader}>
             <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
               {labels.officialEvent}
@@ -2508,46 +4320,6 @@ function OfficialKoloEventCard({
                 {labels.summerPartyLocation}
               </Text>
             </View>
-          </View>
-          <View style={styles.officialEventActions}>
-            <Pressable
-              accessibilityRole="link"
-              onPress={(event) => {
-                event.stopPropagation();
-                void openContactUrl(KOLO_SUMMER_PARTY_EVENTBRITE_URL);
-              }}
-              style={styles.officialEventPrimaryButton}
-            >
-              <CalendarDays color="#FFFFFF" size={16} strokeWidth={2.7} />
-              <Text style={styles.officialEventPrimaryButtonText}>
-                {labels.summerPartyEventbrite}
-              </Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="link"
-              onPress={(event) => {
-                event.stopPropagation();
-                void openContactUrl(KOLO_SUMMER_PARTY_MAP_URL);
-              }}
-              style={[
-                styles.officialEventSecondaryButton,
-                isDarkMode ? styles.darkSecondaryButton : null,
-              ]}
-            >
-              <MapPin
-                color={isDarkMode ? "#F5F5F7" : "#111111"}
-                size={16}
-                strokeWidth={2.7}
-              />
-              <Text
-                style={[
-                  styles.officialEventSecondaryButtonText,
-                  isDarkMode ? styles.darkSecondaryButtonText : null,
-                ]}
-              >
-                {labels.summerPartyMaps}
-              </Text>
-            </Pressable>
           </View>
         </View>
       </Pressable>
@@ -2600,19 +4372,12 @@ function OfficialKoloEventCard({
                 </Pressable>
               </View>
 
-              <View
-                style={[
-                  styles.contentDetailImageFrame,
-                  isDarkMode
-                    ? styles.darkOfficialEventImageSurface
-                    : styles.lightOfficialEventImageSurface,
-                ]}
-              >
+              <View style={styles.officialEventDetailImageFrame}>
                 <Image
                   accessibilityLabel={labels.summerPartyTitle}
-                  resizeMode="contain"
+                  resizeMode="cover"
                   source={KOLO_SUMMER_PARTY_IMAGE}
-                  style={styles.contentDetailImage}
+                  style={styles.officialEventDetailImage}
                 />
               </View>
 
@@ -2748,13 +4513,11 @@ function EventsScreen({
   isDarkMode,
   isResolvingCurrentLocation,
   labels,
-  localOnly,
   location,
   onContentPress,
   onShareContent,
   onUseCurrentLocation,
   setLocation,
-  setLocalOnly,
 }: {
   businesses: Business[];
   canViewContacts: boolean;
@@ -2762,35 +4525,34 @@ function EventsScreen({
   isDarkMode: boolean;
   isResolvingCurrentLocation: boolean;
   labels: Record<string, string>;
-  localOnly: boolean;
   location: string;
   onContentPress: (entry: ContentDetailEntry) => void;
   onShareContent: (entry: ContentDetailEntry) => Promise<void>;
   onUseCurrentLocation: (silent?: boolean) => Promise<string | undefined>;
   setLocation: (value: string) => void;
-  setLocalOnly: (value: boolean) => void;
 }) {
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [eventLocalOnly, setEventLocalOnly] = useState(true);
   const selectedLocation = location.trim();
 
   if (!isDataReady) {
     return (
-      <ScrollView
-        contentContainerStyle={styles.screenContent}
-        keyboardShouldPersistTaps="handled"
-        style={styles.screen}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={[styles.homeHero, isDarkMode ? styles.darkCard : null]}>
-          <Text style={[styles.homeTitle, isDarkMode ? styles.darkText : null]}>
+      <KeyboardAwareScreen>
+        <View style={styles.eventsHeader}>
+          <Text style={[styles.searchModeTitle, isDarkMode ? styles.darkText : null]}>
             {labels.eventsNearYou}
           </Text>
-          <Text style={[styles.homeIntro, isDarkMode ? styles.darkMutedText : null]}>
+        </View>
+        <View style={[styles.loadingCard, isDarkMode ? styles.darkSettingRow : null]}>
+          <Text style={[styles.loadingTitle, isDarkMode ? styles.darkText : null]}>
             {isResolvingCurrentLocation
               ? labels.detectingLocation
               : labels.loadingBusinesses}
           </Text>
+          <Text style={[styles.loadingLine, isDarkMode ? styles.darkLoadingLine : null]} />
+          <Text style={[styles.loadingLineShort, isDarkMode ? styles.darkLoadingLine : null]} />
         </View>
-      </ScrollView>
+      </KeyboardAwareScreen>
     );
   }
 
@@ -2807,7 +4569,7 @@ function EventsScreen({
     )
     .filter(({ business, item }) => {
       const matchesOnline =
-        !localOnly || (!item.isOnline && !business.servesAllCanada);
+        !eventLocalOnly || (!item.isOnline && !business.servesAllCanada);
 
       if (!matchesOnline) {
         return false;
@@ -2820,7 +4582,7 @@ function EventsScreen({
       const eventLocation = item.location ?? "";
 
       return (
-        (!localOnly && (item.isOnline || business.servesAllCanada)) ||
+        (!eventLocalOnly && (item.isOnline || business.servesAllCanada)) ||
         isNearLocation(business.city, selectedLocation) ||
         (eventLocation ? isNearLocation(eventLocation, selectedLocation) : false) ||
         (eventLocation
@@ -2836,37 +4598,22 @@ function EventsScreen({
 
   return (
     <KeyboardAwareScreen>
-      <View style={[styles.searchPanel, isDarkMode ? styles.darkCard : null]}>
-        <Text style={[styles.homeTitle, isDarkMode ? styles.darkText : null]}>
+      <View style={styles.eventsHeader}>
+        <Text style={[styles.searchModeTitle, isDarkMode ? styles.darkText : null]}>
           {labels.eventsNearYou}
         </Text>
-        <Text style={[styles.homeIntro, isDarkMode ? styles.darkMutedText : null]}>
-          {labels.eventsIntro}
-        </Text>
-        <Field isDarkMode={isDarkMode} label={labels.location}>
-          <LocationPicker
-            allowAll
-            isDarkMode={isDarkMode}
-            isResolvingCurrentLocation={isResolvingCurrentLocation}
-            labels={labels}
-            onChange={setLocation}
-            onUseCurrentLocation={onUseCurrentLocation}
-            placeholder={labels.city}
-            showMyLocation
-            value={location}
+        <Pressable
+          accessibilityLabel={labels.settings}
+          accessibilityRole="button"
+          onPress={() => setIsSettingsOpen(true)}
+          style={[styles.eventsSettingsButton, isDarkMode ? styles.darkIconBox : null]}
+        >
+          <SlidersHorizontal
+            color={isDarkMode ? "#E5E5EA" : "#111111"}
+            size={18}
+            strokeWidth={2.8}
           />
-        </Field>
-        <View style={[styles.localOnlyRow, isDarkMode ? styles.darkSettingRow : null]}>
-          <Text style={[styles.localOnlyTitle, isDarkMode ? styles.darkText : null]}>
-            {labels.localOnly}
-          </Text>
-          <Switch
-            onValueChange={setLocalOnly}
-            thumbColor={localOnly ? "#FFFFFF" : "#111111"}
-            trackColor={{ false: "#E5E5EA", true: "#111111" }}
-            value={localOnly}
-          />
-        </View>
+        </Pressable>
       </View>
 
       <OfficialKoloEventCard isDarkMode={isDarkMode} labels={labels} />
@@ -2893,6 +4640,7 @@ function EventsScreen({
             onShare={() => {
               void onShareContent({ business, item });
             }}
+            presentation="event"
             showBusinessName
           />
         ))
@@ -2901,361 +4649,900 @@ function EventsScreen({
           {labels.noContentItems}
         </Text>
       ) : null}
+      <Modal
+        animationType="slide"
+        onRequestClose={() => setIsSettingsOpen(false)}
+        transparent
+        visible={isSettingsOpen}
+      >
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setIsSettingsOpen(false)}
+          style={styles.pickerBackdrop}
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={[styles.eventSettingsSheet, isDarkMode ? styles.darkPickerSheet : null]}
+          >
+            <View style={styles.eventSettingsHeader}>
+              <Text style={[styles.pickerTitle, isDarkMode ? styles.darkText : null]}>
+                {labels.settings}
+              </Text>
+              <Pressable
+                accessibilityLabel={labels.close}
+                accessibilityRole="button"
+                onPress={() => setIsSettingsOpen(false)}
+                style={[styles.modalCloseButton, isDarkMode ? styles.darkSettingRow : null]}
+              >
+                <X
+                  color={isDarkMode ? "#E5E5EA" : "#111111"}
+                  size={19}
+                  strokeWidth={2.7}
+                />
+              </Pressable>
+            </View>
+            <View style={styles.eventSettingsBody}>
+              <Field isDarkMode={isDarkMode} label={labels.location}>
+                <LocationPicker
+                  allowAll
+                  isDarkMode={isDarkMode}
+                  isResolvingCurrentLocation={isResolvingCurrentLocation}
+                  labels={labels}
+                  onChange={setLocation}
+                  onUseCurrentLocation={onUseCurrentLocation}
+                  placeholder={labels.city}
+                  showMyLocation
+                  value={location}
+                />
+              </Field>
+              <View style={[styles.localOnlyRow, isDarkMode ? styles.darkSettingRow : null]}>
+                <Text style={[styles.localOnlyTitle, isDarkMode ? styles.darkText : null]}>
+                  {labels.localOnly}
+                </Text>
+                <Switch
+                  onValueChange={setEventLocalOnly}
+                  thumbColor={eventLocalOnly ? "#FFFFFF" : "#111111"}
+                  trackColor={{ false: "#E5E5EA", true: "#111111" }}
+                  value={eventLocalOnly}
+                />
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAwareScreen>
   );
 }
 
 function HomeScreen({
   businesses,
-  canViewContacts,
+  feedPosts,
   isDataReady,
   isDarkMode,
   labels,
   locale,
+  location,
   onBusinessPress,
   onContentPress,
+  onFeedPostPress,
   onCategoryPress,
-  onLocationPress,
-  onShareBusiness,
   onShareContent,
-  onSearchPress,
-  onToggleSavedBusiness,
-  savedBusyBusinessId,
+  profile,
+  query,
+  selectedCategory,
+  session,
 }: {
   businesses: Business[];
-  canViewContacts: boolean;
+  feedPosts: MobileFeedPost[];
   isDataReady: boolean;
   isDarkMode: boolean;
   labels: Record<string, string>;
   locale: Locale;
+  location: string;
   onBusinessPress: (business: Business) => void;
   onContentPress: (entry: ContentDetailEntry) => void;
+  onFeedPostPress: (post: MobileFeedPost) => void;
   onCategoryPress: (categorySlug: string) => void;
-  onLocationPress: (location: string) => void;
-  onShareBusiness: (business: Business) => Promise<void>;
   onShareContent: (entry: ContentDetailEntry) => Promise<void>;
-  onSearchPress: () => void;
-  onToggleSavedBusiness: (business: Business) => void;
-  savedBusyBusinessId: string | null;
+  profile: UserProfile | null;
+  query: string;
+  selectedCategory: string;
+  session: Session | null;
 }) {
+  const homeCopy = getHomeCopy(locale);
+
   if (!isDataReady) {
     return (
-      <ScrollView
-        contentContainerStyle={styles.screenContent}
-        keyboardShouldPersistTaps="handled"
-        style={styles.screen}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={[styles.homeHero, isDarkMode ? styles.darkCard : null]}>
-          <Text style={[styles.homeTitle, isDarkMode ? styles.darkText : null]}>
-            {labels.homeTitle}
-          </Text>
-          <Text style={[styles.homeIntro, isDarkMode ? styles.darkMutedText : null]}>
-            {labels.loadingBusinesses}
-          </Text>
-          <View style={[styles.loadingCard, isDarkMode ? styles.darkSettingRow : null]}>
-            <Text style={[styles.loadingTitle, isDarkMode ? styles.darkText : null]}>
-              {labels.loading}
-            </Text>
-            <Text style={[styles.loadingLine, isDarkMode ? styles.darkLoadingLine : null]} />
-            <Text style={[styles.loadingLineShort, isDarkMode ? styles.darkLoadingLine : null]} />
-          </View>
-        </View>
-      </ScrollView>
+      <HomeLoadingScreen
+        isDarkMode={isDarkMode}
+        labels={labels}
+        locale={locale}
+      />
     );
   }
 
   const uniqueBusinesses = getUniqueBusinessesById(businesses);
-  const contentFeedItems = uniqueBusinesses
-    .flatMap((business) =>
-      (business.contentItems ?? []).map((item) => ({ business, item })),
-    )
-    .filter(
-      ({ item }, index, allItems) =>
-        allItems.findIndex(({ item: otherItem }) => otherItem.id === item.id) ===
-        index,
-    )
-    .sort(
-      (first, second) =>
-        getContentTimestamp(second.item) - getContentTimestamp(first.item),
-    )
-    .slice(0, 8);
-  const feedBusinessKeys = new Set(
-    contentFeedItems.map(({ business }) => getBusinessDedupeKey(business)),
+  const effectiveQuery = getEffectiveSearchQuery(query);
+  const selectedCategorySlug =
+    selectedCategory === "all" ? "" : normalizeCategorySlug(selectedCategory);
+  const categoryCards = getHomeCategoryCards({
+    businesses: uniqueBusinesses,
+    followedBusinesses: uniqueBusinesses.filter((business) => business.isSaved),
+    locale,
+    location,
+    query: effectiveQuery,
+    selectedCategorySlug,
+  }).slice(0, 12);
+  const preferredCategorySlugs = categoryCards.map(({ category }) => category.slug);
+  const locationTrimmed = location.trim();
+  const locationAwareBusinesses = uniqueBusinesses.filter(
+    (business) =>
+      !locationTrimmed ||
+      business.servesAllCanada ||
+      isNearLocation(business.city, locationTrimmed),
   );
-  const featuredBusinesses = rankBusinesses(
+  const newNearbyBusinesses = sortHomeBusinessesByFreshness(
+    rankBusinesses(
+      locationAwareBusinesses.length ? locationAwareBusinesses : uniqueBusinesses,
+      {
+        categorySlug: selectedCategorySlug || undefined,
+        location,
+        query: effectiveQuery,
+      },
+    ),
+  ).slice(0, 10);
+  const newNearbyKeys = new Set(
+    newNearbyBusinesses.map((business) => getBusinessDedupeKey(business)),
+  );
+  const followedBusinesses = uniqueBusinesses.filter((business) => business.isSaved);
+  const followedBusinessKeys = new Set(
+    followedBusinesses.map((business) => getBusinessDedupeKey(business)),
+  );
+  const followedContentItems = getHomeContentEntries(followedBusinesses).slice(0, 10);
+  const interestContentItems = getHomeContentEntries(
     uniqueBusinesses.filter(
-      (business) => !feedBusinessKeys.has(getBusinessDedupeKey(business)),
+      (business) =>
+        preferredCategorySlugs.includes(business.categorySlug) ||
+        isHomeBusinessPreferenceMatch(business, effectiveQuery),
     ),
   )
-    .slice(0, 4);
-  const popularCategories = categories
-    .map((category) => ({
-      ...category,
-      count: uniqueBusinesses.filter(
-        (business) => business.categorySlug === category.slug,
-      ).length,
-    }))
-    .filter((category) => category.count > 0)
-    .sort((first, second) => second.count - first.count)
-    .slice(0, 6);
-  const quickCities = citySuggestions.slice(0, 8);
-  const homeStats = [
-    { label: labels.statBusinesses, value: uniqueBusinesses.length.toString() },
-    { label: labels.statCategories, value: categories.length.toString() },
-    { label: labels.statCities, value: citySuggestions.length.toString() },
-  ];
-  const discoveryCards = [
+    .filter(({ business }) => !followedBusinessKeys.has(getBusinessDedupeKey(business)))
+    .slice(0, 10);
+  const freshContentItems = getHomeContentEntries(uniqueBusinesses).slice(0, 10);
+  const primaryContentItems = followedContentItems.length
+    ? followedContentItems
+    : interestContentItems.length
+      ? interestContentItems
+      : freshContentItems;
+  const recommendedBusinesses = rankBusinesses(
+    uniqueBusinesses.filter(
+      (business) =>
+        !newNearbyKeys.has(getBusinessDedupeKey(business)) &&
+        (preferredCategorySlugs.includes(business.categorySlug) ||
+          isHomeBusinessPreferenceMatch(business, effectiveQuery) ||
+          followedBusinessKeys.has(getBusinessDedupeKey(business))),
+    ),
     {
-      categorySlug: "grocery-stores",
-      text: labels.planFoodText,
-      title: labels.planFood,
+      categorySlug: selectedCategorySlug || undefined,
+      location,
+      query: effectiveQuery,
     },
-    {
-      categorySlug: "wellness-care",
-      text: labels.planCareText,
-      title: labels.planCare,
-    },
-    {
-      categorySlug: "events",
-      text: labels.planWeekendText,
-      title: labels.planWeekend,
-    },
-  ];
+  ).slice(0, 10);
+  const storyBusinesses = getUniqueBusinesses([
+    ...recommendedBusinesses,
+    ...newNearbyBusinesses,
+    ...rankBusinesses(uniqueBusinesses, {
+      categorySlug: selectedCategorySlug || undefined,
+      location,
+      query: effectiveQuery,
+    }),
+  ])
+    .filter((business) =>
+      Boolean(getRenderableImageUrl(business.logoUrl, imageOptimizationPresets.logo)),
+    )
+    .slice(0, 14);
+  const feedPreviewPosts = feedPosts.slice(0, 8);
+  const contentTitle = followedContentItems.length
+    ? homeCopy.followingContentTitle
+    : homeCopy.freshContentTitle;
+  const contentSubtitle = followedContentItems.length
+    ? homeCopy.followingContentSubtitle
+    : homeCopy.freshContentSubtitle;
+  const nearbySubtitle = locationTrimmed
+    ? `${homeCopy.nearbySubtitle} ${locationTrimmed}`
+    : homeCopy.nearbyFallbackSubtitle;
 
   return (
     <ScrollView
-      contentContainerStyle={styles.screenContent}
+      contentContainerStyle={[styles.screenContent, styles.homeScreenContent]}
       keyboardShouldPersistTaps="handled"
       style={styles.screen}
       showsVerticalScrollIndicator={false}
     >
-      <View style={[styles.homeHero, isDarkMode ? styles.darkCard : null]}>
-        <Text style={[styles.homeTitle, isDarkMode ? styles.darkText : null]}>
-          {labels.homeTitle}
-        </Text>
-        <Text style={[styles.homeIntro, isDarkMode ? styles.darkMutedText : null]}>
-          {labels.homeIntro}
-        </Text>
-        <View style={styles.homeStatsRow}>
-          {homeStats.map((stat) => (
-            <View
-              key={stat.label}
-              style={[styles.homeStatPill, isDarkMode ? styles.darkSettingRow : null]}
-            >
-              <Text style={[styles.homeStatValue, isDarkMode ? styles.darkText : null]}>
-                {stat.value}
-              </Text>
-              <Text style={[styles.homeStatLabel, isDarkMode ? styles.darkMutedText : null]}>
-                {stat.label}
-              </Text>
-            </View>
-          ))}
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onSearchPress}
-          style={[
-            styles.homeSearchButton,
-            isDarkMode ? styles.darkSettingRow : null,
-          ]}
+      <Text style={[styles.homeBrand, isDarkMode ? styles.darkText : null]}>
+        Коло
+      </Text>
+
+      {storyBusinesses.length ? (
+        <ScrollView
+          contentContainerStyle={styles.homeStoriesRail}
+          horizontal
+          showsHorizontalScrollIndicator={false}
         >
-          <Search color={isDarkMode ? "#E5E5EA" : "#6E6E73"} size={20} strokeWidth={2.5} />
-          <View style={styles.flex}>
-            <Text style={[styles.homeSearchTitle, isDarkMode ? styles.darkText : null]}>
-              {labels.search}
-            </Text>
-            <Text style={[styles.homeSearchText, isDarkMode ? styles.darkMutedText : null]}>
-              {labels.searchPlaceholder}
-            </Text>
+          {storyBusinesses.map((business) => (
+            <HomeStoryBusiness
+              business={business}
+              isDarkMode={isDarkMode}
+              key={getBusinessDedupeKey(business)}
+              labels={labels}
+              onPress={() => onBusinessPress(business)}
+            />
+          ))}
+        </ScrollView>
+      ) : null}
+
+      <HomeRail
+        isDarkMode={isDarkMode}
+        subtitle={homeCopy.categorySubtitle}
+        title={homeCopy.categoryTitle}
+      >
+        {categoryCards.length ? (
+          categoryCards.map(({ category, count }) => (
+            <HomeCategoryRailCard
+              categorySlug={category.slug}
+              count={count}
+              isDarkMode={isDarkMode}
+              key={category.slug}
+              name={category.name[locale]}
+              onPress={() => onCategoryPress(category.slug)}
+              supportingText={labels.businesses}
+            />
+          ))
+        ) : (
+          <HomeEmptyRailCard
+            isDarkMode={isDarkMode}
+            text={homeCopy.emptyContentText}
+          />
+        )}
+      </HomeRail>
+
+      <HomeRail
+        isDarkMode={isDarkMode}
+        subtitle={contentSubtitle}
+        title={contentTitle}
+      >
+        {primaryContentItems.length ? (
+          primaryContentItems.map(({ business, item }) => (
+            <HomeContentRailCard
+              business={business}
+              isDarkMode={isDarkMode}
+              item={item}
+              key={item.id}
+              labels={labels}
+              onPress={() => onContentPress({ business, item })}
+              onShare={() => {
+                void onShareContent({ business, item });
+              }}
+            />
+          ))
+        ) : (
+          <HomeEmptyRailCard
+            isDarkMode={isDarkMode}
+            text={homeCopy.emptyContentText}
+          />
+        )}
+      </HomeRail>
+
+      <HomeRail
+        isDarkMode={isDarkMode}
+        subtitle={nearbySubtitle}
+        title={homeCopy.nearbyTitle}
+      >
+        {newNearbyBusinesses.length ? (
+          newNearbyBusinesses.map((business) => (
+            <HomeBusinessFeatureCard
+              business={business}
+              isDarkMode={isDarkMode}
+              key={business.id}
+              labels={labels}
+              locale={locale}
+              onPress={() => onBusinessPress(business)}
+            />
+          ))
+        ) : (
+          <HomeEmptyRailCard
+            isDarkMode={isDarkMode}
+            text={homeCopy.emptyContentText}
+          />
+        )}
+      </HomeRail>
+
+      {recommendedBusinesses.length ? (
+        <HomeRail
+          isDarkMode={isDarkMode}
+          subtitle={homeCopy.recommendedSubtitle}
+          title={homeCopy.recommendedTitle}
+        >
+          {recommendedBusinesses.map((business) => (
+            <HomeBusinessFeatureCard
+              business={business}
+              isDarkMode={isDarkMode}
+              key={business.id}
+              labels={labels}
+              locale={locale}
+              onPress={() => onBusinessPress(business)}
+            />
+          ))}
+        </HomeRail>
+      ) : null}
+
+      {feedPreviewPosts.length ? (
+        <HomeRail
+          isDarkMode={isDarkMode}
+          subtitle={homeCopy.communitySubtitle}
+          title={homeCopy.communityTitle}
+        >
+          {feedPreviewPosts.map((post) => (
+            <HomeFeedPostRailCard
+              isDarkMode={isDarkMode}
+              key={post.id}
+              labels={labels}
+              onPress={() => onFeedPostPress(post)}
+              post={post}
+              profile={profile}
+              session={session}
+            />
+          ))}
+        </HomeRail>
+      ) : null}
+    </ScrollView>
+  );
+}
+
+function HomeLoadingScreen({
+  isDarkMode,
+  labels,
+  locale,
+}: {
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  locale: Locale;
+}) {
+  const homeCopy = getHomeCopy(locale);
+  const skeletonStyle = isDarkMode ? styles.darkLoadingLine : null;
+
+  return (
+    <ScrollView
+      contentContainerStyle={[styles.screenContent, styles.homeScreenContent]}
+      keyboardShouldPersistTaps="handled"
+      style={styles.screen}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text style={[styles.homeBrand, isDarkMode ? styles.darkText : null]}>
+        Kolo
+      </Text>
+
+      <View style={[styles.homeLoadingHero, isDarkMode ? styles.darkCard : null]}>
+        <View style={styles.homeLoadingHeroTopRow}>
+          <View style={[styles.homeLoadingIcon, isDarkMode ? styles.darkIconBox : null]}>
+            <Sparkles
+              color={isDarkMode ? "#E5E5EA" : "#111111"}
+              size={20}
+              strokeWidth={2.7}
+            />
           </View>
-        </Pressable>
-      </View>
-
-      <OfficialKoloEventCard isDarkMode={isDarkMode} labels={labels} />
-
-      <View style={styles.homeSectionHeader}>
-        <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
-          {labels.planToday}
+          <Text style={[styles.homeLoadingBadge, isDarkMode ? styles.darkBadge : null]}>
+            {labels.loading}
+          </Text>
+        </View>
+        <Text style={[styles.homeLoadingTitle, isDarkMode ? styles.darkText : null]}>
+          {labels.loadingBusinesses}
         </Text>
+        <View style={[styles.homeLoadingSearchCard, isDarkMode ? styles.darkIconBox : null]}>
+          <Search
+            color={isDarkMode ? "#A1A1A6" : "#6E6E73"}
+            size={18}
+            strokeWidth={2.7}
+          />
+          <View style={styles.flex}>
+            <View style={[styles.homeSkeletonLine, styles.homeSkeletonLineWide, skeletonStyle]} />
+            <View style={[styles.homeSkeletonLine, styles.homeSkeletonLineShort, skeletonStyle]} />
+          </View>
+        </View>
       </View>
+
       <ScrollView
-        contentContainerStyle={styles.discoveryRail}
+        contentContainerStyle={styles.homeLoadingStoriesRail}
         horizontal
         showsHorizontalScrollIndicator={false}
       >
-        {discoveryCards.map((card, index) => (
-          <Pressable
-            accessibilityRole="button"
-            key={card.categorySlug}
-            onPress={() => onCategoryPress(card.categorySlug)}
-            style={[
-              styles.discoveryCard,
-              index === 0 ? styles.discoveryCardDark : null,
-              isDarkMode && index !== 0 ? styles.darkCard : null,
-            ]}
-          >
-            <View
-              style={[
-                styles.discoveryIcon,
-                index === 0 ? styles.discoveryIconDark : null,
-                isDarkMode && index !== 0 ? styles.discoveryIconDark : null,
-              ]}
-            >
-              {index === 1 ? (
-                <Sparkles
-                  color={isDarkMode ? "#FFFFFF" : "#111111"}
-                  size={19}
-                  strokeWidth={2.8}
-                />
-              ) : (
-                <Store
-                  color={index === 0 || isDarkMode ? "#FFFFFF" : "#111111"}
-                  size={19}
-                  strokeWidth={2.8}
-                />
-              )}
-            </View>
-            <Text
-              style={[
-                styles.discoveryTitle,
-                index === 0 || isDarkMode ? styles.discoveryTitleLight : null,
-              ]}
-            >
-              {card.title}
-            </Text>
-            <Text
-              style={[
-                styles.discoveryText,
-                index === 0 ? styles.discoveryTextLight : null,
-                isDarkMode && index !== 0 ? styles.darkMutedText : null,
-              ]}
-            >
-              {card.text}
-            </Text>
-          </Pressable>
+        {Array.from({ length: 7 }, (_, index) => (
+          <View key={`loading-story-${index}`} style={styles.homeLoadingStoryItem}>
+            <View style={[styles.homeSkeletonCircle, skeletonStyle]} />
+            <View style={[styles.homeSkeletonTinyLine, skeletonStyle]} />
+          </View>
         ))}
       </ScrollView>
 
-      <View style={styles.homeSectionHeader}>
-        <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
-          {labels.liveNearby}
-        </Text>
-        <Text style={[styles.resultCount, isDarkMode ? styles.darkBadge : null]}>
-          {contentFeedItems.length}
-        </Text>
-      </View>
-      {contentFeedItems.length ? (
-        contentFeedItems.map(({ business, item }) => (
-          <PublicContentCard
-            business={business}
-            canViewContacts={canViewContacts}
-            isDarkMode={isDarkMode}
-            item={item}
-            key={item.id}
-            labels={labels}
-            onPress={() => onContentPress({ business, item })}
-            onShare={() => {
-              void onShareContent({ business, item });
-            }}
-            showBusinessName
-          />
-        ))
-      ) : (
-        uniqueBusinesses.slice(0, 3).map((business) => (
-          <BusinessCard
-            business={business}
-            canViewContacts={canViewContacts}
-            isDarkMode={isDarkMode}
-            key={business.id}
-            labels={labels}
-            locale={locale}
-            onPress={() => onBusinessPress(business)}
-            onShare={() => {
-              void onShareBusiness(business);
-            }}
-            onToggleSaved={() => onToggleSavedBusiness(business)}
-            saveBusy={savedBusyBusinessId === business.id}
-          />
-        ))
-      )}
-
-      {featuredBusinesses.length ? (
-        <>
-          <View style={styles.homeSectionHeader}>
-            <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
-              {labels.featuredBusinesses}
-            </Text>
-            <Text style={[styles.resultCount, isDarkMode ? styles.darkBadge : null]}>
-              {featuredBusinesses.length}
-            </Text>
-          </View>
-          <ScrollView
-            contentContainerStyle={styles.featuredBusinessRail}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-          >
-            {featuredBusinesses.map((business) => (
-              <HomeBusinessFeatureCard
-                business={business}
-                isDarkMode={isDarkMode}
-                key={business.id}
-                labels={labels}
-                locale={locale}
-                onPress={() => onBusinessPress(business)}
-              />
-            ))}
-          </ScrollView>
-        </>
-      ) : null}
-
-      <View style={styles.homeSectionHeader}>
-        <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
-          {labels.popularCategories}
-        </Text>
-      </View>
-      <View style={styles.categoryPreviewGrid}>
-        {popularCategories.map((category) => (
-          <Pressable
-            accessibilityRole="button"
-            key={category.slug}
-            onPress={() => onCategoryPress(category.slug)}
-            style={[
-              styles.categoryPreviewCard,
-              isDarkMode ? styles.darkCard : null,
-            ]}
-          >
-            <Text style={[styles.categoryPreviewName, isDarkMode ? styles.darkText : null]}>
-              {category.name[locale]}
-            </Text>
-            <Text style={[styles.categoryPreviewMeta, isDarkMode ? styles.darkMutedText : null]}>
-              {category.count} {labels.businesses}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      <View style={styles.homeSectionHeader}>
-        <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
-          {labels.quickCities}
-        </Text>
-      </View>
-      <View style={styles.cityPillGrid}>
-        {quickCities.map((city) => (
-          <Pressable
-            accessibilityRole="button"
-            key={city}
-            onPress={() => onLocationPress(city)}
-            style={[styles.cityPill, isDarkMode ? styles.darkSettingRow : null]}
-          >
-            <MapPin color={isDarkMode ? "#E5E5EA" : "#6E6E73"} size={16} strokeWidth={2.5} />
-            <Text style={[styles.cityPillText, isDarkMode ? styles.darkText : null]}>
-              {city}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      <HomeLoadingRail
+        isDarkMode={isDarkMode}
+        skeletonStyle={skeletonStyle}
+        title={homeCopy.categoryTitle}
+        variant="category"
+      />
+      <HomeLoadingRail
+        isDarkMode={isDarkMode}
+        skeletonStyle={skeletonStyle}
+        title={homeCopy.freshContentTitle}
+        variant="content"
+      />
+      <HomeLoadingRail
+        isDarkMode={isDarkMode}
+        skeletonStyle={skeletonStyle}
+        title={homeCopy.nearbyTitle}
+        variant="business"
+      />
     </ScrollView>
+  );
+}
+
+function HomeLoadingRail({
+  isDarkMode,
+  skeletonStyle,
+  title,
+  variant,
+}: {
+  isDarkMode: boolean;
+  skeletonStyle: StyleProp<ViewStyle>;
+  title: string;
+  variant: "business" | "category" | "content";
+}) {
+  const cardCount = variant === "category" ? 4 : 3;
+
+  return (
+    <View style={styles.homeRail}>
+      <View style={styles.homeSectionHeader}>
+        <View style={styles.flex}>
+          <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+            {title}
+          </Text>
+          <View style={[styles.homeSkeletonLine, styles.homeSkeletonRailSubtitle, skeletonStyle]} />
+        </View>
+      </View>
+      <ScrollView
+        contentContainerStyle={styles.homeRailContent}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+      >
+        {Array.from({ length: cardCount }, (_, index) => (
+          <HomeLoadingRailCard
+            isDarkMode={isDarkMode}
+            key={`${variant}-${index}`}
+            skeletonStyle={skeletonStyle}
+            variant={variant}
+          />
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+function HomeLoadingRailCard({
+  isDarkMode,
+  skeletonStyle,
+  variant,
+}: {
+  isDarkMode: boolean;
+  skeletonStyle: StyleProp<ViewStyle>;
+  variant: "business" | "category" | "content";
+}) {
+  if (variant === "category") {
+    return (
+      <View style={[styles.homeLoadingCategoryCard, isDarkMode ? styles.darkCard : null]}>
+        <View style={[styles.homeSkeletonIcon, skeletonStyle]} />
+        <View style={[styles.homeSkeletonLine, styles.homeSkeletonLineMedium, skeletonStyle]} />
+        <View style={[styles.homeSkeletonLine, styles.homeSkeletonLineShort, skeletonStyle]} />
+      </View>
+    );
+  }
+
+  return (
+    <View
+      style={[
+        variant === "content"
+          ? styles.homeLoadingContentCard
+          : styles.homeLoadingBusinessCard,
+        isDarkMode ? styles.darkBusinessCard : null,
+      ]}
+    >
+      {variant === "content" ? (
+        <View style={[styles.homeSkeletonImage, skeletonStyle]} />
+      ) : (
+        <View style={styles.homeLoadingBusinessTopRow}>
+          <View style={[styles.homeSkeletonLogo, skeletonStyle]} />
+          <View style={[styles.homeSkeletonPill, skeletonStyle]} />
+        </View>
+      )}
+      <View style={styles.homeLoadingCardBody}>
+        <View style={[styles.homeSkeletonLine, styles.homeSkeletonLineWide, skeletonStyle]} />
+        <View style={[styles.homeSkeletonLine, styles.homeSkeletonLineMedium, skeletonStyle]} />
+        <View style={[styles.homeSkeletonLine, styles.homeSkeletonLineShort, skeletonStyle]} />
+      </View>
+    </View>
+  );
+}
+
+function HomeRail({
+  children,
+  isDarkMode,
+  subtitle,
+  title,
+}: {
+  children: ReactNode;
+  isDarkMode: boolean;
+  subtitle?: string;
+  title: string;
+}) {
+  return (
+    <View style={styles.homeRail}>
+      <View style={styles.homeSectionHeader}>
+        <View style={styles.flex}>
+          <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+            {title}
+          </Text>
+          {subtitle ? (
+            <Text style={[styles.homeRailSubtitle, isDarkMode ? styles.darkMutedText : null]}>
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+      <ScrollView
+        contentContainerStyle={styles.homeRailContent}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+      >
+        {children}
+      </ScrollView>
+    </View>
+  );
+}
+
+function HomeStoryBusiness({
+  business,
+  isDarkMode,
+  labels,
+  onPress,
+}: {
+  business: Business;
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  onPress: () => void;
+}) {
+  const logoUrl = getRenderableImageUrl(
+    business.logoUrl,
+    imageOptimizationPresets.logo,
+  );
+  const [hasLogoImageError, setHasLogoImageError] = useState(false);
+
+  useEffect(() => {
+    setHasLogoImageError(false);
+  }, [logoUrl]);
+
+  if (!logoUrl || hasLogoImageError) {
+    return null;
+  }
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={styles.homeStoryItem}
+    >
+      <View style={[styles.homeStoryLogoRing, isDarkMode ? styles.darkStoryLogoRing : null]}>
+        <Image
+          onError={() => setHasLogoImageError(true)}
+          resizeMode="contain"
+          source={{ uri: logoUrl }}
+          style={[
+            styles.homeStoryLogo,
+            isDarkMode ? styles.darkContentImageSurface : null,
+          ]}
+        />
+      </View>
+      <Text
+        numberOfLines={1}
+        style={[styles.homeStoryName, isDarkMode ? styles.darkMutedText : null]}
+      >
+        {business.name}
+      </Text>
+      {hasBusinessFollowers(business) ? (
+        <Text
+          numberOfLines={1}
+          style={[styles.homeStoryFollowers, isDarkMode ? styles.darkMutedText : null]}
+        >
+          {getFollowerLabel(business, labels)}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function HomeContentRailCard({
+  business,
+  isDarkMode,
+  item,
+  labels,
+  onPress,
+  onShare,
+}: {
+  business: Business;
+  isDarkMode: boolean;
+  item: BusinessContentItem;
+  labels: Record<string, string>;
+  onPress: () => void;
+  onShare: () => void;
+}) {
+  const coverImageUrl = getContentImageUrls(
+    item,
+    imageOptimizationPresets.thumbnail,
+  )[0];
+  const metaItems = [
+    item.isFree ? labels.free : formatPriceWithCurrency(item.price),
+    item.type === "product" && !item.isAvailable ? labels.outOfStock : undefined,
+    item.isOnline ? labels.online : undefined,
+    item.startsAt ? formatContentDate(item.startsAt) : undefined,
+    business.servesAllCanada ? labels.canadaWide : business.city,
+  ].filter((value): value is string => Boolean(value));
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={[styles.homeContentRailCard, isDarkMode ? styles.darkBusinessCard : null]}
+    >
+      {coverImageUrl ? (
+        <Image
+          resizeMode="cover"
+          source={{ uri: coverImageUrl }}
+          style={[
+            styles.homeContentRailImage,
+            isDarkMode ? styles.darkContentImageSurface : null,
+          ]}
+        />
+      ) : (
+        <View
+          style={[
+            styles.homeContentRailImage,
+            styles.homeContentRailImageFallback,
+            isDarkMode ? styles.darkIconBox : null,
+          ]}
+        >
+          <Sparkles color={isDarkMode ? "#E5E5EA" : "#111111"} size={24} strokeWidth={2.6} />
+        </View>
+      )}
+      <View style={styles.homeContentRailBody}>
+        <View style={styles.homeContentRailTopRow}>
+          <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
+            {getContentTypeLabel(item, labels)}
+          </Text>
+          <Pressable
+            accessibilityLabel={labels.shareBusiness}
+            accessibilityRole="button"
+            onPress={(event) => {
+              event.stopPropagation();
+              onShare();
+            }}
+            style={[styles.contentItemActionButton, isDarkMode ? styles.darkIconBox : null]}
+          >
+            <Share2
+              color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+              size={15}
+              strokeWidth={2.6}
+            />
+          </Pressable>
+        </View>
+        <Text
+          numberOfLines={2}
+          style={[styles.homeContentRailTitle, isDarkMode ? styles.darkText : null]}
+        >
+          {item.title}
+        </Text>
+        <Text
+          numberOfLines={1}
+          style={[styles.homeContentRailBusiness, isDarkMode ? styles.darkMutedText : null]}
+        >
+          {business.name}
+        </Text>
+        <Text
+          numberOfLines={2}
+          style={[styles.descriptionText, isDarkMode ? styles.darkMutedText : null]}
+        >
+          {item.description}
+        </Text>
+        {metaItems.length ? (
+          <Text
+            numberOfLines={2}
+            style={[styles.contentItemMeta, isDarkMode ? styles.darkMutedText : null]}
+          >
+            {metaItems.join(" | ")}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
+function getHomeCategoryIcon(categorySlug: string): LucideIcon {
+  const icons: Record<string, LucideIcon> = {
+    "advertising-services": Megaphone,
+    "auto-repair": Car,
+    beauty: Scissors,
+    bookkeepers: Calculator,
+    cleaning: Sparkles,
+    construction: Hammer,
+    events: CalendarDays,
+    flowers: Flower2,
+    "grocery-stores": ShoppingBasket,
+    "insurance-brokers": ShieldCheck,
+    "it-services": Code2,
+    lawyers: Scale,
+    "mortgage-brokers": HandCoins,
+    moving: Truck,
+    photographers: Camera,
+    realtors: Home,
+    "repair-services": Wrench,
+    restaurants: Utensils,
+    shops: ShoppingBag,
+    "textile-decor": Sofa,
+    "travel-tours": Plane,
+    tutors: GraduationCap,
+    "wellness-care": HeartPulse,
+  };
+
+  return icons[categorySlug] ?? Store;
+}
+
+function HomeCategoryRailCard({
+  categorySlug,
+  count,
+  isDarkMode,
+  name,
+  onPress,
+  supportingText,
+}: {
+  categorySlug: string;
+  count: number;
+  isDarkMode: boolean;
+  name: string;
+  onPress: () => void;
+  supportingText: string;
+}) {
+  const Icon = getHomeCategoryIcon(categorySlug);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={[styles.homeCategoryRailCard, isDarkMode ? styles.darkCard : null]}
+    >
+      <View style={[styles.discoveryIcon, isDarkMode ? styles.darkIconBox : null]}>
+        <Icon color={isDarkMode ? "#E5E5EA" : "#111111"} size={19} strokeWidth={2.7} />
+      </View>
+      <Text
+        numberOfLines={2}
+        style={[styles.homeCategoryRailName, isDarkMode ? styles.darkText : null]}
+      >
+        {name}
+      </Text>
+      <Text style={[styles.categoryPreviewMeta, isDarkMode ? styles.darkMutedText : null]}>
+        {count} {supportingText}
+      </Text>
+    </Pressable>
+  );
+}
+
+function HomeFeedPostRailCard({
+  isDarkMode,
+  labels,
+  onPress,
+  post,
+  profile,
+  session,
+}: {
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  onPress: () => void;
+  post: MobileFeedPost;
+  profile: UserProfile | null;
+  session: Session | null;
+}) {
+  const authorName = getFeedPostAuthorName(post, labels, session, profile);
+  const avatarUrl = getFeedPostAvatarUrl(post, session, profile);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={[styles.homePostRailCard, isDarkMode ? styles.darkBusinessCard : null]}
+    >
+      <View style={styles.feedAuthorRow}>
+        {avatarUrl ? (
+          <Image
+            resizeMode="contain"
+            source={{ uri: avatarUrl }}
+            style={[
+              styles.feedAvatar,
+              isDarkMode ? styles.darkContentImageSurface : null,
+            ]}
+          />
+        ) : (
+          <View style={[styles.feedAvatar, isDarkMode ? styles.darkIconBox : null]}>
+            {post.business_id ? (
+              <Store color={isDarkMode ? "#E5E5EA" : "#111111"} size={18} />
+            ) : (
+              <UserRound color={isDarkMode ? "#E5E5EA" : "#111111"} size={18} />
+            )}
+          </View>
+        )}
+        <View style={styles.flex}>
+          <Text
+            numberOfLines={1}
+            style={[styles.feedAuthorName, isDarkMode ? styles.darkText : null]}
+          >
+            {authorName}
+          </Text>
+          <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+            {formatMobileMessageDate(post.created_at)}
+          </Text>
+        </View>
+      </View>
+      <Text
+        numberOfLines={5}
+        style={[styles.homePostBody, isDarkMode ? styles.darkText : null]}
+      >
+        {post.body}
+      </Text>
+      <View style={styles.homePostMetaRow}>
+        <View style={styles.feedMetricRow}>
+          <Heart
+            color={isDarkMode ? "#A1A1A6" : "#6E6E73"}
+            size={15}
+            strokeWidth={2.5}
+          />
+          <Text style={[styles.feedActionText, isDarkMode ? styles.darkMutedText : null]}>
+            {post.likeCount}
+          </Text>
+        </View>
+        <View style={styles.feedMetricRow}>
+          <MessageCircle
+            color={isDarkMode ? "#A1A1A6" : "#6E6E73"}
+            size={15}
+            strokeWidth={2.5}
+          />
+          <Text style={[styles.feedActionText, isDarkMode ? styles.darkMutedText : null]}>
+            {post.commentCount}
+          </Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+function HomeEmptyRailCard({
+  isDarkMode,
+  text,
+}: {
+  isDarkMode: boolean;
+  text: string;
+}) {
+  return (
+    <View style={[styles.homeEmptyRailCard, isDarkMode ? styles.darkCard : null]}>
+      <Sparkles color={isDarkMode ? "#E5E5EA" : "#6E6E73"} size={22} strokeWidth={2.7} />
+      <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
+        {text}
+      </Text>
+    </View>
   );
 }
 
@@ -3303,7 +5590,7 @@ function RegisterScreen({
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: true,
       base64: true,
-      quality: 0.85,
+      quality: 0.72,
     });
 
     if (result.canceled) {
@@ -3522,8 +5809,16 @@ function RegisterScreen({
             void handleSubmit();
           }}
         />
-        {submitError ? <Text style={styles.errorText}>{submitError}</Text> : null}
-        {submitted ? <Text style={styles.successText}>{labels.submitted}</Text> : null}
+        {submitError ? (
+          <Text style={[styles.errorText, isDarkMode ? styles.darkAlertText : null]}>
+            {submitError}
+          </Text>
+        ) : null}
+        {submitted ? (
+          <Text style={[styles.successText, isDarkMode ? styles.darkAlertText : null]}>
+            {labels.submitted}
+          </Text>
+        ) : null}
       </View>
     </KeyboardAwareScreen>
   );
@@ -3817,8 +6112,16 @@ function DashboardScreen({
               void handleSave();
             }}
           />
-          {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
-          {saved ? <Text style={styles.successText}>{labels.saved}</Text> : null}
+          {saveError ? (
+            <Text style={[styles.errorText, isDarkMode ? styles.darkAlertText : null]}>
+              {saveError}
+            </Text>
+          ) : null}
+          {saved ? (
+            <Text style={[styles.successText, isDarkMode ? styles.darkAlertText : null]}>
+              {labels.saved}
+            </Text>
+          ) : null}
         </View>
       ) : null}
 
@@ -3991,7 +6294,10 @@ function DashboardProfilePreview({
   onEdit: () => void;
 }) {
   const contacts = getBusinessContacts(business, labels);
-  const logoUrl = getRenderableImageUrl(business.logoUrl);
+  const logoUrl = getRenderableImageUrl(
+    business.logoUrl,
+    imageOptimizationPresets.logo,
+  );
   const [hasLogoImageError, setHasLogoImageError] = useState(false);
 
   useEffect(() => {
@@ -4315,7 +6621,7 @@ function BusinessContentSection({
       base64: true,
       mediaTypes: ["images"],
       orderedSelection: true,
-      quality: 0.85,
+      quality: 0.72,
       selectionLimit: 8,
     });
 
@@ -4452,7 +6758,10 @@ function BusinessContentSection({
     }
   }
 
-  const existingImageUrls = getContentImageUrls(editingItem);
+  const existingImageUrls = getContentImageUrls(
+    editingItem,
+    imageOptimizationPresets.thumbnail,
+  );
   const imagePreviewUris =
     images.length > 0 ? images.map((selectedImage) => selectedImage.uri) : existingImageUrls;
   const imageUploadHint =
@@ -4494,8 +6803,16 @@ function BusinessContentSection({
         </Pressable>
       </View>
 
-      {successMessage ? <Text style={styles.successText}>{successMessage}</Text> : null}
-      {errorMessage && !isComposerOpen ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+      {successMessage ? (
+        <Text style={[styles.successText, isDarkMode ? styles.darkAlertText : null]}>
+          {successMessage}
+        </Text>
+      ) : null}
+      {errorMessage && !isComposerOpen ? (
+        <Text style={[styles.errorText, isDarkMode ? styles.darkAlertText : null]}>
+          {errorMessage}
+        </Text>
+      ) : null}
 
       <View style={styles.contentList}>
         {items.length ? (
@@ -4788,7 +7105,11 @@ function BusinessContentSection({
             void handleSubmit();
           }}
         />
-                {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+                {errorMessage ? (
+                  <Text style={[styles.errorText, isDarkMode ? styles.darkAlertText : null]}>
+                    {errorMessage}
+                  </Text>
+                ) : null}
               </View>
             </ScrollView>
           </View>
@@ -4811,7 +7132,10 @@ function BusinessContentCard({
   onDelete: (item: BusinessContentItem) => void;
   onEdit: (item: BusinessContentItem) => void;
 }) {
-  const coverImageUrl = getContentImageUrls(item)[0];
+  const coverImageUrl = getContentImageUrls(
+    item,
+    imageOptimizationPresets.thumbnail,
+  )[0];
   const metaItems = [
     item.type === "product"
       ? item.isAvailable
@@ -4829,7 +7153,7 @@ function BusinessContentCard({
     <View style={[styles.contentItemCard, isDarkMode ? styles.darkSettingRow : null]}>
       {coverImageUrl ? (
         <Image
-          resizeMode="contain"
+          resizeMode="cover"
           source={{ uri: coverImageUrl }}
           style={[
             styles.contentItemImage,
@@ -4837,67 +7161,77 @@ function BusinessContentCard({
           ]}
         />
       ) : null}
-      <View style={styles.contentItemHeader}>
-        <Text style={[styles.contentItemTitle, isDarkMode ? styles.darkText : null]}>
-          {item.title}
-        </Text>
-        <View style={styles.contentItemActions}>
-          <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
-            {getContentTypeLabel(item, labels)}
+      <View style={styles.contentItemBody}>
+        <View style={styles.contentItemHeader}>
+          <Text style={[styles.contentItemTitle, isDarkMode ? styles.darkText : null]}>
+            {item.title}
           </Text>
-          <Pressable
-            accessibilityLabel={labels.edit}
-            accessibilityRole="button"
-            onPress={() => onEdit(item)}
-            style={[
-              styles.contentItemActionButton,
-              isDarkMode ? styles.darkIconBox : null,
-            ]}
-          >
-            <Pencil
-              color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
-              size={16}
-              strokeWidth={2.6}
-            />
-          </Pressable>
-          <Pressable
-            accessibilityLabel={labels.delete}
-            accessibilityRole="button"
-            onPress={() => onDelete(item)}
-            style={[
-              styles.contentItemActionButton,
-              isDarkMode ? styles.darkIconBox : null,
-            ]}
-          >
-            <Trash2
-              color={isDarkMode ? "#FFFFFF" : "#6E6E73"}
-              size={16}
-              strokeWidth={2.6}
-            />
-          </Pressable>
+          <View style={styles.contentItemActions}>
+            <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
+              {getContentTypeLabel(item, labels)}
+            </Text>
+            <Pressable
+              accessibilityLabel={labels.edit}
+              accessibilityRole="button"
+              onPress={() => onEdit(item)}
+              style={[
+                styles.contentItemActionButton,
+                isDarkMode ? styles.darkIconBox : null,
+              ]}
+            >
+              <Pencil
+                color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+                size={16}
+                strokeWidth={2.6}
+              />
+            </Pressable>
+            <Pressable
+              accessibilityLabel={labels.delete}
+              accessibilityRole="button"
+              onPress={() => onDelete(item)}
+              style={[
+                styles.contentItemActionButton,
+                isDarkMode ? styles.darkIconBox : null,
+              ]}
+            >
+              <Trash2
+                color={isDarkMode ? "#FFFFFF" : "#6E6E73"}
+                size={16}
+                strokeWidth={2.6}
+              />
+            </Pressable>
+          </View>
         </View>
-      </View>
-      <Text
-        numberOfLines={2}
-        style={[styles.descriptionText, isDarkMode ? styles.darkMutedText : null]}
-      >
-        {item.description}
-      </Text>
-      {metaItems.length ? (
-        <Text style={[styles.contentItemMeta, isDarkMode ? styles.darkMutedText : null]}>
-          {metaItems.join(" | ")}
-        </Text>
-      ) : null}
-      {item.linkUrl && contentLinkUrl ? (
-        <Pressable
-          accessibilityRole="link"
-          onPress={() => {
-            void openContactUrl(contentLinkUrl);
-          }}
+        <Text
+          numberOfLines={2}
+          style={[styles.descriptionText, isDarkMode ? styles.darkMutedText : null]}
         >
-          <Text style={styles.contactLine}>{item.linkUrl}</Text>
-        </Pressable>
-      ) : null}
+          {item.description}
+        </Text>
+        {metaItems.length ? (
+          <View style={styles.contentMetaChipRow}>
+            {metaItems.map((meta, index) => (
+              <Text
+                key={`${meta}-${index}`}
+                numberOfLines={1}
+                style={[styles.contentMetaChip, isDarkMode ? styles.darkBadge : null]}
+              >
+                {meta}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+        {item.linkUrl && contentLinkUrl ? (
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => {
+              void openContactUrl(contentLinkUrl);
+            }}
+          >
+            <Text style={styles.contactLine}>{item.linkUrl}</Text>
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -4915,6 +7249,1427 @@ function getContentTypeLabel(
   }
 
   return labels.services;
+}
+
+function FeedScreen({
+  commentDrafts,
+  draft,
+  isDarkMode,
+  isLoading,
+  isSubmitting,
+  labels,
+  profile,
+  onCommentDraftChange,
+  onCreateComment,
+  onDeleteComment,
+  onCreatePost,
+  onOpenPost,
+  onOpenMessages,
+  onPostAsBusinessChange,
+  onRequireSignIn,
+  onToggleLike,
+  onUpdateComment,
+  ownedBusiness,
+  postAsBusiness,
+  posts,
+  session,
+  setDraft,
+  unreadMessageCount,
+}: {
+  commentDrafts: Record<string, string>;
+  draft: string;
+  isDarkMode: boolean;
+  isLoading: boolean;
+  isSubmitting: boolean;
+  labels: Record<string, string>;
+  profile: UserProfile | null;
+  onCommentDraftChange: (postId: string, value: string) => void;
+  onCreateComment: (post: MobileFeedPost) => Promise<void> | void;
+  onDeleteComment: (comment: MobileFeedPost["comments"][number]) => void;
+  onCreatePost: () => Promise<boolean> | boolean;
+  onOpenPost: (post: MobileFeedPost) => void;
+  onOpenMessages: () => void;
+  onPostAsBusinessChange: (value: boolean) => void;
+  onRequireSignIn: () => void;
+  onToggleLike: (post: MobileFeedPost) => Promise<void> | void;
+  onUpdateComment: (
+    comment: MobileFeedPost["comments"][number],
+    body: string,
+  ) => Promise<void> | void;
+  ownedBusiness: Business | null;
+  postAsBusiness: boolean;
+  posts: MobileFeedPost[];
+  session: Session | null;
+  setDraft: (value: string) => void;
+  unreadMessageCount: number;
+}) {
+  const [isComposerOpen, setIsComposerOpen] = useState(false);
+
+  function openComposer() {
+    if (!session) {
+      onRequireSignIn();
+      return;
+    }
+
+    setIsComposerOpen(true);
+  }
+
+  async function submitFeedPost() {
+    const didCreate = await onCreatePost();
+
+    if (didCreate) {
+      setIsComposerOpen(false);
+    }
+  }
+
+  return (
+    <View style={styles.feedScreenShell}>
+      <KeyboardAwareScreen>
+        <View style={styles.feedHeaderRow}>
+          <View style={styles.flex}>
+            <Text style={[styles.screenTitle, isDarkMode ? styles.darkText : null]}>
+              {labels.feed}
+            </Text>
+          </View>
+          <Pressable
+            accessibilityLabel={labels.messages}
+            accessibilityRole="button"
+            onPress={onOpenMessages}
+            style={[
+              styles.feedHeaderIconButton,
+              isDarkMode ? styles.darkSettingRow : null,
+            ]}
+          >
+            <MessageCircle
+              color={isDarkMode ? "#E5E5EA" : "#111111"}
+              size={21}
+              strokeWidth={2.7}
+            />
+            {unreadMessageCount > 0 ? (
+              <View style={styles.feedHeaderUnreadBadge}>
+                <Text style={styles.unreadBadgeText}>
+                  {formatUnreadCount(unreadMessageCount)}
+                </Text>
+              </View>
+            ) : null}
+          </Pressable>
+        </View>
+
+        {isLoading ? (
+          <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
+            {labels.loading}
+          </Text>
+        ) : posts.length ? (
+          <View style={styles.contentList}>
+            {posts.map((post) => (
+              <FeedPostCard
+                commentDraft={commentDrafts[post.id] ?? ""}
+                isDarkMode={isDarkMode}
+                key={post.id}
+                labels={labels}
+                onCommentDraftChange={(value) => onCommentDraftChange(post.id, value)}
+                onCreateComment={() => onCreateComment(post)}
+                onDeleteComment={onDeleteComment}
+                onOpenComments={() => onOpenPost(post)}
+                onRequireSignIn={onRequireSignIn}
+                onToggleLike={() => onToggleLike(post)}
+                onUpdateComment={onUpdateComment}
+                post={post}
+                profile={profile}
+                session={session}
+              />
+            ))}
+          </View>
+        ) : (
+          <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
+            <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+              {labels.feedEmpty}
+            </Text>
+            <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+              {labels.feedIntro}
+            </Text>
+          </View>
+        )}
+        <View style={styles.feedFloatingSpacer} />
+      </KeyboardAwareScreen>
+
+      <Pressable
+        accessibilityLabel={labels.feedPublish}
+        accessibilityRole="button"
+        onPress={openComposer}
+        style={styles.feedFloatingButton}
+      >
+        <Plus color="#FFFFFF" size={28} strokeWidth={2.8} />
+      </Pressable>
+
+      <FeedComposerModal
+        draft={draft}
+        isDarkMode={isDarkMode}
+        isOpen={isComposerOpen}
+        isSubmitting={isSubmitting}
+        labels={labels}
+        onClose={() => setIsComposerOpen(false)}
+        onCreatePost={submitFeedPost}
+        onPostAsBusinessChange={onPostAsBusinessChange}
+        ownedBusiness={ownedBusiness}
+        postAsBusiness={postAsBusiness}
+        setDraft={setDraft}
+      />
+    </View>
+  );
+}
+
+function FeedComposerModal({
+  draft,
+  isDarkMode,
+  isOpen,
+  isSubmitting,
+  labels,
+  onClose,
+  onCreatePost,
+  onPostAsBusinessChange,
+  ownedBusiness,
+  postAsBusiness,
+  setDraft,
+}: {
+  draft: string;
+  isDarkMode: boolean;
+  isOpen: boolean;
+  isSubmitting: boolean;
+  labels: Record<string, string>;
+  onClose: () => void;
+  onCreatePost: () => Promise<void> | void;
+  onPostAsBusinessChange: (value: boolean) => void;
+  ownedBusiness: Business | null;
+  postAsBusiness: boolean;
+  setDraft: (value: string) => void;
+}) {
+  return (
+    <Modal
+      animationType="slide"
+      onRequestClose={onClose}
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
+      transparent
+      visible={isOpen}
+    >
+      <View style={styles.modalBackdrop}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onClose}
+          style={styles.modalDismissLayer}
+        />
+        <View style={[styles.modalSheet, isDarkMode ? styles.darkModalSheet : null]}>
+          <ScrollView
+            bounces
+            contentContainerStyle={styles.modalContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            style={styles.modalScroll}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, isDarkMode ? styles.darkText : null]}>
+                {labels.feedPublish}
+              </Text>
+              <Pressable
+                accessibilityLabel={labels.close}
+                accessibilityRole="button"
+                onPress={onClose}
+                style={[
+                  styles.modalCloseButton,
+                  isDarkMode ? styles.darkSettingRow : null,
+                ]}
+              >
+                <X
+                  color={isDarkMode ? "#E5E5EA" : "#111111"}
+                  size={19}
+                  strokeWidth={2.7}
+                />
+              </Pressable>
+            </View>
+            <TextInput
+              autoFocus
+              multiline
+              maxLength={2000}
+              onChangeText={setDraft}
+              placeholder={labels.feedPostPlaceholder}
+              placeholderTextColor={isDarkMode ? "#8E8E93" : "#6E6E73"}
+              style={[
+                styles.input,
+                styles.textArea,
+                isDarkMode ? styles.darkInput : null,
+              ]}
+              value={draft}
+            />
+            {ownedBusiness ? (
+              <View style={[styles.settingsRow, isDarkMode ? styles.darkSettingRow : null]}>
+                <View>
+                  <Text style={[styles.switchLabel, isDarkMode ? styles.darkText : null]}>
+                    {labels.feedPostAs}
+                  </Text>
+                  <Text style={[styles.settingMeta, isDarkMode ? styles.darkMutedText : null]}>
+                    {postAsBusiness ? labels.feedPostAsBusiness : labels.feedPostAsMe}
+                  </Text>
+                </View>
+                <Switch
+                  onValueChange={onPostAsBusinessChange}
+                  thumbColor={postAsBusiness ? "#FFFFFF" : "#111111"}
+                  trackColor={{ false: "#E5E5EA", true: "#6E6E73" }}
+                  value={postAsBusiness}
+                />
+              </View>
+            ) : null}
+            <PrimaryButton
+              disabled={isSubmitting || !draft.trim()}
+              label={isSubmitting ? labels.saving : labels.feedPublish}
+              onPress={onCreatePost}
+            />
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function FeedPostCard({
+  commentDraft,
+  isDarkMode,
+  labels,
+  onCommentDraftChange,
+  onCreateComment,
+  onDeleteComment,
+  onOpenComments,
+  onRequireSignIn,
+  onToggleLike,
+  onUpdateComment,
+  post,
+  presentation = "compact",
+  profile,
+  session,
+}: {
+  commentDraft: string;
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  onCommentDraftChange: (value: string) => void;
+  onCreateComment: () => Promise<void> | void;
+  onDeleteComment: (comment: MobileFeedPost["comments"][number]) => void;
+  onOpenComments?: () => void;
+  onRequireSignIn: () => void;
+  onToggleLike: () => Promise<void> | void;
+  onUpdateComment: (
+    comment: MobileFeedPost["comments"][number],
+    body: string,
+  ) => Promise<void> | void;
+  post: MobileFeedPost;
+  presentation?: "compact" | "detail";
+  profile: UserProfile | null;
+  session: Session | null;
+}) {
+  const authorName = getFeedPostAuthorName(post, labels, session, profile);
+  const avatarUrl = getFeedPostAvatarUrl(post, session, profile);
+  const showDetail = presentation === "detail";
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentDraft, setEditingCommentDraft] = useState("");
+
+  useEffect(() => {
+    setEditingCommentId(null);
+    setEditingCommentDraft("");
+  }, [post.id]);
+
+  async function saveCommentEdit(comment: MobileFeedPost["comments"][number]) {
+    const body = editingCommentDraft.trim();
+
+    if (!body) {
+      return;
+    }
+
+    await onUpdateComment(comment, body);
+    setEditingCommentId(null);
+    setEditingCommentDraft("");
+  }
+
+  return (
+    <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
+      <View style={styles.feedAuthorRow}>
+        {avatarUrl ? (
+          <Image
+            resizeMode="contain"
+            source={{ uri: avatarUrl }}
+            style={[
+              styles.feedAvatar,
+              isDarkMode ? styles.darkContentImageSurface : null,
+            ]}
+          />
+        ) : (
+          <View style={[styles.feedAvatar, isDarkMode ? styles.darkIconBox : null]}>
+            {post.business_id ? (
+              <Store color={isDarkMode ? "#E5E5EA" : "#111111"} size={18} />
+            ) : (
+              <UserRound color={isDarkMode ? "#E5E5EA" : "#111111"} size={18} />
+            )}
+          </View>
+        )}
+        <View style={styles.flex}>
+          <Text style={[styles.feedAuthorName, isDarkMode ? styles.darkText : null]}>
+            {authorName}
+          </Text>
+          <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+            {formatMobileMessageDate(post.created_at)}
+          </Text>
+        </View>
+      </View>
+
+      <Text style={[styles.feedBody, isDarkMode ? styles.darkText : null]}>
+        {post.body}
+      </Text>
+
+      <View style={styles.feedActions}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={session ? onToggleLike : onRequireSignIn}
+          style={[
+            styles.feedActionButton,
+            isDarkMode ? styles.darkSettingRow : null,
+            post.likedByCurrentUser ? styles.activeFeedActionButton : null,
+          ]}
+        >
+          <Heart
+            color={post.likedByCurrentUser ? "#FFFFFF" : isDarkMode ? "#E5E5EA" : "#111111"}
+            fill={post.likedByCurrentUser ? "#FFFFFF" : "transparent"}
+            size={16}
+            strokeWidth={2.6}
+          />
+          <Text
+            style={[
+              styles.feedActionText,
+              isDarkMode ? styles.darkText : null,
+              post.likedByCurrentUser ? styles.activeFeedActionText : null,
+            ]}
+          >
+            {post.likeCount}
+          </Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onOpenComments}
+          style={[styles.feedActionButton, isDarkMode ? styles.darkSettingRow : null]}
+        >
+          <MessageCircle color={isDarkMode ? "#E5E5EA" : "#111111"} size={16} />
+          <Text style={[styles.feedActionText, isDarkMode ? styles.darkText : null]}>
+            {post.commentCount}
+          </Text>
+        </Pressable>
+      </View>
+
+      {showDetail && post.comments.length ? (
+        <View style={styles.feedComments}>
+          {post.comments.map((comment) => {
+            const commentAvatarUrl = getFeedCommentAvatarUrl(
+              comment,
+              session,
+              profile,
+            );
+            const isOwnComment = session?.user.id === comment.author_id;
+            const isEditingComment = editingCommentId === comment.id;
+
+            return (
+              <View
+                key={comment.id}
+                style={[
+                  styles.feedComment,
+                  isDarkMode ? styles.darkSettingRow : null,
+                ]}
+              >
+                {commentAvatarUrl ? (
+                  <Image
+                    resizeMode="cover"
+                    source={{ uri: commentAvatarUrl }}
+                    style={styles.feedCommentAvatar}
+                  />
+                ) : (
+                  <View
+                    style={[
+                      styles.feedCommentAvatarFallback,
+                      isDarkMode ? styles.darkBadge : null,
+                    ]}
+                  >
+                    <UserRound
+                      color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+                      size={16}
+                      strokeWidth={2.6}
+                    />
+                  </View>
+                )}
+                <View style={styles.flex}>
+                  <View style={styles.feedCommentHeader}>
+                    <Text
+                      style={[
+                        styles.feedCommentAuthor,
+                        isDarkMode ? styles.darkText : null,
+                      ]}
+                    >
+                      {getFeedCommentAuthorName(comment, labels, session, profile)}
+                    </Text>
+                    {isOwnComment ? (
+                      <View style={styles.feedCommentActionRow}>
+                        <Pressable
+                          accessibilityLabel={labels.edit}
+                          accessibilityRole="button"
+                          onPress={() => {
+                            setEditingCommentId(comment.id);
+                            setEditingCommentDraft(comment.body);
+                          }}
+                          style={[
+                            styles.feedCommentIconButton,
+                            isDarkMode ? styles.darkIconBox : null,
+                          ]}
+                        >
+                          <Pencil
+                            color={isDarkMode ? "#E5E5EA" : "#111111"}
+                            size={14}
+                            strokeWidth={2.7}
+                          />
+                        </Pressable>
+                        <Pressable
+                          accessibilityLabel={labels.delete}
+                          accessibilityRole="button"
+                          onPress={() => {
+                            if (isEditingComment) {
+                              setEditingCommentId(null);
+                              setEditingCommentDraft("");
+                            }
+
+                            onDeleteComment(comment);
+                          }}
+                          style={[
+                            styles.feedCommentIconButton,
+                            isDarkMode ? styles.darkIconBox : null,
+                          ]}
+                        >
+                          <Trash2
+                            color={isDarkMode ? "#E5E5EA" : "#111111"}
+                            size={14}
+                            strokeWidth={2.7}
+                          />
+                        </Pressable>
+                      </View>
+                    ) : null}
+                  </View>
+                  {isEditingComment ? (
+                    <View style={styles.feedCommentEditBox}>
+                      <TextInput
+                        maxLength={1000}
+                        multiline
+                        onChangeText={setEditingCommentDraft}
+                        placeholder={labels.commentPlaceholder}
+                        placeholderTextColor={isDarkMode ? "#8E8E93" : "#6E6E73"}
+                        style={[
+                          styles.input,
+                          styles.feedCommentEditInput,
+                          isDarkMode ? styles.darkInput : null,
+                        ]}
+                        value={editingCommentDraft}
+                      />
+                      <View style={styles.feedCommentEditActions}>
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => {
+                            setEditingCommentId(null);
+                            setEditingCommentDraft("");
+                          }}
+                          style={[
+                            styles.feedCommentTextButton,
+                            isDarkMode ? styles.darkSettingRow : null,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.feedCommentTextButtonLabel,
+                              isDarkMode ? styles.darkText : null,
+                            ]}
+                          >
+                            {labels.cancel}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          disabled={!editingCommentDraft.trim()}
+                          onPress={() => {
+                            void saveCommentEdit(comment);
+                          }}
+                          style={[
+                            styles.feedCommentTextButton,
+                            styles.feedCommentSaveButton,
+                            !editingCommentDraft.trim()
+                              ? styles.disabledButton
+                              : null,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.feedCommentTextButtonLabel,
+                              styles.feedCommentSaveButtonLabel,
+                            ]}
+                          >
+                            {labels.save}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : (
+                    <Text
+                      style={[
+                        styles.feedCommentBody,
+                        isDarkMode ? styles.darkMutedText : null,
+                      ]}
+                    >
+                      {comment.body}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
+
+      {showDetail && session ? (
+        <View style={styles.feedCommentComposer}>
+          <TextInput
+            maxLength={1000}
+            onChangeText={onCommentDraftChange}
+            placeholder={labels.commentPlaceholder}
+            placeholderTextColor={isDarkMode ? "#8E8E93" : "#6E6E73"}
+            style={[styles.input, styles.feedCommentInput, isDarkMode ? styles.darkInput : null]}
+            value={commentDraft}
+          />
+          <SecondaryButton
+            disabled={!commentDraft.trim()}
+            isDarkMode={isDarkMode}
+            label={labels.comment}
+            onPress={onCreateComment}
+          />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function FeedPostModal({
+  commentDraft,
+  isDarkMode,
+  labels,
+  onClose,
+  onCommentDraftChange,
+  onCreateComment,
+  onDeleteComment,
+  onRequireSignIn,
+  onUpdateComment,
+  post,
+  profile,
+  session,
+}: {
+  commentDraft: string;
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  onClose: () => void;
+  onCommentDraftChange: (value: string) => void;
+  onCreateComment: () => Promise<void> | void;
+  onDeleteComment: (comment: MobileFeedPost["comments"][number]) => void;
+  onRequireSignIn: () => void;
+  onUpdateComment: (
+    comment: MobileFeedPost["comments"][number],
+    body: string,
+  ) => Promise<void> | void;
+  post: MobileFeedPost | null;
+  profile: UserProfile | null;
+  session: Session | null;
+}) {
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentDraft, setEditingCommentDraft] = useState("");
+
+  useEffect(() => {
+    setEditingCommentId(null);
+    setEditingCommentDraft("");
+  }, [post?.id]);
+
+  async function saveCommentEdit(comment: MobileFeedPost["comments"][number]) {
+    const body = editingCommentDraft.trim();
+
+    if (!body) {
+      return;
+    }
+
+    await onUpdateComment(comment, body);
+    setEditingCommentId(null);
+    setEditingCommentDraft("");
+  }
+
+  return (
+    <Modal
+      animationType="slide"
+      onRequestClose={onClose}
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
+      transparent
+      visible={Boolean(post)}
+    >
+      <View style={styles.modalBackdrop}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onClose}
+          style={styles.modalDismissLayer}
+        />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 14 : 0}
+          pointerEvents="box-none"
+          style={styles.modalKeyboardAvoider}
+        >
+          <View style={[styles.modalSheet, isDarkMode ? styles.darkModalSheet : null]}>
+            {post ? (
+              <>
+                <View
+                  style={[
+                    styles.commentsModalHeader,
+                    isDarkMode ? styles.darkCommentsModalHeader : null,
+                  ]}
+                >
+                  <View style={styles.flex}>
+                    <Text style={[styles.modalTitle, isDarkMode ? styles.darkText : null]}>
+                      {labels.comments}
+                    </Text>
+                    <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+                      {post.commentCount}
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityLabel={labels.close}
+                    accessibilityRole="button"
+                    onPress={onClose}
+                    style={[
+                      styles.modalCloseButton,
+                      isDarkMode ? styles.darkSettingRow : null,
+                    ]}
+                  >
+                    <X
+                      color={isDarkMode ? "#E5E5EA" : "#111111"}
+                      size={19}
+                      strokeWidth={2.7}
+                    />
+                  </Pressable>
+                </View>
+                <ScrollView
+                  automaticallyAdjustKeyboardInsets
+                  bounces
+                  contentContainerStyle={styles.commentsModalList}
+                  keyboardDismissMode="interactive"
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                  style={styles.modalScroll}
+                >
+                  {post.comments.length ? (
+                    <View style={styles.feedComments}>
+                      {post.comments.map((comment) => {
+                        const commentAvatarUrl = getFeedCommentAvatarUrl(
+                          comment,
+                          session,
+                          profile,
+                        );
+                        const isOwnComment = session?.user.id === comment.author_id;
+                        const isEditingComment = editingCommentId === comment.id;
+
+                        return (
+                          <View
+                            key={comment.id}
+                            style={[
+                              styles.feedComment,
+                              styles.commentsModalItem,
+                              isDarkMode ? styles.darkSettingRow : null,
+                            ]}
+                          >
+                            {commentAvatarUrl ? (
+                              <Image
+                                resizeMode="cover"
+                                source={{ uri: commentAvatarUrl }}
+                                style={styles.feedCommentAvatar}
+                              />
+                            ) : (
+                              <View
+                                style={[
+                                  styles.feedCommentAvatarFallback,
+                                  isDarkMode ? styles.darkBadge : null,
+                                ]}
+                              >
+                                <UserRound
+                                  color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+                                  size={16}
+                                  strokeWidth={2.6}
+                                />
+                              </View>
+                            )}
+                            <View style={styles.flex}>
+                              <View style={styles.feedCommentHeader}>
+                                <Text
+                                  style={[
+                                    styles.feedCommentAuthor,
+                                    isDarkMode ? styles.darkText : null,
+                                  ]}
+                                >
+                                  {getFeedCommentAuthorName(
+                                    comment,
+                                    labels,
+                                    session,
+                                    profile,
+                                  )}
+                                </Text>
+                                {isOwnComment ? (
+                                  <View style={styles.feedCommentActionRow}>
+                                    <Pressable
+                                      accessibilityLabel={labels.edit}
+                                      accessibilityRole="button"
+                                      onPress={() => {
+                                        setEditingCommentId(comment.id);
+                                        setEditingCommentDraft(comment.body);
+                                      }}
+                                      style={[
+                                        styles.feedCommentIconButton,
+                                        isDarkMode ? styles.darkIconBox : null,
+                                      ]}
+                                    >
+                                      <Pencil
+                                        color={isDarkMode ? "#E5E5EA" : "#111111"}
+                                        size={14}
+                                        strokeWidth={2.7}
+                                      />
+                                    </Pressable>
+                                    <Pressable
+                                      accessibilityLabel={labels.delete}
+                                      accessibilityRole="button"
+                                      onPress={() => {
+                                        if (isEditingComment) {
+                                          setEditingCommentId(null);
+                                          setEditingCommentDraft("");
+                                        }
+
+                                        onDeleteComment(comment);
+                                      }}
+                                      style={[
+                                        styles.feedCommentIconButton,
+                                        isDarkMode ? styles.darkIconBox : null,
+                                      ]}
+                                    >
+                                      <Trash2
+                                        color={isDarkMode ? "#E5E5EA" : "#111111"}
+                                        size={14}
+                                        strokeWidth={2.7}
+                                      />
+                                    </Pressable>
+                                  </View>
+                                ) : null}
+                              </View>
+                              {isEditingComment ? (
+                                <View style={styles.feedCommentEditBox}>
+                                  <TextInput
+                                    maxLength={1000}
+                                    multiline
+                                    onChangeText={setEditingCommentDraft}
+                                    placeholder={labels.commentPlaceholder}
+                                    placeholderTextColor={
+                                      isDarkMode ? "#8E8E93" : "#6E6E73"
+                                    }
+                                    style={[
+                                      styles.input,
+                                      styles.feedCommentEditInput,
+                                      isDarkMode ? styles.darkInput : null,
+                                    ]}
+                                    value={editingCommentDraft}
+                                  />
+                                  <View style={styles.feedCommentEditActions}>
+                                    <Pressable
+                                      accessibilityRole="button"
+                                      onPress={() => {
+                                        setEditingCommentId(null);
+                                        setEditingCommentDraft("");
+                                      }}
+                                      style={[
+                                        styles.feedCommentTextButton,
+                                        isDarkMode ? styles.darkSettingRow : null,
+                                      ]}
+                                    >
+                                      <Text
+                                        style={[
+                                          styles.feedCommentTextButtonLabel,
+                                          isDarkMode ? styles.darkText : null,
+                                        ]}
+                                      >
+                                        {labels.cancel}
+                                      </Text>
+                                    </Pressable>
+                                    <Pressable
+                                      accessibilityRole="button"
+                                      disabled={!editingCommentDraft.trim()}
+                                      onPress={() => {
+                                        void saveCommentEdit(comment);
+                                      }}
+                                      style={[
+                                        styles.feedCommentTextButton,
+                                        styles.feedCommentSaveButton,
+                                        !editingCommentDraft.trim()
+                                          ? styles.disabledButton
+                                          : null,
+                                      ]}
+                                    >
+                                      <Text
+                                        style={[
+                                          styles.feedCommentTextButtonLabel,
+                                          styles.feedCommentSaveButtonLabel,
+                                        ]}
+                                      >
+                                        {labels.save}
+                                      </Text>
+                                    </Pressable>
+                                  </View>
+                                </View>
+                              ) : (
+                                <Text
+                                  style={[
+                                    styles.feedCommentBody,
+                                    isDarkMode ? styles.darkMutedText : null,
+                                  ]}
+                                >
+                                  {comment.body}
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : (
+                    <View style={styles.commentsModalEmpty}>
+                      <MessageCircle
+                        color={isDarkMode ? "#E5E5EA" : "#111111"}
+                        size={28}
+                        strokeWidth={2.6}
+                      />
+                      <Text
+                        style={[
+                          styles.emptyState,
+                          isDarkMode ? styles.darkEmptyState : null,
+                        ]}
+                      >
+                        {labels.noComments}
+                      </Text>
+                    </View>
+                  )}
+                </ScrollView>
+                <View
+                  style={[
+                    styles.commentsComposerBar,
+                    isDarkMode ? styles.darkCommentsComposerBar : null,
+                  ]}
+                >
+                  {session ? (
+                    <>
+                      <TextInput
+                        maxLength={1000}
+                        onChangeText={onCommentDraftChange}
+                        placeholder={labels.commentPlaceholder}
+                        placeholderTextColor={isDarkMode ? "#8E8E93" : "#6E6E73"}
+                        style={[
+                          styles.input,
+                          styles.commentsComposerInput,
+                          isDarkMode ? styles.darkInput : null,
+                        ]}
+                        value={commentDraft}
+                      />
+                      <Pressable
+                        accessibilityLabel={labels.comment}
+                        accessibilityRole="button"
+                        disabled={!commentDraft.trim()}
+                        onPress={onCreateComment}
+                        style={[
+                          styles.commentsComposerButton,
+                          !commentDraft.trim() ? styles.disabledButton : null,
+                        ]}
+                      >
+                        <MessageCircle
+                          color="#FFFFFF"
+                          size={18}
+                          strokeWidth={2.7}
+                        />
+                      </Pressable>
+                    </>
+                  ) : (
+                    <PrimaryButton
+                      label={labels.signIn}
+                      onPress={() => {
+                        onClose();
+                        onRequireSignIn();
+                      }}
+                    />
+                  )}
+                </View>
+              </>
+            ) : null}
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+}
+
+function getFeedPostAuthorName(
+  post: MobileFeedPost,
+  labels: Record<string, string>,
+  session: Session | null,
+  profile: UserProfile | null,
+) {
+  if (post.business?.name) {
+    return post.business.name;
+  }
+
+  if (session?.user.id === post.author_id) {
+    return getProfileDisplayName(profile, session);
+  }
+
+  return post.author?.author_name || labels.user || labels.profile;
+}
+
+function getFeedPostAvatarUrl(
+  post: MobileFeedPost,
+  session: Session | null,
+  profile: UserProfile | null,
+) {
+  if (post.business?.logo_url) {
+    return getRenderableImageUrl(
+      post.business.logo_url,
+      imageOptimizationPresets.logo,
+    );
+  }
+
+  const currentUserAvatar =
+    session?.user.id === post.author_id
+      ? getProfileAvatarUrl(profile, session)
+      : "";
+
+  return getRenderableImageUrl(
+    currentUserAvatar || post.author?.author_avatar_url,
+    imageOptimizationPresets.avatar,
+  );
+}
+
+function getFeedCommentAuthorName(
+  comment: MobileFeedPost["comments"][number],
+  labels: Record<string, string>,
+  session: Session | null,
+  profile: UserProfile | null,
+) {
+  if (session?.user.id === comment.author_id) {
+    return getProfileDisplayName(profile, session);
+  }
+
+  return comment.author?.author_name || labels.user || labels.profile;
+}
+
+function getFeedCommentAvatarUrl(
+  comment: MobileFeedPost["comments"][number],
+  session: Session | null,
+  profile: UserProfile | null,
+) {
+  const currentUserAvatar =
+    session?.user.id === comment.author_id
+      ? getProfileAvatarUrl(profile, session)
+      : "";
+
+  return getRenderableImageUrl(
+    currentUserAvatar || comment.author?.author_avatar_url,
+    imageOptimizationPresets.avatar,
+  );
+}
+
+function formatUnreadCount(count: number) {
+  return count > 99 ? "99+" : String(count);
+}
+
+function useMessageThreadKeyboardInset(enabled: boolean) {
+  const inset = useRef(
+    new Animated.Value(MESSAGE_THREAD_BASE_BOTTOM_INSET),
+  ).current;
+
+  useEffect(() => {
+    if (!enabled) {
+      inset.stopAnimation();
+      inset.setValue(MESSAGE_THREAD_BASE_BOTTOM_INSET);
+      return;
+    }
+
+    function animateTo(value: number, event?: KeyboardEvent) {
+      Animated.timing(inset, {
+        duration: getKeyboardAnimationDuration(event),
+        easing: Easing.bezier(0.2, 0, 0, 1),
+        toValue: value,
+        useNativeDriver: false,
+      }).start();
+    }
+
+    const showSubscription = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (event) => {
+        const keyboardHeight = Math.max(0, event.endCoordinates?.height ?? 0);
+        animateTo(keyboardHeight + MESSAGE_THREAD_KEYBOARD_GAP, event);
+      },
+    );
+    const hideSubscription = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      (event) => {
+        animateTo(MESSAGE_THREAD_BASE_BOTTOM_INSET, event);
+      },
+    );
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, [enabled, inset]);
+
+  return inset;
+}
+
+function getKeyboardAnimationDuration(event?: KeyboardEvent) {
+  return Math.max(180, event?.duration ?? (Platform.OS === "ios" ? 260 : 220));
+}
+
+function hasConversationMessages(conversation: MobileConversation) {
+  return Boolean(conversation.lastMessageAt || conversation.lastMessagePreview.trim());
+}
+
+function MessagesPageHeader({
+  isDarkMode,
+  labels,
+  onBack,
+  subtitle,
+  title,
+}: {
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  onBack: () => void;
+  subtitle?: string;
+  title?: string;
+}) {
+  return (
+    <View style={styles.messagesPageHeader}>
+      <Pressable
+        accessibilityLabel={labels.previous}
+        accessibilityRole="button"
+        onPress={onBack}
+        style={[styles.messageBackButton, isDarkMode ? styles.darkSettingRow : null]}
+      >
+        <ArrowLeft
+          color={isDarkMode ? "#E5E5EA" : "#111111"}
+          size={21}
+          strokeWidth={2.7}
+        />
+      </Pressable>
+      <View style={styles.flex}>
+        <Text
+          ellipsizeMode="tail"
+          numberOfLines={1}
+          style={[styles.screenTitle, isDarkMode ? styles.darkText : null]}
+        >
+          {title ?? labels.messages}
+        </Text>
+        {subtitle ? (
+          <Text
+            numberOfLines={1}
+            style={[styles.messageHeaderSubtitle, isDarkMode ? styles.darkMutedText : null]}
+          >
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function MessagesScreen({
+  conversations,
+  isDarkMode,
+  isLoading,
+  isSending,
+  isThreadOpen,
+  labels,
+  messageDraft,
+  messages,
+  onBack,
+  onRequireSignIn,
+  onSelectConversation,
+  onSendMessage,
+  selectedConversation,
+  session,
+  setMessageDraft,
+}: {
+  conversations: MobileConversation[];
+  isDarkMode: boolean;
+  isLoading: boolean;
+  isSending: boolean;
+  isThreadOpen: boolean;
+  labels: Record<string, string>;
+  messageDraft: string;
+  messages: MobileMessage[];
+  onBack: () => void;
+  onRequireSignIn: () => void;
+  onSelectConversation: (conversationId: string) => void;
+  onSendMessage: () => Promise<void> | void;
+  selectedConversation: MobileConversation | null;
+  session: Session | null;
+  setMessageDraft: (value: string) => void;
+}) {
+  const inboxConversations = conversations.filter(hasConversationMessages);
+  const keyboardBottomInset = useMessageThreadKeyboardInset(
+    isThreadOpen && Boolean(selectedConversation),
+  );
+
+  if (!session) {
+    return (
+      <KeyboardAwareScreen>
+        <MessagesPageHeader
+          isDarkMode={isDarkMode}
+          labels={labels}
+          onBack={onBack}
+        />
+        <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
+          <MessageCircle
+            color={isDarkMode ? "#E5E5EA" : "#111111"}
+            size={28}
+            strokeWidth={2.6}
+          />
+          <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+            {labels.messages}
+          </Text>
+          <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+            {labels.messagesIntro}
+          </Text>
+          <PrimaryButton label={labels.signIn} onPress={onRequireSignIn} />
+        </View>
+      </KeyboardAwareScreen>
+    );
+  }
+
+  if (isThreadOpen && selectedConversation) {
+    const title = getMobileConversationTitle(selectedConversation, session.user.id);
+    const subtitle = getMobileConversationSubtitle(
+      selectedConversation,
+      session.user.id,
+    );
+
+    return (
+      <View style={styles.flex}>
+        <Animated.View
+          style={[
+            styles.messageThreadShell,
+            { paddingBottom: keyboardBottomInset },
+          ]}
+        >
+        <MessagesPageHeader
+          isDarkMode={isDarkMode}
+          labels={labels}
+          onBack={onBack}
+          subtitle={subtitle}
+          title={title}
+        />
+
+        <ScrollView
+          contentContainerStyle={styles.messageThreadScrollContent}
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          style={styles.messageThreadScroll}
+        >
+          <View style={styles.messageList}>
+            {isLoading ? (
+              <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
+                {labels.loading}
+              </Text>
+            ) : messages.length ? (
+              messages.map((message, messageIndex) => {
+                const isMine = message.senderId === session.user.id;
+                const isUnreadIncoming = !isMine && Boolean(message.isUnread);
+                const shouldShowReadStatus =
+                  isMine && messageIndex === messages.length - 1;
+                const statusLabel = shouldShowReadStatus
+                  ? getMobileMessageReadStatusLabel(
+                      message,
+                      selectedConversation,
+                      session.user.id,
+                      labels,
+                    )
+                  : "";
+
+                return (
+                  <View
+                    key={message.id}
+                    style={[
+                      styles.messageBubbleRow,
+                      isMine ? styles.messageBubbleRowMine : null,
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.messageBubble,
+                        isMine
+                          ? styles.messageBubbleMine
+                          : isDarkMode
+                            ? styles.darkSettingRow
+                            : null,
+                        isUnreadIncoming ? styles.unreadMessageBubble : null,
+                        isUnreadIncoming && isDarkMode
+                          ? styles.darkUnreadMessageBubble
+                          : null,
+                      ]}
+                    >
+                      {isUnreadIncoming ? (
+                        <View style={styles.messageUnreadIndicator} />
+                      ) : null}
+                      <Text
+                        style={[
+                          styles.messageBody,
+                          isMine || isDarkMode ? styles.darkText : null,
+                        ]}
+                      >
+                        {message.body}
+                      </Text>
+                      <View
+                        style={[
+                          styles.messageMetaRow,
+                          isMine ? styles.messageMetaRowMine : null,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.messageTime,
+                            isMine ? styles.messageTimeMine : null,
+                          ]}
+                        >
+                          {formatMobileMessageDate(message.createdAt)}
+                        </Text>
+                        {shouldShowReadStatus ? (
+                          <Text
+                            style={[
+                              styles.messageReadStatus,
+                              isMine ? styles.messageReadStatusMine : null,
+                              !isMine && isDarkMode ? styles.darkMutedText : null,
+                            ]}
+                          >
+                            {statusLabel}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  </View>
+                );
+              })
+            ) : null}
+          </View>
+        </ScrollView>
+
+        <View style={styles.messageComposer}>
+          <TextInput
+            multiline
+            onChangeText={setMessageDraft}
+            placeholder={labels.messagePlaceholder}
+            placeholderTextColor={isDarkMode ? "#8E8E93" : "#6E6E73"}
+            style={[
+              styles.messageComposerInput,
+              isDarkMode ? styles.darkInput : null,
+            ]}
+            value={messageDraft}
+          />
+          <Pressable
+            accessibilityLabel={labels.sendMessage}
+            accessibilityRole="button"
+            disabled={isSending || !messageDraft.trim()}
+            onPress={onSendMessage}
+            style={[
+              styles.messageSendButton,
+              isSending || !messageDraft.trim() ? styles.disabledButton : null,
+            ]}
+          >
+            <Send color="#FFFFFF" size={17} strokeWidth={2.8} />
+          </Pressable>
+        </View>
+        </Animated.View>
+      </View>
+    );
+  }
+
+  return (
+    <KeyboardAwareScreen>
+      <MessagesPageHeader
+        isDarkMode={isDarkMode}
+        labels={labels}
+        onBack={onBack}
+      />
+
+      {inboxConversations.length ? (
+        <View style={styles.messageInboxList}>
+          {inboxConversations.map((conversation) => (
+            <Pressable
+              accessibilityRole="button"
+              key={conversation.id}
+              onPress={() => onSelectConversation(conversation.id)}
+              style={[styles.conversationRow, isDarkMode ? styles.darkSettingRow : null]}
+            >
+              <View style={styles.conversationRowText}>
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.conversationTitle,
+                    isDarkMode ? styles.darkText : null,
+                  ]}
+                >
+                  {getMobileConversationTitle(conversation, session.user.id)}
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.conversationPreview,
+                    isDarkMode ? styles.darkMutedText : null,
+                  ]}
+                >
+                  {conversation.lastMessagePreview || "..."}
+                </Text>
+              </View>
+              <View style={styles.conversationRowMeta}>
+                {conversation.unreadCount > 0 ? (
+                  <View style={styles.conversationUnreadBadge}>
+                    <Text style={styles.unreadBadgeText}>
+                      {formatUnreadCount(conversation.unreadCount)}
+                    </Text>
+                  </View>
+                ) : null}
+                {conversation.lastMessageAt ? (
+                  <Text style={[styles.conversationTime, isDarkMode ? styles.darkMutedText : null]}>
+                    {formatMobileMessageDate(conversation.lastMessageAt)}
+                  </Text>
+                ) : null}
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
+          <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+            {labels.messagesEmpty}
+          </Text>
+          <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+            {labels.messageStartHint}
+          </Text>
+        </View>
+      )}
+    </KeyboardAwareScreen>
+  );
 }
 
 function ProfileScreen({
@@ -5033,7 +8788,7 @@ function ProfileScreen({
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: true,
       base64: true,
-      quality: 0.85,
+      quality: 0.72,
     });
 
     if (result.canceled) {
@@ -5191,7 +8946,9 @@ function ProfileScreen({
       ) : null}
 
       {session && profileSaveMessage ? (
-        <Text style={styles.successText}>{profileSaveMessage}</Text>
+        <Text style={[styles.successText, isDarkMode ? styles.darkAlertText : null]}>
+          {profileSaveMessage}
+        </Text>
       ) : null}
 
       {session && isEditingPersonalProfile ? (
@@ -5315,7 +9072,9 @@ function ProfileScreen({
             }}
           />
           {profileSaveError ? (
-            <Text style={styles.errorText}>{profileSaveError}</Text>
+            <Text style={[styles.errorText, isDarkMode ? styles.darkAlertText : null]}>
+              {profileSaveError}
+            </Text>
           ) : null}
         </View>
       ) : null}
@@ -5405,9 +9164,15 @@ function ProfileScreen({
           </>
         )}
         {!isSupabaseConfigured ? (
-          <Text style={styles.errorText}>{labels.notConfigured}</Text>
+          <Text style={[styles.errorText, isDarkMode ? styles.darkAlertText : null]}>
+            {labels.notConfigured}
+          </Text>
         ) : null}
-        {authMessage ? <Text style={styles.errorText}>{authMessage}</Text> : null}
+        {authMessage ? (
+          <Text style={[styles.errorText, isDarkMode ? styles.darkAlertText : null]}>
+            {authMessage}
+          </Text>
+        ) : null}
       </View>
 
       {session ? (
@@ -5416,20 +9181,15 @@ function ProfileScreen({
             {labels.savedBusinesses}
           </Text>
           {savedBusinesses.length > 0 ? (
-            <View style={styles.contentList}>
+            <View style={styles.savedBusinessList}>
               {savedBusinesses.map((business) => (
-                <BusinessCard
+                <SavedBusinessCard
                   business={business}
-                  canViewContacts
                   isDarkMode={isDarkMode}
                   key={business.id}
                   labels={labels}
-                  locale={locale}
                   onPress={() => onBusinessPress(business)}
-                  onShare={() => {
-                    void onShareBusiness(business);
-                  }}
-                  onToggleSaved={() => onToggleSavedBusiness(business)}
+                  onRemove={() => onToggleSavedBusiness(business)}
                   saveBusy={savedBusyBusinessId === business.id}
                 />
               ))}
@@ -5521,7 +9281,10 @@ function HomeBusinessFeatureCard({
   onPress: () => void;
 }) {
   const contentCount = business.contentItems?.length ?? 0;
-  const logoUrl = getRenderableImageUrl(business.logoUrl);
+  const logoUrl = getRenderableImageUrl(
+    business.logoUrl,
+    imageOptimizationPresets.logo,
+  );
   const [hasLogoImageError, setHasLogoImageError] = useState(false);
 
   useEffect(() => {
@@ -5556,6 +9319,11 @@ function HomeBusinessFeatureCard({
       <Text style={[styles.homeFeatureMeta, isDarkMode ? styles.darkMutedText : null]}>
         {business.servesAllCanada ? labels.canadaWide : business.city}
       </Text>
+      {hasBusinessFollowers(business) ? (
+        <Text style={[styles.followerBadge, isDarkMode ? styles.darkBadge : null]}>
+          {getFollowerLabel(business, labels)}
+        </Text>
+      ) : null}
       <Text
         numberOfLines={2}
         style={[styles.descriptionText, isDarkMode ? styles.darkMutedText : null]}
@@ -5567,6 +9335,75 @@ function HomeBusinessFeatureCard({
           {contentCount} {labels.contentItems}
         </Text>
       ) : null}
+    </Pressable>
+  );
+}
+
+function SavedBusinessCard({
+  business,
+  isDarkMode,
+  labels,
+  onPress,
+  onRemove,
+  saveBusy,
+}: {
+  business: Business;
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  onPress: () => void;
+  onRemove: () => void;
+  saveBusy: boolean;
+}) {
+  const logoUrl = getRenderableImageUrl(
+    business.logoUrl,
+    imageOptimizationPresets.logo,
+  );
+  const [hasLogoImageError, setHasLogoImageError] = useState(false);
+
+  useEffect(() => {
+    setHasLogoImageError(false);
+  }, [logoUrl]);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={[styles.savedBusinessCard, isDarkMode ? styles.darkSavedBusinessCard : null]}
+    >
+      {logoUrl && !hasLogoImageError ? (
+        <Image
+          onError={() => setHasLogoImageError(true)}
+          resizeMode="contain"
+          source={{ uri: logoUrl }}
+          style={[styles.savedBusinessLogo, isDarkMode ? styles.darkContentImageSurface : null]}
+        />
+      ) : null}
+      <View style={styles.flex}>
+        <Text
+          numberOfLines={1}
+          style={[styles.savedBusinessName, isDarkMode ? styles.darkText : null]}
+        >
+          {business.name}
+        </Text>
+        <Text
+          numberOfLines={1}
+          style={[styles.savedBusinessMeta, isDarkMode ? styles.darkMutedText : null]}
+        >
+          {business.servesAllCanada ? labels.canadaWide : business.city}
+        </Text>
+      </View>
+      <Pressable
+        accessibilityLabel={labels.removeSavedBusiness}
+        accessibilityRole="button"
+        disabled={saveBusy}
+        onPress={(event) => {
+          event.stopPropagation();
+          onRemove();
+        }}
+        style={[styles.savedBusinessRemoveButton, isDarkMode ? styles.darkIconBox : null]}
+      >
+        <X color={isDarkMode ? "#E5E5EA" : "#6E6E73"} size={16} strokeWidth={2.7} />
+      </Pressable>
     </Pressable>
   );
 }
@@ -5594,6 +9431,9 @@ function BusinessCard({
 }) {
   const hasContacts = hasBusinessContacts(business);
   const saveLabel = business.isSaved ? labels.savedBusiness : labels.saveBusiness;
+  const followerLabel = hasBusinessFollowers(business)
+    ? getFollowerLabel(business, labels)
+    : "";
 
   return (
     <Pressable
@@ -5656,6 +9496,11 @@ function BusinessCard({
         {business.name}
       </Text>
       <View style={styles.metaRow}>
+        {followerLabel ? (
+          <Text style={[styles.followerBadge, isDarkMode ? styles.darkBadge : null]}>
+            {followerLabel}
+          </Text>
+        ) : null}
         {business.servesAllCanada ? (
           <Text style={[styles.onlineBadge, isDarkMode ? styles.darkOnlineBadge : null]}>
             {labels.canadaWide}
@@ -5697,7 +9542,10 @@ function BusinessCardLogo({
   isDarkMode: boolean;
   labels: Record<string, string>;
 }) {
-  const logoUrl = getRenderableImageUrl(business.logoUrl);
+  const logoUrl = getRenderableImageUrl(
+    business.logoUrl,
+    imageOptimizationPresets.logo,
+  );
   const [hasImageError, setHasImageError] = useState(false);
 
   useEffect(() => {
@@ -5730,6 +9578,7 @@ function PublicContentCard({
   labels,
   onPress,
   onShare,
+  presentation = "default",
   showBusinessName,
 }: {
   business: Business;
@@ -5739,9 +9588,13 @@ function PublicContentCard({
   labels: Record<string, string>;
   onPress?: () => void;
   onShare?: () => void;
+  presentation?: "default" | "event";
   showBusinessName?: boolean;
 }) {
-  const coverImageUrl = getContentImageUrls(item)[0];
+  const coverImageUrl = getContentImageUrls(
+    item,
+    imageOptimizationPresets.thumbnail,
+  )[0];
   const metaItems = [
     item.type === "product"
       ? item.isAvailable
@@ -5763,107 +9616,121 @@ function PublicContentCard({
       accessibilityRole={onPress ? "button" : undefined}
       disabled={!onPress}
       onPress={onPress}
-      style={[styles.contentItemCard, isDarkMode ? styles.darkSettingRow : null]}
+      style={[
+        styles.contentItemCard,
+        presentation === "event" ? styles.eventContentCard : null,
+        isDarkMode ? styles.darkSettingRow : null,
+        presentation === "event" && isDarkMode ? styles.darkEventContentCard : null,
+      ]}
     >
       {coverImageUrl ? (
         <Image
-          resizeMode="contain"
+          resizeMode="cover"
           source={{ uri: coverImageUrl }}
           style={[
             styles.contentItemImage,
+            presentation === "event" ? styles.eventContentImage : null,
             isDarkMode ? styles.darkContentImageSurface : null,
           ]}
         />
       ) : null}
-      <View style={styles.contentItemHeader}>
-        <View style={styles.flex}>
-          {showBusinessName ? (
-            <Text style={[styles.contentBusinessName, isDarkMode ? styles.darkMutedText : null]}>
-              {business.name}
-            </Text>
-          ) : null}
-          <Text style={[styles.contentItemTitle, isDarkMode ? styles.darkText : null]}>
-            {item.title}
-          </Text>
-        </View>
-        <View style={styles.contentItemActions}>
-          <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
-            {getContentTypeLabel(item, labels)}
-          </Text>
-          {onShare ? (
-            <Pressable
-              accessibilityLabel={labels.shareBusiness}
-              accessibilityRole="button"
-              onPress={(event) => {
-                event.stopPropagation();
-                onShare();
-              }}
-              style={[
-                styles.contentItemActionButton,
-                isDarkMode ? styles.darkIconBox : null,
-              ]}
-            >
-              <Share2
-                color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
-                size={16}
-                strokeWidth={2.6}
-              />
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
-      <Text
-        numberOfLines={2}
-        style={[styles.descriptionText, isDarkMode ? styles.darkMutedText : null]}
+      <View
+        style={[
+          styles.contentItemBody,
+          presentation === "event" ? styles.eventContentBody : null,
+          isDarkMode ? styles.darkContentItemBody : null,
+        ]}
       >
-        {item.description}
-      </Text>
-      {metaItems.length ? (
-        <Text style={[styles.contentItemMeta, isDarkMode ? styles.darkMutedText : null]}>
-          {metaItems.join(" | ")}
-        </Text>
-      ) : null}
-      {item.linkUrl && contentLinkUrl ? (
-        <Pressable
-          accessibilityLabel={`${labels.contentLink}: ${item.linkUrl}`}
-          accessibilityRole="link"
-          onPress={(event) => {
-            event.stopPropagation();
-            void openContactUrl(contentLinkUrl);
-          }}
-          style={[
-            styles.contentItemLinkButton,
-            isDarkMode ? styles.darkIconBox : null,
-          ]}
+        <View style={styles.contentItemHeader}>
+          <View style={styles.flex}>
+            {showBusinessName ? (
+              <Text style={[styles.contentBusinessName, isDarkMode ? styles.darkMutedText : null]}>
+                {business.name}
+              </Text>
+            ) : null}
+            <Text style={[styles.contentItemTitle, isDarkMode ? styles.darkText : null]}>
+              {item.title}
+            </Text>
+          </View>
+          <View style={styles.contentItemActions}>
+            <Text style={[styles.statusPill, isDarkMode ? styles.darkBadge : null]}>
+              {getContentTypeLabel(item, labels)}
+            </Text>
+            {onShare ? (
+              <Pressable
+                accessibilityLabel={labels.shareBusiness}
+                accessibilityRole="button"
+                onPress={(event) => {
+                  event.stopPropagation();
+                  onShare();
+                }}
+                style={[
+                  styles.contentItemActionButton,
+                  isDarkMode ? styles.darkIconBox : null,
+                ]}
+              >
+                <Share2
+                  color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+                  size={16}
+                  strokeWidth={2.6}
+                />
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+        <Text
+          numberOfLines={2}
+          style={[styles.descriptionText, isDarkMode ? styles.darkMutedText : null]}
         >
-          <ExternalLink
-            color={isDarkMode ? "#E5E5EA" : "#111111"}
-            size={15}
-            strokeWidth={2.7}
-          />
-          <Text
-            numberOfLines={1}
+          {item.description}
+        </Text>
+        {metaItems.length ? (
+          <Text style={[styles.contentItemMeta, isDarkMode ? styles.darkMutedText : null]}>
+            {metaItems.join(" | ")}
+          </Text>
+        ) : null}
+        {item.linkUrl && contentLinkUrl ? (
+          <Pressable
+            accessibilityLabel={`${labels.contentLink}: ${item.linkUrl}`}
+            accessibilityRole="link"
+            onPress={(event) => {
+              event.stopPropagation();
+              void openContactUrl(contentLinkUrl);
+            }}
             style={[
-              styles.contentItemLinkText,
-              isDarkMode ? styles.darkText : null,
+              styles.contentItemLinkButton,
+              isDarkMode ? styles.darkIconBox : null,
             ]}
           >
-            {item.linkUrl}
-          </Text>
-        </Pressable>
-      ) : null}
-      {hasLockedContacts ? (
-        <View style={[styles.lockedContactNote, isDarkMode ? styles.darkSettingRow : null]}>
-          <Lock
-            color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
-            size={16}
-            strokeWidth={2.6}
-          />
-          <Text style={[styles.lockedContactTitle, isDarkMode ? styles.darkText : null]}>
-            {labels.contactSignInTitle}
-          </Text>
-        </View>
-      ) : null}
+            <ExternalLink
+              color={isDarkMode ? "#E5E5EA" : "#111111"}
+              size={15}
+              strokeWidth={2.7}
+            />
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.contentItemLinkText,
+                isDarkMode ? styles.darkText : null,
+              ]}
+            >
+              {item.linkUrl}
+            </Text>
+          </Pressable>
+        ) : null}
+        {hasLockedContacts ? (
+          <View style={[styles.lockedContactNote, isDarkMode ? styles.darkSettingRow : null]}>
+            <Lock
+              color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+              size={16}
+              strokeWidth={2.6}
+            />
+            <Text style={[styles.lockedContactTitle, isDarkMode ? styles.darkText : null]}>
+              {labels.contactSignInTitle}
+            </Text>
+          </View>
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -6616,7 +10483,13 @@ function BusinessContentModal({
               {hasMeta ? (
                 <View style={[styles.contactCard, isDarkMode ? styles.darkSettingRow : null]}>
                   {item.startsAt ? (
-                    <View style={styles.contentDetailMetaRow}>
+                    <View
+                      style={[
+                        styles.contentDetailMetaRow,
+                        styles.contentDetailMetaCard,
+                        isDarkMode ? styles.darkIconBox : null,
+                      ]}
+                    >
                       <CalendarDays
                         color={isDarkMode ? "#E5E5EA" : "#111111"}
                         size={17}
@@ -6637,7 +10510,11 @@ function BusinessContentModal({
                           void openContactUrl(locationUrl);
                         }
                       }}
-                      style={styles.contentDetailMetaRow}
+                      style={[
+                        styles.contentDetailMetaRow,
+                        styles.contentDetailMetaCard,
+                        isDarkMode ? styles.darkIconBox : null,
+                      ]}
                     >
                       <MapPin
                         color={isDarkMode ? "#E5E5EA" : "#111111"}
@@ -6657,7 +10534,11 @@ function BusinessContentModal({
                         onContentContactPress(entry, "link");
                         void openContactUrl(contentLinkUrl);
                       }}
-                      style={styles.contentDetailMetaRow}
+                      style={[
+                        styles.contentDetailMetaRow,
+                        styles.contentDetailMetaCard,
+                        isDarkMode ? styles.darkIconBox : null,
+                      ]}
                     >
                       <ExternalLink
                         color={isDarkMode ? "#E5E5EA" : "#111111"}
@@ -6800,312 +10681,320 @@ function ContentImageCarousel({
   );
 }
 
-function BusinessModal({
+function BusinessScreen({
   business,
   canViewContacts,
   isDarkMode,
   labels,
   locale,
-  onClose,
+  onBack,
   onContactPress,
   onContentPress,
   onManage,
+  onMessageBusiness,
   onRequireSignIn,
   onShareBusiness,
   onShareContent,
   onToggleSavedBusiness,
   saveBusyBusinessId,
 }: {
-  business: Business | null;
+  business: Business;
   canViewContacts: boolean;
   isDarkMode: boolean;
   labels: Record<string, string>;
   locale: Locale;
-  onClose: () => void;
+  onBack: () => void;
   onContactPress: (contact: ContactItem) => void;
   onContentPress: (entry: ContentDetailEntry) => void;
   onManage: () => void;
+  onMessageBusiness: (business: Business) => Promise<void> | void;
   onRequireSignIn: () => void;
   onShareBusiness: (business: Business) => Promise<void>;
   onShareContent: (entry: ContentDetailEntry) => Promise<void>;
   onToggleSavedBusiness: (business: Business) => void;
   saveBusyBusinessId: string | null;
 }) {
-  const contacts = business ? getBusinessContacts(business, labels) : [];
+  const contacts = getBusinessContacts(business, labels);
   const [activeModalTab, setActiveModalTab] = useState<
     "about" | "services" | "events" | "products"
   >("about");
-  const contentItems = business?.contentItems ?? [];
+  const contentItems = business.contentItems ?? [];
   const serviceItems = contentItems.filter((item) => item.type === "service");
   const eventItems = contentItems.filter((item) => item.type === "event");
   const productItems = contentItems.filter((item) => item.type === "product");
-  const modalLogoUrl = getRenderableImageUrl(business?.logoUrl);
+  const modalLogoUrl = getRenderableImageUrl(
+    business.logoUrl,
+    imageOptimizationPresets.logo,
+  );
   const [hasModalLogoImageError, setHasModalLogoImageError] = useState(false);
 
   useEffect(() => {
     setActiveModalTab("about");
-  }, [business?.id]);
+  }, [business.id]);
 
   useEffect(() => {
     setHasModalLogoImageError(false);
   }, [modalLogoUrl]);
 
+  const categoryName = getCategoryName(business.categorySlug, locale);
+  const locationLabel = business.servesAllCanada ? labels.canadaWide : business.city;
+  const tabItems = [
+    { key: "about", label: labels.about },
+    {
+      key: "services",
+      label: serviceItems.length ? `${labels.services} ${serviceItems.length}` : labels.services,
+    },
+    {
+      key: "events",
+      label: eventItems.length ? `${labels.events} ${eventItems.length}` : labels.events,
+    },
+    {
+      key: "products",
+      label: productItems.length ? `${labels.products} ${productItems.length}` : labels.products,
+    },
+  ] as const;
+
+  function renderContentItems(items: BusinessContentItem[]) {
+    if (!items.length) {
+      return (
+        <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
+          {labels.noContentItems}
+        </Text>
+      );
+    }
+
+    return items.map((item) => (
+      <PublicContentCard
+        business={business}
+        canViewContacts={canViewContacts}
+        isDarkMode={isDarkMode}
+        item={item}
+        key={item.id}
+        labels={labels}
+        onPress={() => onContentPress({ business, item })}
+        onShare={() => {
+          void onShareContent({ business, item });
+        }}
+      />
+    ));
+  }
+
   return (
-    <Modal
-      animationType="slide"
-      onRequestClose={onClose}
-      presentationStyle="overFullScreen"
-      statusBarTranslucent
-      transparent
-      visible={Boolean(business)}
-    >
-      <View style={styles.modalBackdrop}>
+    <KeyboardAwareScreen contentContainerStyle={styles.businessScreenContent}>
+      <View style={styles.businessTopBar}>
         <Pressable
+          accessibilityLabel={labels.previous}
           accessibilityRole="button"
-          onPress={onClose}
-          style={styles.modalDismissLayer}
-        />
-        <View style={[styles.modalSheet, isDarkMode ? styles.darkModalSheet : null]}>
-          {business ? (
-            <ScrollView
-              bounces
-              contentInsetAdjustmentBehavior="automatic"
-              contentContainerStyle={styles.modalContent}
-              keyboardShouldPersistTaps="handled"
-              nestedScrollEnabled
-              showsVerticalScrollIndicator
-              style={styles.modalScroll}
+          onPress={onBack}
+          style={[styles.messageBackButton, isDarkMode ? styles.darkSettingRow : null]}
+        >
+          <ArrowLeft
+            color={isDarkMode ? "#E5E5EA" : "#111111"}
+            size={21}
+            strokeWidth={2.7}
+          />
+        </Pressable>
+        <View style={styles.cardHeaderActions}>
+          <Pressable
+            accessibilityLabel={labels.shareBusiness}
+            accessibilityRole="button"
+            onPress={() => {
+              void onShareBusiness(business);
+            }}
+            style={[styles.saveIconButton, isDarkMode ? styles.darkIconBox : null]}
+          >
+            <Share2
+              color={isDarkMode ? "#E5E5EA" : "#111111"}
+              size={17}
+              strokeWidth={2.7}
+            />
+          </Pressable>
+          <Pressable
+            accessibilityLabel={business.isSaved ? labels.savedBusiness : labels.saveBusiness}
+            accessibilityRole="button"
+            disabled={saveBusyBusinessId === business.id}
+            onPress={() => onToggleSavedBusiness(business)}
+            style={[
+              styles.saveIconButton,
+              isDarkMode ? styles.darkIconBox : null,
+              business.isSaved ? styles.activeSaveIconButton : null,
+            ]}
+          >
+            <Bookmark
+              color={business.isSaved ? "#FFFFFF" : isDarkMode ? "#E5E5EA" : "#111111"}
+              fill={business.isSaved ? "#FFFFFF" : "transparent"}
+              size={17}
+              strokeWidth={2.7}
+            />
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={[styles.businessHeroCard, isDarkMode ? styles.darkCard : null]}>
+        <View style={styles.businessHeroHeader}>
+          {modalLogoUrl && !hasModalLogoImageError ? (
+            <View
+              accessibilityLabel={`${business.name} ${labels.logo}`}
+              style={[styles.businessHeroLogo, isDarkMode ? styles.darkIconBox : null]}
             >
-              <View style={styles.modalHeader}>
-                <Text style={[styles.categoryBadge, isDarkMode ? styles.darkBadge : null]}>
-                  {getCategoryName(business.categorySlug, locale)}
-                </Text>
-                <View style={styles.cardHeaderActions}>
-                  <Pressable
-                    accessibilityLabel={labels.shareBusiness}
-                    accessibilityRole="button"
-                    onPress={() => {
-                      void onShareBusiness(business);
-                    }}
-                    style={[
-                      styles.saveIconButton,
-                      isDarkMode ? styles.darkIconBox : null,
-                    ]}
-                  >
-                    <Share2
-                      color={isDarkMode ? "#E5E5EA" : "#111111"}
-                      size={17}
-                      strokeWidth={2.7}
-                    />
-                  </Pressable>
-                  <Pressable
-                    accessibilityLabel={
-                      business.isSaved ? labels.savedBusiness : labels.saveBusiness
-                    }
-                    accessibilityRole="button"
-                    disabled={saveBusyBusinessId === business.id}
-                    onPress={() => onToggleSavedBusiness(business)}
-                    style={[
-                      styles.saveIconButton,
-                      isDarkMode ? styles.darkIconBox : null,
-                      business.isSaved ? styles.activeSaveIconButton : null,
-                    ]}
-                  >
-                    <Bookmark
-                      color={business.isSaved ? "#FFFFFF" : isDarkMode ? "#E5E5EA" : "#111111"}
-                      fill={business.isSaved ? "#FFFFFF" : "transparent"}
-                      size={17}
-                      strokeWidth={2.7}
-                    />
-                  </Pressable>
-                  <Pressable
-                    accessibilityLabel={labels.close}
-                    accessibilityRole="button"
-                    onPress={onClose}
-                    style={[
-                      styles.modalCloseButton,
-                      isDarkMode ? styles.darkSettingRow : null,
-                    ]}
-                  >
-                    <X
-                      color={isDarkMode ? "#E5E5EA" : "#111111"}
-                      size={19}
-                      strokeWidth={2.7}
-                    />
-                  </Pressable>
-                </View>
-              </View>
-
-              <View style={styles.modalBusinessHeader}>
-                {modalLogoUrl && !hasModalLogoImageError ? (
-                  <View
-                    accessibilityLabel={`${business.name} ${labels.logo}`}
-                    style={[
-                      styles.modalBusinessLogo,
-                      isDarkMode ? styles.darkIconBox : null,
-                    ]}
-                  >
-                    <Image
-                      onError={() => setHasModalLogoImageError(true)}
-                      resizeMode="contain"
-                      source={{ uri: modalLogoUrl }}
-                      style={styles.modalBusinessLogoImage}
-                    />
-                  </View>
-                ) : null}
-                <View style={styles.flex}>
-                  <Text style={[styles.modalTitle, isDarkMode ? styles.darkText : null]}>
-                    {business.name}
-                  </Text>
-                  {business.servesAllCanada ? (
-                    <Text style={[styles.onlineBadge, isDarkMode ? styles.darkOnlineBadge : null]}>
-                      {labels.canadaWide}
-                    </Text>
-                  ) : (
-                    <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
-                      {business.city}
-                    </Text>
-                  )}
-                </View>
-              </View>
-              <View style={[styles.dashboardTabs, isDarkMode ? styles.darkSettingRow : null]}>
-                <DashboardPanelButton
-                  active={activeModalTab === "about"}
-                  isDarkMode={isDarkMode}
-                  label={labels.about}
-                  onPress={() => setActiveModalTab("about")}
-                />
-                <DashboardPanelButton
-                  active={activeModalTab === "services"}
-                  isDarkMode={isDarkMode}
-                  label={labels.services}
-                  onPress={() => setActiveModalTab("services")}
-                />
-                <DashboardPanelButton
-                  active={activeModalTab === "events"}
-                  isDarkMode={isDarkMode}
-                  label={labels.events}
-                  onPress={() => setActiveModalTab("events")}
-                />
-                <DashboardPanelButton
-                  active={activeModalTab === "products"}
-                  isDarkMode={isDarkMode}
-                  label={labels.products}
-                  onPress={() => setActiveModalTab("products")}
-                />
-              </View>
-
-              {activeModalTab === "about" ? (
-                <>
-                  <Text style={[styles.modalBody, isDarkMode ? styles.darkMutedText : null]}>
-                    {business.description}
-                  </Text>
-                  {contacts.length ? (
-                    <View style={[styles.contactCard, isDarkMode ? styles.darkSettingRow : null]}>
-                      <Text
-                        style={[
-                          styles.contactSectionTitle,
-                          isDarkMode ? styles.darkText : null,
-                        ]}
-                      >
-                        {labels.contacts}
-                      </Text>
-                      {canViewContacts ? (
-                        contacts.map((contact) => (
-                          <ContactRow
-                            contact={contact}
-                            isDarkMode={isDarkMode}
-                            key={contact.key}
-                            onContactPress={onContactPress}
-                          />
-                        ))
-                      ) : (
-                        <ContactSignInPrompt
-                          isDarkMode={isDarkMode}
-                          labels={labels}
-                          onPress={onRequireSignIn}
-                        />
-                      )}
-                    </View>
-                  ) : null}
-                </>
-              ) : null}
-
-              {activeModalTab === "services" ? (
-                serviceItems.length ? (
-                  serviceItems.map((item) => (
-                    <PublicContentCard
-                      business={business}
-                      canViewContacts={canViewContacts}
-                      isDarkMode={isDarkMode}
-                      item={item}
-                      key={item.id}
-                      labels={labels}
-                      onPress={() => onContentPress({ business, item })}
-                      onShare={() => {
-                        void onShareContent({ business, item });
-                      }}
-                    />
-                  ))
-                ) : (
-                  <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
-                    {labels.noContentItems}
-                  </Text>
-                )
-              ) : null}
-
-              {activeModalTab === "events" ? (
-                eventItems.length ? (
-                  eventItems.map((item) => (
-                    <PublicContentCard
-                      business={business}
-                      canViewContacts={canViewContacts}
-                      isDarkMode={isDarkMode}
-                      item={item}
-                      key={item.id}
-                      labels={labels}
-                      onPress={() => onContentPress({ business, item })}
-                      onShare={() => {
-                        void onShareContent({ business, item });
-                      }}
-                    />
-                  ))
-                ) : (
-                  <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
-                    {labels.noContentItems}
-                  </Text>
-                )
-              ) : null}
-              {activeModalTab === "products" ? (
-                productItems.length ? (
-                  productItems.map((item) => (
-                    <PublicContentCard
-                      business={business}
-                      canViewContacts={canViewContacts}
-                      isDarkMode={isDarkMode}
-                      item={item}
-                      key={item.id}
-                      labels={labels}
-                      onPress={() => onContentPress({ business, item })}
-                      onShare={() => {
-                        void onShareContent({ business, item });
-                      }}
-                    />
-                  ))
-                ) : (
-                  <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
-                    {labels.noContentItems}
-                  </Text>
-                )
-              ) : null}
-              {business.ownedByCurrentUser ? (
-                <PrimaryButton label={labels.manageProfile} onPress={onManage} />
-              ) : null}
-            </ScrollView>
+              <Image
+                onError={() => setHasModalLogoImageError(true)}
+                resizeMode="contain"
+                source={{ uri: modalLogoUrl }}
+                style={styles.businessHeroLogoImage}
+              />
+            </View>
+          ) : null}
+          <View style={styles.flex}>
+            <Text style={[styles.businessHeroCategory, isDarkMode ? styles.darkMutedText : null]}>
+              {categoryName}
+            </Text>
+            <Text style={[styles.businessHeroName, isDarkMode ? styles.darkText : null]}>
+              {business.name}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.businessHeroMetaRow}>
+          <View style={[styles.infoPill, isDarkMode ? styles.darkIconBox : null]}>
+            <MapPin
+              color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+              size={15}
+              strokeWidth={2.6}
+            />
+            <Text
+              numberOfLines={1}
+              style={[styles.infoPillText, isDarkMode ? styles.darkMutedText : null]}
+            >
+              {locationLabel}
+            </Text>
+          </View>
+          {hasBusinessFollowers(business) ? (
+            <View style={[styles.infoPill, isDarkMode ? styles.darkIconBox : null]}>
+              <Heart
+                color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+                size={15}
+                strokeWidth={2.6}
+              />
+              <Text
+                numberOfLines={1}
+                style={[styles.infoPillText, isDarkMode ? styles.darkMutedText : null]}
+              >
+                {getFollowerLabel(business, labels)}
+              </Text>
+            </View>
           ) : null}
         </View>
       </View>
-    </Modal>
+
+      <ScrollView
+        contentContainerStyle={styles.businessProfileTabBar}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.businessProfileTabScroller}
+      >
+        {tabItems.map((tab) => (
+          <BusinessProfileTabButton
+            active={activeModalTab === tab.key}
+            isDarkMode={isDarkMode}
+            key={tab.key}
+            label={tab.label}
+            onPress={() => setActiveModalTab(tab.key)}
+          />
+        ))}
+      </ScrollView>
+
+      {activeModalTab === "about" ? (
+        <View style={[styles.businessSectionCard, isDarkMode ? styles.darkCard : null]}>
+          <Text style={[styles.modalBody, isDarkMode ? styles.darkMutedText : null]}>
+            {business.description}
+          </Text>
+          {business.ownerId && !business.ownedByCurrentUser ? (
+            <PrimaryButton
+              label={labels.messageBusiness}
+              onPress={() => {
+                void onMessageBusiness(business);
+              }}
+            />
+          ) : null}
+          {contacts.length ? (
+            <View style={styles.businessContactStack}>
+              <Text style={[styles.contactSectionTitle, isDarkMode ? styles.darkText : null]}>
+                {labels.contacts}
+              </Text>
+              {canViewContacts ? (
+                contacts.map((contact) => (
+                  <ContactRow
+                    contact={contact}
+                    isDarkMode={isDarkMode}
+                    key={contact.key}
+                    onContactPress={onContactPress}
+                  />
+                ))
+              ) : (
+                <ContactSignInPrompt
+                  isDarkMode={isDarkMode}
+                  labels={labels}
+                  onPress={onRequireSignIn}
+                />
+              )}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {activeModalTab === "services" ? (
+        <View style={styles.businessContentList}>{renderContentItems(serviceItems)}</View>
+      ) : null}
+
+      {activeModalTab === "events" ? (
+        <View style={styles.businessContentList}>{renderContentItems(eventItems)}</View>
+      ) : null}
+
+      {activeModalTab === "products" ? (
+        <View style={styles.businessContentList}>{renderContentItems(productItems)}</View>
+      ) : null}
+
+      {business.ownedByCurrentUser ? (
+        <View style={styles.businessActionFooter}>
+          <PrimaryButton label={labels.manageProfile} onPress={onManage} />
+        </View>
+      ) : null}
+    </KeyboardAwareScreen>
+  );
+}
+
+function BusinessProfileTabButton({
+  active,
+  isDarkMode,
+  label,
+  onPress,
+}: {
+  active: boolean;
+  isDarkMode: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={[
+        styles.businessProfileTabButton,
+        isDarkMode ? styles.darkIconBox : null,
+        active ? styles.activeBusinessProfileTabButton : null,
+      ]}
+    >
+      <Text
+        numberOfLines={1}
+        style={[
+          styles.businessProfileTabText,
+          isDarkMode ? styles.darkText : null,
+          active ? styles.activeBusinessProfileTabText : null,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -7181,7 +11070,7 @@ function ContactRow({
         <Text style={[styles.contactLabel, isDarkMode ? styles.darkMutedText : null]}>
           {contact.label}
         </Text>
-        <Text style={styles.contactLine}>
+        <Text style={[styles.contactLine, isDarkMode ? styles.darkMutedText : null]}>
           {contact.value}
         </Text>
       </View>
@@ -7214,17 +11103,23 @@ function GoogleLogo({ size }: { size: number }) {
 
 function TabButton({
   active,
+  badgeCount = 0,
+  hasBadge,
   Icon,
   isDarkMode,
   label,
   onPress,
 }: {
   active: boolean;
+  badgeCount?: number;
+  hasBadge?: boolean;
   Icon: LucideIcon;
   isDarkMode: boolean;
   label: string;
   onPress: () => void;
 }) {
+  const shouldShowBadge = badgeCount > 0 || Boolean(hasBadge);
+
   return (
     <Pressable
       accessibilityLabel={label}
@@ -7237,6 +11132,13 @@ function TabButton({
         size={21}
         strokeWidth={2.6}
       />
+      {shouldShowBadge ? (
+        <View style={styles.tabUnreadDot}>
+          {badgeCount > 0 ? (
+            <Text style={styles.tabUnreadText}>{formatUnreadCount(badgeCount)}</Text>
+          ) : null}
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -7705,6 +11607,45 @@ function getMobileLocationLabel(
   return [primaryLocation, secondaryLocation].filter(Boolean).join(", ");
 }
 
+function getDiscoveryTiles(
+  businesses: Business[],
+  labels: Record<string, string>,
+) {
+  const contentTiles = businesses.flatMap((business) =>
+    (business.contentItems ?? []).flatMap((item) => {
+      const imageUrl = getContentImageUrls(
+        item,
+        imageOptimizationPresets.thumbnail,
+      )[0];
+
+      if (!imageUrl) {
+        return [];
+      }
+
+      return {
+        business,
+        imageUrl,
+        item,
+        key: `content-${business.id}-${item.id}`,
+        kind: "content" as const,
+        subtitle: getContentTypeLabel(item, labels),
+        title: item.title,
+      };
+    }),
+  );
+  return contentTiles
+    .sort((firstTile, secondTile) =>
+      getDiscoveryTileTime(secondTile) - getDiscoveryTileTime(firstTile),
+    );
+}
+
+function getDiscoveryTileTime(tile: DiscoveryTile) {
+  const value = tile.item.updatedAt || tile.item.createdAt;
+  const time = value ? new Date(value).getTime() : 0;
+
+  return Number.isFinite(time) ? time : 0;
+}
+
 function getCategoryName(slug: string, locale: Locale) {
   const normalizedSlug = normalizeCategorySlug(slug);
   const categoryName = categories.find(
@@ -7929,6 +11870,206 @@ function getContentTimestamp(item: BusinessContentItem) {
   return Number.isNaN(parsedDate.getTime()) ? 0 : parsedDate.getTime();
 }
 
+function getHomeCopy(locale: Locale) {
+  if (locale === "uk") {
+    return {
+      categorySubtitle: "На основі підписок, локації та останнього пошуку.",
+      categoryTitle: "Категорії для вас",
+      communitySubtitle: "Короткі оновлення від людей і бізнесів у Kolo.",
+      communityTitle: "Пости спільноти",
+      emptyContentText: "Поки немає нових оновлень у цих категоріях.",
+      followingContentSubtitle: "Сервіси, продукти й події від бізнесів, за якими ви стежите.",
+      followingContentTitle: "Від ваших підписок",
+      freshContentSubtitle: "Свіжі пропозиції, продукти й події, які можна відкрити свайпом.",
+      freshContentTitle: "Нові послуги, продукти та події",
+      heroIntro: "Персональні добірки бізнесів, послуг, продуктів, подій і постів у кілька свайпів.",
+      nearbyFallbackSubtitle: "Підбірка по Канаді, доки локація не вибрана.",
+      nearbySubtitle: "Поруч із",
+      nearbyTitle: "Нові бізнеси поруч",
+      recommendedSubtitle: "Підібрано за вашими підписками, пошуком і категоріями.",
+      recommendedTitle: "Може зацікавити",
+    };
+  }
+
+  return {
+    categorySubtitle: "Based on following, location, and your latest search.",
+    categoryTitle: "Categories for you",
+    communitySubtitle: "Short updates from people and businesses in Kolo.",
+    communityTitle: "Community posts",
+    emptyContentText: "No new updates in these categories yet.",
+    followingContentSubtitle: "Services, products, and events from businesses you follow.",
+    followingContentTitle: "From your following",
+    freshContentSubtitle: "Fresh offers, products, and events you can swipe through.",
+    freshContentTitle: "New services, products & events",
+    heroIntro: "Personal picks of businesses, services, products, events, and posts in a few swipes.",
+    nearbyFallbackSubtitle: "Canada-wide picks until a location is selected.",
+    nearbySubtitle: "Near",
+    nearbyTitle: "New businesses nearby",
+    recommendedSubtitle: "Picked from your following, search, and categories.",
+    recommendedTitle: "You may like",
+  };
+}
+
+function getHomeContentEntries(businesses: Business[]) {
+  const seenItemIds = new Set<string>();
+
+  return businesses
+    .flatMap((business) =>
+      getPublicBusinessContentItems(business.contentItems).map((item) => ({
+        business,
+        item,
+      })),
+    )
+    .filter(({ item }) => {
+      if (seenItemIds.has(item.id)) {
+        return false;
+      }
+
+      seenItemIds.add(item.id);
+      return true;
+    })
+    .sort(
+      (first, second) =>
+        getHomeContentSortTimestamp(second.item) -
+        getHomeContentSortTimestamp(first.item),
+    );
+}
+
+function getHomeContentSortTimestamp(item: BusinessContentItem) {
+  const timestamps = [item.updatedAt, item.createdAt, item.startsAt]
+    .map(getDateTimestamp)
+    .filter((timestamp) => timestamp > 0);
+
+  return Math.max(0, ...timestamps);
+}
+
+function getHomeCategoryCards({
+  businesses,
+  followedBusinesses,
+  locale,
+  location,
+  query,
+  selectedCategorySlug,
+}: {
+  businesses: Business[];
+  followedBusinesses: Business[];
+  locale: Locale;
+  location: string;
+  query: string;
+  selectedCategorySlug: string;
+}) {
+  const counts = new Map<string, number>();
+  const weights = new Map<string, number>();
+  const normalizedQuery = normalize(query);
+  const locationTrimmed = location.trim();
+  const bumpWeight = (slug: string, weight: number) => {
+    weights.set(slug, (weights.get(slug) ?? 0) + weight);
+  };
+
+  for (const business of businesses) {
+    counts.set(business.categorySlug, (counts.get(business.categorySlug) ?? 0) + 1);
+
+    if (locationTrimmed && isNearLocation(business.city, locationTrimmed)) {
+      bumpWeight(business.categorySlug, 2);
+    }
+
+    if (isHomeBusinessPreferenceMatch(business, query)) {
+      bumpWeight(business.categorySlug, 3);
+    }
+  }
+
+  for (const business of followedBusinesses) {
+    bumpWeight(business.categorySlug, 8);
+  }
+
+  if (selectedCategorySlug) {
+    bumpWeight(selectedCategorySlug, 10);
+  }
+
+  if (normalizedQuery) {
+    for (const category of categories) {
+      const categoryText = normalize(
+        `${category.slug} ${category.name.en} ${category.name.uk}`,
+      );
+
+      if (categoryText.includes(normalizedQuery)) {
+        bumpWeight(category.slug, 6);
+      }
+    }
+  }
+
+  return categories
+    .map((category) => {
+      const count = counts.get(category.slug) ?? 0;
+      const weight = (weights.get(category.slug) ?? 0) + count * 0.35;
+
+      return {
+        category,
+        count,
+        weight,
+      };
+    })
+    .filter(({ count, weight }) => count > 0 || weight > 0)
+    .sort((first, second) => {
+      if (second.weight !== first.weight) {
+        return second.weight - first.weight;
+      }
+
+      if (second.count !== first.count) {
+        return second.count - first.count;
+      }
+
+      return first.category.name[locale].localeCompare(second.category.name[locale]);
+    });
+}
+
+function sortHomeBusinessesByFreshness(businesses: Business[]) {
+  return [...businesses].sort(
+    (first, second) =>
+      getBusinessFreshnessTimestamp(second) - getBusinessFreshnessTimestamp(first),
+  );
+}
+
+function getBusinessFreshnessTimestamp(business: Business) {
+  const contentTimestamps =
+    business.contentItems?.map(getHomeContentSortTimestamp) ?? [];
+  const timestamps = [
+    getDateTimestamp(business.createdAt),
+    getDateTimestamp(business.updatedAt),
+    ...contentTimestamps,
+  ].filter((timestamp) => timestamp > 0);
+
+  return Math.max(0, ...timestamps);
+}
+
+function isHomeBusinessPreferenceMatch(business: Business, query: string) {
+  const normalizedQuery = normalize(query);
+
+  if (!normalizedQuery) {
+    return false;
+  }
+
+  const category = getCategoryName(business.categorySlug, "en");
+  const contentText = (business.contentItems ?? [])
+    .map((item) => `${item.title} ${item.description} ${item.location ?? ""}`)
+    .join(" ");
+  const haystack = normalize(
+    `${business.name} ${business.description} ${business.city} ${category} ${business.categorySlug} ${contentText}`,
+  );
+
+  return haystack.includes(normalizedQuery);
+}
+
+function getDateTimestamp(value: string | undefined) {
+  if (!value) {
+    return 0;
+  }
+
+  const timestamp = new Date(value).getTime();
+
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
 function getUniqueBusinesses(businesses: Business[]) {
   return businesses.filter(
     (business, index, allBusinesses) =>
@@ -7966,6 +12107,142 @@ function isOwnedBusinessMatch(publicBusiness: Business, ownedBusiness: Business)
 
 function isSameBusinessReference(firstBusiness: Business, secondBusiness: Business) {
   return getBusinessDedupeKey(firstBusiness) === getBusinessDedupeKey(secondBusiness);
+}
+
+function getNextFollowerCount(
+  currentCount: number | undefined,
+  nextIsFollowing: boolean,
+) {
+  return Math.max(0, (currentCount ?? 0) + (nextIsFollowing ? 1 : -1));
+}
+
+function getFollowerLabel(business: Business, labels: Record<string, string>) {
+  const followerCount = Math.max(0, business.followerCount ?? 0);
+  const label = followerCount === 1 ? labels.followerOne : labels.followers;
+
+  return `${followerCount} ${label}`;
+}
+
+function hasBusinessFollowers(business: Business) {
+  return Math.max(0, business.followerCount ?? 0) > 0;
+}
+
+function createOptimisticConversationFromBusiness({
+  business,
+  conversationId,
+  customerEmail,
+  customerId,
+  customerName,
+}: {
+  business: Business;
+  conversationId: string;
+  customerEmail?: string | null;
+  customerId: string;
+  customerName?: string | null;
+}): MobileConversation {
+  return {
+    business: {
+      category_slug: business.categorySlug,
+      city: business.city,
+      id: business.id,
+      logo_url: business.logoUrl ?? null,
+      name: business.name,
+      slug: business.slug ?? null,
+    },
+    businessId: business.id,
+    businessOwnerId: business.ownerId ?? "",
+    customerEmail: customerEmail ?? undefined,
+    customerId,
+    customerName: customerName ?? customerEmail ?? undefined,
+    id: conversationId,
+    isUnread: false,
+    lastMessagePreview: "",
+    unreadCount: 0,
+  };
+}
+
+function createDraftConversationId(businessId: string, customerId: string) {
+  return `draft:${businessId}:${customerId}`;
+}
+
+function mergeConversationsWithOptimisticDrafts(
+  serverConversations: MobileConversation[],
+  currentConversations: MobileConversation[],
+) {
+  const serverKeys = new Set(
+    serverConversations.map(
+      (conversation) => `${conversation.businessId}:${conversation.customerId}`,
+    ),
+  );
+  const optimisticDrafts = currentConversations.filter(
+    (conversation) =>
+      isDraftConversationId(conversation.id) &&
+      !serverKeys.has(`${conversation.businessId}:${conversation.customerId}`) &&
+      !conversation.lastMessageAt &&
+      !conversation.lastMessagePreview,
+  );
+
+  return [...optimisticDrafts, ...serverConversations];
+}
+
+function getMobileConversationTitle(
+  conversation: MobileConversation,
+  userId: string,
+) {
+  if (conversation.businessOwnerId === userId) {
+    return (
+      conversation.customerName ||
+      conversation.customerEmail ||
+      conversation.business?.name ||
+      "Customer"
+    );
+  }
+
+  return conversation.business?.name ?? "Business";
+}
+
+function getMobileConversationSubtitle(
+  conversation: MobileConversation,
+  userId: string,
+) {
+  if (conversation.businessOwnerId === userId) {
+    return conversation.customerEmail ?? conversation.business?.name ?? "";
+  }
+
+  return conversation.business?.city ?? "";
+}
+
+function formatMobileMessageDate(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+  }).format(new Date(value));
+}
+
+function getMobileMessageReadStatusLabel(
+  message: MobileMessage,
+  conversation: MobileConversation,
+  userId: string,
+  labels: Record<string, string>,
+) {
+  if (message.senderId !== userId) {
+    return message.isUnread ? labels.messageUnread : labels.messageRead;
+  }
+
+  const recipientReadAt =
+    conversation.businessOwnerId === userId
+      ? conversation.customerLastReadAt
+      : conversation.ownerLastReadAt;
+
+  if (!recipientReadAt) {
+    return labels.messageUnread;
+  }
+
+  return new Date(recipientReadAt) >= new Date(message.createdAt)
+    ? labels.messageRead
+    : labels.messageUnread;
 }
 
 function getBusinessDedupeKey(business: Business) {
@@ -8018,7 +12295,24 @@ function getPickerDate(value: string) {
   return new Date();
 }
 
-function getRenderableImageUrl(value?: string | null) {
+type ImageOptimizationOptions = {
+  height?: number;
+  quality?: number;
+  resize?: "cover" | "contain" | "fill";
+  width?: number;
+};
+
+const imageOptimizationPresets = {
+  avatar: { height: 160, quality: 70, resize: "cover", width: 160 },
+  detail: { quality: 72, resize: "contain", width: 1200 },
+  logo: { height: 220, quality: 72, resize: "contain", width: 220 },
+  thumbnail: { height: 520, quality: 62, resize: "cover", width: 520 },
+} satisfies Record<string, ImageOptimizationOptions>;
+
+function getRenderableImageUrl(
+  value?: string | null,
+  options: ImageOptimizationOptions = imageOptimizationPresets.detail,
+) {
   const trimmedValue = value?.trim() ?? "";
   const normalizedValue = trimmedValue.toLowerCase();
 
@@ -8031,22 +12325,79 @@ function getRenderableImageUrl(value?: string | null) {
   }
 
   if (/^(https?:|file:|content:|data:image\/)/i.test(trimmedValue)) {
-    return trimmedValue;
+    return getOptimizedSupabaseImageUrl(trimmedValue, options);
   }
 
   return "";
 }
 
-function getContentImageUrls(item?: BusinessContentItem | null) {
+function getOptimizedSupabaseImageUrl(
+  value: string,
+  options: ImageOptimizationOptions,
+) {
+  if (/^(file:|content:|data:image\/)/i.test(value)) {
+    return value;
+  }
+
+  try {
+    const url = new URL(value) as unknown as {
+      pathname: string;
+      searchParams: {
+        set: (name: string, value: string) => void;
+      };
+      toString: () => string;
+    };
+    const publicObjectPath = "/storage/v1/object/public/";
+    const renderImagePath = "/storage/v1/render/image/public/";
+
+    if (
+      !url.pathname.includes(publicObjectPath) &&
+      !url.pathname.includes(renderImagePath)
+    ) {
+      return value;
+    }
+
+    if (/\.(svg)(\?|$)/i.test(url.pathname)) {
+      return value;
+    }
+
+    url.pathname = url.pathname.replace(publicObjectPath, renderImagePath);
+
+    if (options.width) {
+      url.searchParams.set("width", String(options.width));
+    }
+
+    if (options.height) {
+      url.searchParams.set("height", String(options.height));
+    }
+
+    if (options.quality) {
+      url.searchParams.set("quality", String(options.quality));
+    }
+
+    if (options.resize) {
+      url.searchParams.set("resize", options.resize);
+    }
+
+    return url.toString();
+  } catch {
+    return value;
+  }
+}
+
+function getContentImageUrls(
+  item?: BusinessContentItem | null,
+  options: ImageOptimizationOptions = imageOptimizationPresets.detail,
+) {
   if (!item) {
     return [];
   }
 
   const imageUrls =
     item.imageUrls
-      ?.map((url) => getRenderableImageUrl(url))
+      ?.map((url) => getRenderableImageUrl(url, options))
       .filter((url): url is string => Boolean(url)) ?? [];
-  const coverImageUrl = getRenderableImageUrl(item.imageUrl);
+  const coverImageUrl = getRenderableImageUrl(item.imageUrl, options);
 
   if (coverImageUrl && !imageUrls.includes(coverImageUrl)) {
     return [coverImageUrl, ...imageUrls];
@@ -8278,6 +12629,13 @@ const styles = StyleSheet.create({
   activeDashboardTabButtonText: {
     color: "#FFFFFF",
   },
+  activeBusinessProfileTabButton: {
+    backgroundColor: "#111111",
+    borderColor: "#111111",
+  },
+  activeBusinessProfileTabText: {
+    color: "#FFFFFF",
+  },
   activeTabButton: {
     backgroundColor: "#111111",
   },
@@ -8295,7 +12653,7 @@ const styles = StyleSheet.create({
   announcementBanner: {
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderColor: "#E5E5EA",
+    borderColor: "#BDEFFF",
     borderRadius: 18,
     borderWidth: 1,
     flexDirection: "row",
@@ -8309,7 +12667,7 @@ const styles = StyleSheet.create({
   },
   announcementCard: {
     backgroundColor: "#FFFFFF",
-    borderColor: "#E5E5EA",
+    borderColor: "#FFFFFF",
     borderRadius: 18,
     borderWidth: 1,
     gap: 10,
@@ -8370,8 +12728,7 @@ const styles = StyleSheet.create({
   },
   appShell: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 8,
+    position: "relative",
   },
   appleSignInButton: {
     height: 52,
@@ -8399,16 +12756,18 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   businessCard: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E5E5EA",
-    borderRadius: 22,
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
     borderWidth: 1,
+    borderRadius: 24,
     gap: 12,
-    padding: 18,
-    shadowColor: "#111111",
+    marginHorizontal: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    shadowColor: "#2B2118",
     shadowOffset: { height: 10, width: 0 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
+    shadowOpacity: 0.07,
+    shadowRadius: 18,
   },
   businessName: {
     color: "#111111",
@@ -8417,12 +12776,18 @@ const styles = StyleSheet.create({
     lineHeight: 28,
   },
   card: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E5E5EA",
-    borderRadius: 24,
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
     borderWidth: 1,
+    borderRadius: 24,
     gap: 16,
-    padding: 18,
+    marginHorizontal: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    shadowColor: "#2B2118",
+    shadowOffset: { height: 10, width: 0 },
+    shadowOpacity: 0.07,
+    shadowRadius: 18,
   },
   rankingInfoRow: {
     alignItems: "flex-start",
@@ -8467,10 +12832,127 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
   },
+  businessPageHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+  },
+  businessActionFooter: {
+    paddingHorizontal: 4,
+    paddingTop: 2,
+  },
+  businessContactStack: {
+    gap: 10,
+    marginTop: 4,
+  },
+  businessContentList: {
+    gap: 12,
+    paddingTop: 2,
+  },
+  businessHeroCard: {
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderRadius: 28,
+    borderWidth: 1,
+    gap: 16,
+    padding: 18,
+    shadowColor: "#2B2118",
+    shadowOffset: { height: 14, width: 0 },
+    shadowOpacity: 0.07,
+    shadowRadius: 24,
+  },
+  businessHeroCategory: {
+    color: "#6E6E73",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.4,
+    marginBottom: 5,
+    textTransform: "uppercase",
+  },
+  businessHeroHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 14,
+  },
+  businessHeroLogo: {
+    alignItems: "center",
+    backgroundColor: "#F8F4ED",
+    borderColor: "#E4DDD2",
+    borderRadius: 22,
+    borderWidth: 1,
+    height: 78,
+    justifyContent: "center",
+    overflow: "hidden",
+    width: 78,
+  },
+  businessHeroLogoImage: {
+    height: "100%",
+    width: "100%",
+  },
+  businessHeroMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  businessHeroName: {
+    color: "#111111",
+    fontSize: 30,
+    fontWeight: "900",
+    lineHeight: 34,
+  },
+  businessProfileTabBar: {
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 2,
+    paddingVertical: 2,
+  },
+  businessProfileTabButton: {
+    alignItems: "center",
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexGrow: 0,
+    flexShrink: 0,
+    height: 40,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  businessProfileTabScroller: {
+    flexGrow: 0,
+    flexShrink: 0,
+    height: 44,
+    maxHeight: 44,
+  },
+  businessProfileTabText: {
+    color: "#111111",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  businessScreenContent: {
+    gap: 12,
+    paddingHorizontal: 12,
+  },
+  businessSectionCard: {
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderRadius: 24,
+    borderWidth: 1,
+    gap: 14,
+    padding: 16,
+  },
+  businessTopBar: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 2,
+  },
   categoryBadge: {
     alignSelf: "flex-start",
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E5E5EA",
+    backgroundColor: "#F3EEE6",
+    borderColor: "#DED5C8",
     borderRadius: 8,
     borderWidth: 1,
     color: "#111111",
@@ -8556,21 +13038,706 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
-  contactCard: {
+  followerBadge: {
+    alignSelf: "flex-start",
     backgroundColor: "#F5F5F7",
-    borderRadius: 14,
-    gap: 10,
-    padding: 14,
+    borderColor: "#E5E5EA",
+    borderRadius: 8,
+    borderWidth: 1,
+    color: "#6E6E73",
+    fontSize: 12,
+    fontWeight: "900",
+    overflow: "hidden",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
   },
-  contactIcon: {
+  feedActionButton: {
+    alignItems: "center",
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    minHeight: 38,
+    paddingHorizontal: 12,
+  },
+  activeFeedActionButton: {
+    backgroundColor: "#111111",
+    borderColor: "#111111",
+  },
+  activeFeedActionText: {
+    color: "#FFFFFF",
+  },
+  feedActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  feedActionText: {
+    color: "#111111",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  feedAuthorName: {
+    color: "#111111",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  feedAuthorRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+  },
+  feedAvatar: {
+    alignItems: "center",
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 14,
+    borderWidth: 1,
+    height: 46,
+    justifyContent: "center",
+    width: 46,
+  },
+  feedBody: {
+    color: "#111111",
+    fontSize: 16,
+    fontWeight: "700",
+    lineHeight: 24,
+  },
+  feedFloatingButton: {
+    alignItems: "center",
+    alignSelf: "center",
+    backgroundColor: "#111111",
+    borderColor: "rgba(255,255,255,0.72)",
+    borderRadius: 999,
+    borderWidth: 2,
+    bottom: 106,
+    elevation: 10,
+    height: 60,
+    justifyContent: "center",
+    position: "absolute",
+    shadowColor: "#111111",
+    shadowOffset: { height: 9, width: 0 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    width: 60,
+  },
+  feedFloatingSpacer: {
+    height: 162,
+  },
+  feedHeaderIconButton: {
     alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderColor: "#E5E5EA",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 46,
+    justifyContent: "center",
+    position: "relative",
+    shadowColor: "#111111",
+    shadowOffset: { height: 4, width: 0 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    width: 46,
+  },
+  feedHeaderRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+  },
+  feedHeaderUnreadBadge: {
+    alignItems: "center",
+    backgroundColor: "#FF453A",
+    borderColor: "#FFFFFF",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 18,
+    justifyContent: "center",
+    minWidth: 18,
+    paddingHorizontal: 5,
+    position: "absolute",
+    right: 4,
+    top: 4,
+  },
+  feedScreenShell: {
+    flex: 1,
+  },
+  commentsComposerBar: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderTopWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    paddingBottom: 18,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  commentsComposerButton: {
+    alignItems: "center",
+    backgroundColor: "#111111",
+    borderColor: "#111111",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 46,
+    justifyContent: "center",
+    width: 46,
+  },
+  commentsComposerInput: {
+    flex: 1,
+    minHeight: 46,
+  },
+  commentsModalEmpty: {
+    alignItems: "center",
+    gap: 10,
+    justifyContent: "center",
+    minHeight: 220,
+    paddingHorizontal: 24,
+  },
+  commentsModalHeader: {
+    alignItems: "center",
+    borderBottomColor: "#E5E5EA",
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    gap: 14,
+    justifyContent: "space-between",
+    paddingBottom: 14,
+    paddingHorizontal: 20,
+    paddingTop: 22,
+  },
+  commentsModalItem: {
+    borderLeftWidth: 0,
+    borderRightWidth: 0,
+    borderRadius: 0,
+  },
+  commentsModalList: {
+    gap: 10,
+    paddingBottom: 24,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+  },
+  feedComment: {
+    alignItems: "flex-start",
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    padding: 12,
+  },
+  feedCommentAvatar: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 34,
+    width: 34,
+  },
+  feedCommentAvatarFallback: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 34,
+    justifyContent: "center",
+    width: 34,
+  },
+  feedCommentAuthor: {
+    color: "#111111",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  feedCommentBody: {
+    color: "#6E6E73",
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 20,
+    marginTop: 4,
+  },
+  feedCommentActionRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  feedCommentComposer: {
+    gap: 10,
+  },
+  feedCommentEditActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "flex-end",
+  },
+  feedCommentEditBox: {
+    gap: 8,
+    marginTop: 8,
+  },
+  feedCommentEditInput: {
+    minHeight: 72,
+    paddingTop: 12,
+  },
+  feedCommentHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "space-between",
+  },
+  feedCommentIconButton: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 30,
+    justifyContent: "center",
+    width: 30,
+  },
+  feedCommentInput: {
+    minHeight: 44,
+  },
+  feedCommentSaveButton: {
+    backgroundColor: "#111111",
+    borderColor: "#111111",
+  },
+  feedCommentSaveButtonLabel: {
+    color: "#FFFFFF",
+  },
+  feedCommentTextButton: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 999,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 34,
+    minWidth: 92,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  feedCommentTextButtonLabel: {
+    color: "#111111",
+    fontSize: 12,
+    fontWeight: "900",
+    lineHeight: 15,
+    textAlign: "center",
+  },
+  feedComments: {
+    gap: 8,
+  },
+  feedPostModalContent: {
+    paddingBottom: 118,
+  },
+  darkCommentsComposerBar: {
+    backgroundColor: "#111111",
+    borderColor: "#2C2C2E",
+  },
+  darkCommentsModalHeader: {
+    borderBottomColor: "#2C2C2E",
+  },
+  feedMetricRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 5,
+  },
+  communitySwitch: {
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    marginBottom: 14,
+    padding: 5,
+  },
+  communitySwitchButton: {
+    alignItems: "center",
+    borderRadius: 12,
+    flex: 1,
+    flexDirection: "row",
+    gap: 6,
+    justifyContent: "center",
+    minHeight: 38,
+  },
+  activeCommunitySwitchButton: {
+    backgroundColor: "#111111",
+  },
+  communitySwitchText: {
+    color: "#111111",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  activeCommunitySwitchText: {
+    color: "#FFFFFF",
+  },
+  communityUnreadDot: {
+    backgroundColor: "#FF453A",
+    borderRadius: 4,
+    height: 8,
+    width: 8,
+  },
+  discoveryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: DISCOVERY_GRID_GAP,
+    justifyContent: "flex-start",
+  },
+  discoverySearchButton: {
+    alignItems: "center",
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderWidth: 1,
+    borderRadius: 999,
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 10,
+    marginHorizontal: 16,
+    minHeight: 44,
+    paddingHorizontal: 16,
+    shadowColor: "#2B2118",
+    shadowOffset: { height: 8, width: 0 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+  },
+  discoveryScrollContent: {
+    paddingTop: 0,
+  },
+  discoveryStickyHeader: {
+    backgroundColor: "#F7F3EC",
+    paddingBottom: 10,
+    paddingTop: 62,
+    zIndex: 10,
+  },
+  discoverySearchHint: {
+    color: "#6E6E73",
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  discoverySearchTitle: {
+    color: "#111111",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  discoveryTextTile: {
+    backgroundColor: "#EFEAE2",
+  },
+  discoveryTextTileBody: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 9,
+  },
+  discoveryTextTileTitle: {
+    color: "#111111",
+    fontSize: 13,
+    fontWeight: "900",
+    lineHeight: 17,
+  },
+  discoveryTile: {
+    backgroundColor: "#EFEAE2",
+    borderColor: "#E4DDD2",
+    borderRadius: 8,
+    borderWidth: 1,
+    height: DISCOVERY_TILE_HEIGHT,
+    overflow: "hidden",
+    position: "relative",
+    width: DISCOVERY_TILE_WIDTH,
+  },
+  discoveryTileImage: {
+    height: "100%",
+    width: "100%",
+  },
+  discoveryTileOverlay: {
+    backgroundColor: "rgba(17, 17, 17, 0.62)",
+    bottom: 0,
+    gap: 3,
+    left: 0,
+    padding: 8,
+    position: "absolute",
+    right: 0,
+  },
+  discoveryTileSubtitle: {
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 9,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  discoveryTileTitle: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+    lineHeight: 15,
+  },
+  discoveryViewerBusinessButton: {
+    alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    gap: 9,
+    minWidth: 0,
+  },
+  discoveryViewerBusinessNameBox: {
+    flex: 1,
+    height: 34,
+    justifyContent: "center",
+    minHeight: 34,
+    minWidth: 0,
+    paddingTop: Platform.OS === "android" ? 3 : 2,
+  },
+  discoveryViewerBusinessName: {
+    color: "#111111",
+    fontSize: 14,
+    fontWeight: "900",
+    includeFontPadding: false,
+    lineHeight: 18,
+    textAlignVertical: "center",
+  },
+  discoveryViewerCaption: {
+    gap: 8,
+    maxHeight: 152,
+    overflow: "hidden",
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  discoveryViewerCaptionExpanded: {
+    backgroundColor: "rgba(247, 243, 236, 0.96)",
+    borderColor: "#E4DDD2",
+    borderTopWidth: 1,
+    marginTop: -122,
+    maxHeight: 286,
+    paddingBottom: 16,
+    paddingTop: 16,
+  },
+  discoveryViewerCaptionScroll: {
+    maxHeight: 190,
+  },
+  discoveryViewerCaptionScrollContent: {
+    gap: 8,
+    paddingBottom: 4,
+  },
+  discoveryViewerCaptionToggle: {
+    alignItems: "center",
+    backgroundColor: "#F8F4ED",
+    borderColor: "#E4DDD2",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 26,
+    justifyContent: "center",
+    width: 26,
+  },
+  discoveryViewerCloseButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(255, 254, 251, 0.92)",
+    borderColor: "rgba(17, 17, 17, 0.1)",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 38,
+    justifyContent: "center",
+    width: 38,
+  },
+  discoveryViewerHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 66,
+  },
+  discoveryViewerImage: {
+    height: "100%",
+    width: "100%",
+  },
+  discoveryViewerImageFrame: {
+    alignSelf: "center",
+    backgroundColor: "#EFEAE2",
+    height: DISCOVERY_VIEWER_IMAGE_HEIGHT,
+    marginTop: 10,
+    overflow: "hidden",
+    width: "100%",
+  },
+  discoveryViewerKindPill: {
+    backgroundColor: "#F8F4ED",
+    borderColor: "#E4DDD2",
+    borderRadius: 999,
+    borderWidth: 1,
+    color: "#111111",
+    flexShrink: 0,
+    fontSize: 11,
+    fontWeight: "900",
+    overflow: "hidden",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  discoveryViewerLink: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 7,
+    maxWidth: "100%",
+    minHeight: 36,
+    paddingHorizontal: 11,
+  },
+  discoveryViewerLinkText: {
+    color: "#111111",
+    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  discoveryViewerLogo: {
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderRadius: 12,
+    borderWidth: 1,
+    height: 34,
+    width: 34,
+  },
+  discoveryViewerMetaChip: {
+    backgroundColor: "#F8F4ED",
+    borderColor: "#E4DDD2",
+    borderRadius: 999,
+    borderWidth: 1,
+    maxWidth: "100%",
+    minHeight: 32,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  discoveryViewerMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+  },
+  discoveryViewerMetaText: {
+    color: "#6E6E73",
+    fontSize: 12,
+    fontWeight: "900",
+    lineHeight: 16,
+  },
+  discoveryViewerPage: {
+    height: DISCOVERY_VIEWER_HEIGHT,
+    paddingBottom: 146,
+  },
+  discoveryViewerShell: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#F7F3EC",
+    zIndex: 20,
+  },
+  discoveryViewerText: {
+    color: "#6E6E73",
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 19,
+  },
+  discoveryViewerTitle: {
+    color: "#111111",
+    flex: 1,
+    fontSize: 19,
+    fontWeight: "900",
+    lineHeight: 24,
+  },
+  discoveryViewerTitleRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  contactCard: {
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 10,
+    padding: 12,
+  },
+  contactIcon: {
+    alignItems: "center",
+    backgroundColor: "#F8F4ED",
+    borderColor: "#E4DDD2",
     borderRadius: 12,
     borderWidth: 1,
     height: 38,
     justifyContent: "center",
     width: 38,
+  },
+  conversationChip: {
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderWidth: 1,
+    borderRadius: 0,
+    marginRight: 10,
+    minHeight: 82,
+    padding: 12,
+    position: "relative",
+    width: 210,
+  },
+  activeConversationChip: {
+    borderColor: "#111111",
+  },
+  conversationRow: {
+    alignItems: "center",
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    minHeight: 74,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  conversationRowMeta: {
+    alignItems: "flex-end",
+    gap: 7,
+    minWidth: 46,
+  },
+  conversationRowText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  conversationTime: {
+    color: "#8A8177",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  conversationPreview: {
+    color: "#6E6E73",
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 6,
+  },
+  messageInboxList: {
+    gap: 10,
+    paddingHorizontal: 16,
+  },
+  conversationScroller: {
+    marginHorizontal: -2,
+  },
+  conversationTitle: {
+    color: "#111111",
+    fontSize: 14,
+    fontWeight: "900",
+    paddingRight: 14,
+  },
+  conversationUnreadBadge: {
+    alignItems: "center",
+    backgroundColor: "#FF453A",
+    borderColor: "#FFFFFF",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 20,
+    justifyContent: "center",
+    minWidth: 20,
+    paddingHorizontal: 6,
+  },
+  unreadBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "900",
+    lineHeight: 12,
   },
   contactLabel: {
     color: "#6E6E73",
@@ -8587,9 +13754,9 @@ const styles = StyleSheet.create({
   },
   contactRow: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E5E5EA",
-    borderRadius: 14,
+    backgroundColor: "#F8F4ED",
+    borderColor: "#E4DDD2",
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
     gap: 12,
@@ -8617,9 +13784,9 @@ const styles = StyleSheet.create({
   },
   contactSignInPrompt: {
     alignItems: "flex-start",
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E5E5EA",
-    borderRadius: 14,
+    backgroundColor: "#F8F4ED",
+    borderColor: "#E4DDD2",
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
     gap: 12,
@@ -8662,14 +13829,14 @@ const styles = StyleSheet.create({
   },
   contentBusinessButton: {
     alignItems: "center",
-    backgroundColor: "#F5F5F7",
-    borderColor: "#E5E5EA",
-    borderRadius: 14,
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderRadius: 18,
     borderWidth: 1,
     flexDirection: "row",
     gap: 10,
-    minHeight: 46,
-    paddingHorizontal: 12,
+    minHeight: 50,
+    paddingHorizontal: 14,
   },
   contentBusinessButtonText: {
     color: "#111111",
@@ -8700,12 +13867,22 @@ const styles = StyleSheet.create({
     shadowRadius: 28,
   },
   contentItemCard: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E5E5EA",
-    borderRadius: 16,
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
     borderWidth: 1,
+    borderRadius: 22,
+    gap: 0,
+    overflow: "hidden",
+    shadowColor: "#2B2118",
+    shadowOffset: { height: 10, width: 0 },
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+  },
+  contentItemBody: {
+    backgroundColor: "#FFFEFB",
     gap: 10,
-    padding: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
   contentItemActionButton: {
     alignItems: "center",
@@ -8730,10 +13907,70 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   contentItemImage: {
-    aspectRatio: 1.8,
-    backgroundColor: "#F5F5F7",
-    borderRadius: 14,
+    aspectRatio: 1.33,
+    backgroundColor: "#EFEAE2",
     width: "100%",
+  },
+  eventContentCard: {
+    borderLeftWidth: 1,
+    borderRadius: 18,
+    borderRightWidth: 1,
+    marginHorizontal: 12,
+    shadowColor: "#291C0E",
+    shadowOffset: { height: 8, width: 0 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+  },
+  eventContentBody: {
+    paddingHorizontal: 14,
+    paddingVertical: 15,
+  },
+  eventContentImage: {
+    aspectRatio: 1.22,
+  },
+  eventSettingsBody: {
+    gap: 14,
+    padding: 16,
+    paddingBottom: 24,
+  },
+  eventSettingsHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingTop: 16,
+  },
+  eventSettingsSheet: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    borderWidth: 1,
+    elevation: 16,
+    marginHorizontal: 0,
+    overflow: "hidden",
+    shadowColor: "#111111",
+    shadowOffset: { height: -8, width: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 28,
+  },
+  eventsHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  eventsSettingsButton: {
+    alignItems: "center",
+    backgroundColor: "#FFFEFB",
+    borderColor: "#D8CFC2",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 40,
+    justifyContent: "center",
+    width: 40,
   },
   contentDetailImageFrame: {
     alignSelf: "center",
@@ -8746,6 +13983,13 @@ const styles = StyleSheet.create({
   contentDetailImage: {
     height: "100%",
     width: "100%",
+  },
+  contentDetailMetaCard: {
+    backgroundColor: "#F8F4ED",
+    borderColor: "#E4DDD2",
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
   },
   contentImageArrow: {
     alignItems: "center",
@@ -8814,15 +14058,15 @@ const styles = StyleSheet.create({
   contentItemLinkButton: {
     alignItems: "center",
     alignSelf: "flex-start",
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E5E5EA",
-    borderRadius: 12,
+    backgroundColor: "#F8F4ED",
+    borderColor: "#E4DDD2",
+    borderRadius: 999,
     borderWidth: 1,
     flexDirection: "row",
     gap: 8,
     maxWidth: "100%",
     minHeight: 38,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
   },
   contentItemLinkText: {
     color: "#111111",
@@ -8836,6 +14080,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
     lineHeight: 18,
+  },
+  contentMetaChip: {
+    backgroundColor: "#F8F4ED",
+    borderColor: "#E4DDD2",
+    borderRadius: 999,
+    borderWidth: 1,
+    color: "#6E6E73",
+    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: "900",
+    maxWidth: "100%",
+    overflow: "hidden",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  contentMetaChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
   },
   contentItemTitle: {
     color: "#111111",
@@ -8899,6 +14162,11 @@ const styles = StyleSheet.create({
     borderColor: "#3A3A3C",
     color: "#F5F5F7",
   },
+  darkAlertText: {
+    backgroundColor: "#1C1C1E",
+    borderColor: "#2C2C2E",
+    color: "#F5F5F7",
+  },
   darkBusinessCard: {
     backgroundColor: "#1C1C1E",
     borderColor: "#2C2C2E",
@@ -8909,14 +14177,32 @@ const styles = StyleSheet.create({
     backgroundColor: "#111111",
     borderColor: "#2C2C2E",
   },
-  darkOfficialEventImageSurface: {
-    backgroundColor: "#000000",
+  darkContentItemBody: {
+    backgroundColor: "#1C1C1E",
   },
-  lightOfficialEventImageSurface: {
-    backgroundColor: "#FFFFFF",
+  darkDiscoveryViewerCaptionExpanded: {
+    backgroundColor: "rgba(0, 0, 0, 0.94)",
+    borderColor: "#2C2C2E",
+  },
+  darkEventContentCard: {
+    backgroundColor: "#1C1C1E",
+    borderColor: "#2C2C2E",
+    shadowColor: "#000000",
+    shadowOpacity: 0.14,
+  },
+  darkSavedBusinessCard: {
+    backgroundColor: "#1C1C1E",
+    borderColor: "#2C2C2E",
+  },
+  darkStoryLogoRing: {
+    backgroundColor: "#1C1C1E",
+    borderColor: "#3A3A3C",
+    shadowColor: "#000000",
+    shadowOpacity: 0.22,
   },
   darkEmptyState: {
     backgroundColor: "#1C1C1E",
+    borderColor: "#2C2C2E",
     color: "#A1A1A6",
   },
   darkIconBox: {
@@ -9041,7 +14327,10 @@ const styles = StyleSheet.create({
   },
   darkTabBar: {
     backgroundColor: "#1C1C1E",
-    borderColor: "#2C2C2E",
+    borderColor: "#F5F5F7",
+    shadowColor: "#FFFFFF",
+    shadowOpacity: 0.24,
+    shadowRadius: 22,
   },
   darkText: {
     color: "#F5F5F7",
@@ -9130,6 +14419,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
+    marginHorizontal: 12,
     padding: 6,
   },
   profilePanelTabs: {
@@ -9139,14 +14429,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     gap: 6,
+    marginHorizontal: 12,
     padding: 6,
   },
   emptyState: {
     backgroundColor: "#FFFFFF",
+    borderColor: "#E4DDD2",
+    borderWidth: 1,
     borderRadius: 16,
     color: "#6E6E73",
     fontSize: 16,
     fontWeight: "700",
+    marginHorizontal: 12,
     padding: 18,
     textAlign: "center",
   },
@@ -9159,6 +14453,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     lineHeight: 20,
+    marginHorizontal: 12,
     padding: 12,
   },
   field: {
@@ -9314,15 +14609,14 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   officialEventCard: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E5E5EA",
-    borderRadius: 24,
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
     borderWidth: 1,
+    borderLeftWidth: 1,
+    borderRadius: 18,
+    borderRightWidth: 1,
+    marginHorizontal: 12,
     overflow: "hidden",
-    shadowColor: "#111111",
-    shadowOffset: { height: 12, width: 0 },
-    shadowOpacity: 0.06,
-    shadowRadius: 18,
   },
   officialEventHeader: {
     alignItems: "center",
@@ -9338,13 +14632,24 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   officialEventImageFrame: {
-    backgroundColor: "#F5F5F7",
-    height: 320,
+    aspectRatio: 1.5,
+    backgroundColor: "transparent",
     overflow: "hidden",
     width: "100%",
   },
   officialEventImage: {
-    backgroundColor: "#F5F5F7",
+    height: "100%",
+    width: "100%",
+  },
+  officialEventDetailImageFrame: {
+    alignSelf: "center",
+    aspectRatio: 1.5,
+    backgroundColor: "transparent",
+    marginHorizontal: -22,
+    overflow: "hidden",
+    width: Dimensions.get("window").width,
+  },
+  officialEventDetailImage: {
     height: "100%",
     width: "100%",
   },
@@ -9433,40 +14738,152 @@ const styles = StyleSheet.create({
     lineHeight: 30,
   },
   homeHero: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E5E5EA",
-    borderRadius: 28,
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
     borderWidth: 1,
+    borderLeftWidth: 0,
+    borderRadius: 0,
+    borderRightWidth: 0,
     gap: 13,
-    padding: 20,
-    shadowColor: "#111111",
-    shadowOffset: { height: 14, width: 0 },
-    shadowOpacity: 0.06,
-    shadowRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
   },
   homeIntro: {
     color: "#6E6E73",
     fontSize: 16,
     lineHeight: 23,
   },
-  homeKicker: {
+  homeBrand: {
+    alignSelf: "center",
+    color: "#111111",
+    fontSize: 30,
+    fontWeight: "900",
+    letterSpacing: 0.4,
+    lineHeight: 36,
+    marginBottom: -2,
+    marginTop: 10,
+  },
+  homeLoadingBadge: {
     alignSelf: "flex-start",
-    backgroundColor: "#111111",
-    borderColor: "#6E6E73",
-    borderRadius: 8,
+    backgroundColor: "#F8F4ED",
+    borderColor: "#E4DDD2",
+    borderRadius: 999,
     borderWidth: 1,
-    color: "#FFFFFF",
+    color: "#6E6E73",
     fontSize: 12,
     fontWeight: "900",
     overflow: "hidden",
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
+  },
+  homeLoadingBusinessCard: {
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderRadius: 24,
+    borderWidth: 1,
+    gap: 14,
+    minHeight: 210,
+    padding: 16,
+    shadowColor: "#2B2118",
+    shadowOffset: { height: 12, width: 0 },
+    shadowOpacity: 0.07,
+    shadowRadius: 20,
+    width: 250,
+  },
+  homeLoadingBusinessTopRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  homeLoadingCardBody: {
+    gap: 10,
+  },
+  homeLoadingCategoryCard: {
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderRadius: 22,
+    borderWidth: 1,
+    gap: 12,
+    minHeight: 148,
+    padding: 15,
+    shadowColor: "#2B2118",
+    shadowOffset: { height: 10, width: 0 },
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+    width: 164,
+  },
+  homeLoadingContentCard: {
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderRadius: 24,
+    borderWidth: 1,
+    overflow: "hidden",
+    shadowColor: "#2B2118",
+    shadowOffset: { height: 12, width: 0 },
+    shadowOpacity: 0.07,
+    shadowRadius: 20,
+    width: 280,
+  },
+  homeLoadingHero: {
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderRadius: 28,
+    borderWidth: 1,
+    gap: 16,
+    marginHorizontal: 16,
+    padding: 18,
+    shadowColor: "#2B2118",
+    shadowOffset: { height: 14, width: 0 },
+    shadowOpacity: 0.07,
+    shadowRadius: 24,
+  },
+  homeLoadingHeroTopRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  homeLoadingIcon: {
+    alignItems: "center",
+    backgroundColor: "#F8F4ED",
+    borderColor: "#E4DDD2",
+    borderRadius: 16,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: "center",
+    width: 44,
+  },
+  homeLoadingSearchCard: {
+    alignItems: "center",
+    backgroundColor: "#F8F4ED",
+    borderColor: "#E4DDD2",
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    minHeight: 66,
+    paddingHorizontal: 14,
+  },
+  homeLoadingStoriesRail: {
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 2,
+  },
+  homeLoadingStoryItem: {
+    alignItems: "center",
+    gap: 8,
+    width: 72,
+  },
+  homeLoadingTitle: {
+    color: "#111111",
+    fontSize: 24,
+    fontWeight: "900",
+    lineHeight: 30,
   },
   homeSearchButton: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E5E5EA",
-    borderRadius: 18,
+    backgroundColor: "#F8F4ED",
+    borderColor: "#DED5C8",
+    borderRadius: 12,
     borderWidth: 1,
     flexDirection: "row",
     gap: 12,
@@ -9483,14 +14900,140 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "900",
   },
-  homeFeatureCard: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E5E5EA",
-    borderRadius: 24,
+  homeRail: {
+    gap: 10,
+  },
+  homeRailContent: {
+    gap: 12,
+    paddingHorizontal: 16,
+  },
+  homeRailSubtitle: {
+    color: "#6E6E73",
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  homeStoriesRail: {
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 2,
+  },
+  homeStoryItem: {
+    alignItems: "center",
+    gap: 7,
+    width: 72,
+  },
+  homeStoryLogo: {
+    backgroundColor: "#FFFEFB",
+    borderRadius: 999,
+    height: 58,
+    width: 58,
+  },
+  homeStoryLogoRing: {
+    alignItems: "center",
+    backgroundColor: "#FFFEFB",
+    borderColor: "#D8CFC2",
+    borderRadius: 999,
     borderWidth: 1,
+    height: 64,
+    justifyContent: "center",
+    shadowColor: "#2B2118",
+    shadowOffset: { height: 8, width: 0 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    width: 64,
+  },
+  homeStoryName: {
+    color: "#6E6E73",
+    fontSize: 11,
+    fontWeight: "900",
+    lineHeight: 14,
+    maxWidth: 70,
+    textAlign: "center",
+  },
+  homeStoryFollowers: {
+    color: "#8A8177",
+    fontSize: 9,
+    fontWeight: "800",
+    lineHeight: 11,
+    maxWidth: 70,
+    textAlign: "center",
+  },
+  homeCategoryRailCard: {
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderWidth: 1,
+    borderRadius: 22,
+    gap: 12,
+    minHeight: 148,
+    padding: 15,
+    shadowColor: "#2B2118",
+    shadowOffset: { height: 10, width: 0 },
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+    width: 164,
+  },
+  homeCategoryRailName: {
+    color: "#111111",
+    fontSize: 18,
+    fontWeight: "900",
+    lineHeight: 22,
+  },
+  homeContentRailCard: {
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderWidth: 1,
+    borderRadius: 24,
+    overflow: "hidden",
+    shadowColor: "#2B2118",
+    shadowOffset: { height: 12, width: 0 },
+    shadowOpacity: 0.07,
+    shadowRadius: 20,
+    width: 280,
+  },
+  homeContentRailBody: {
+    gap: 9,
+    padding: 14,
+  },
+  homeContentRailBusiness: {
+    color: "#6E6E73",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  homeContentRailImage: {
+    aspectRatio: 1.45,
+    backgroundColor: "#EFEAE2",
+    width: "100%",
+  },
+  homeContentRailImageFallback: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  homeContentRailTitle: {
+    color: "#111111",
+    fontSize: 20,
+    fontWeight: "900",
+    lineHeight: 24,
+  },
+  homeContentRailTopRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "space-between",
+  },
+  homeFeatureCard: {
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderWidth: 1,
+    borderRadius: 24,
     gap: 10,
     minHeight: 230,
     padding: 16,
+    shadowColor: "#2B2118",
+    shadowOffset: { height: 12, width: 0 },
+    shadowOpacity: 0.07,
+    shadowRadius: 20,
     width: 250,
   },
   homeFeatureLogo: {
@@ -9512,8 +15055,8 @@ const styles = StyleSheet.create({
   },
   homeFeatureSignal: {
     alignSelf: "flex-start",
-    backgroundColor: "#F5F5F7",
-    borderColor: "#E5E5EA",
+    backgroundColor: "#F3EEE6",
+    borderColor: "#DED5C8",
     borderRadius: 999,
     borderWidth: 1,
     color: "#111111",
@@ -9523,16 +15066,130 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
+  infoPill: {
+    alignItems: "center",
+    backgroundColor: "#F8F4ED",
+    borderColor: "#E4DDD2",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 7,
+    maxWidth: "100%",
+    minHeight: 34,
+    paddingHorizontal: 11,
+  },
+  infoPillText: {
+    color: "#6E6E73",
+    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: "900",
+  },
   homeFeatureTopRow: {
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
+  },
+  homePostBody: {
+    color: "#111111",
+    fontSize: 17,
+    fontWeight: "800",
+    lineHeight: 24,
+  },
+  homePostMetaRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: "auto",
+  },
+  homePostRailCard: {
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderWidth: 1,
+    borderRadius: 24,
+    gap: 14,
+    minHeight: 220,
+    padding: 16,
+    shadowColor: "#2B2118",
+    shadowOffset: { height: 12, width: 0 },
+    shadowOpacity: 0.07,
+    shadowRadius: 20,
+    width: 280,
+  },
+  homeEmptyRailCard: {
+    alignItems: "center",
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderWidth: 1,
+    borderRadius: 24,
+    gap: 10,
+    justifyContent: "center",
+    minHeight: 148,
+    padding: 18,
+    shadowColor: "#2B2118",
+    shadowOffset: { height: 10, width: 0 },
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+    width: 250,
   },
   homeSectionHeader: {
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 4,
+    paddingHorizontal: 16,
+  },
+  homeSkeletonCircle: {
+    backgroundColor: "#E9E1D6",
+    borderRadius: 999,
+    height: 64,
+    width: 64,
+  },
+  homeSkeletonIcon: {
+    backgroundColor: "#E9E1D6",
+    borderRadius: 16,
+    height: 44,
+    width: 44,
+  },
+  homeSkeletonImage: {
+    aspectRatio: 1.45,
+    backgroundColor: "#E9E1D6",
+    width: "100%",
+  },
+  homeSkeletonLine: {
+    backgroundColor: "#E9E1D6",
+    borderRadius: 999,
+    height: 12,
+    overflow: "hidden",
+  },
+  homeSkeletonLineMedium: {
+    width: "66%",
+  },
+  homeSkeletonLineShort: {
+    width: "42%",
+  },
+  homeSkeletonLineWide: {
+    width: "88%",
+  },
+  homeSkeletonLogo: {
+    backgroundColor: "#E9E1D6",
+    borderRadius: 16,
+    height: 52,
+    width: 52,
+  },
+  homeSkeletonPill: {
+    backgroundColor: "#E9E1D6",
+    borderRadius: 999,
+    height: 28,
+    width: 76,
+  },
+  homeSkeletonRailSubtitle: {
+    marginTop: 8,
+    width: "54%",
+  },
+  homeSkeletonTinyLine: {
+    backgroundColor: "#E9E1D6",
+    borderRadius: 999,
+    height: 8,
+    width: 46,
   },
   homeStatsRow: {
     flexDirection: "row",
@@ -9565,9 +15222,12 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     lineHeight: 36,
   },
+  homeScreenContent: {
+    paddingTop: 44,
+  },
   input: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E5E5EA",
+    backgroundColor: "#FFFEFB",
+    borderColor: "#DED5C8",
     borderRadius: 14,
     borderWidth: 1,
     color: "#111111",
@@ -9683,6 +15343,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     gap: 10,
+    marginHorizontal: 12,
     marginTop: 4,
     padding: 14,
   },
@@ -9761,6 +15422,51 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 44,
   },
+  savedBusinessCard: {
+    alignItems: "center",
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    minHeight: 58,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  savedBusinessList: {
+    gap: 8,
+  },
+  savedBusinessLogo: {
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E5E5EA",
+    borderRadius: 12,
+    borderWidth: 1,
+    height: 38,
+    width: 38,
+  },
+  savedBusinessMeta: {
+    color: "#6E6E73",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 16,
+  },
+  savedBusinessName: {
+    color: "#111111",
+    fontSize: 15,
+    fontWeight: "900",
+    lineHeight: 19,
+  },
+  savedBusinessRemoveButton: {
+    alignItems: "center",
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 34,
+    justifyContent: "center",
+    width: 34,
+  },
   metaRow: {
     alignItems: "center",
     flexDirection: "row",
@@ -9789,6 +15495,11 @@ const styles = StyleSheet.create({
   },
   modalDismissLayer: {
     ...StyleSheet.absoluteFillObject,
+  },
+  modalKeyboardAvoider: {
+    flex: 1,
+    justifyContent: "flex-end",
+    width: "100%",
   },
   modalHeader: {
     alignItems: "center",
@@ -10084,16 +15795,16 @@ const styles = StyleSheet.create({
   },
   onlineBadge: {
     alignSelf: "flex-start",
-    backgroundColor: "#F5F5F7",
-    borderColor: "#E5E5EA",
-    borderRadius: 8,
+    backgroundColor: "#F8F4ED",
+    borderColor: "#E4DDD2",
+    borderRadius: 999,
     borderWidth: 1,
     color: "#6E6E73",
     fontSize: 12,
     fontWeight: "900",
     overflow: "hidden",
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   primaryButton: {
     alignItems: "center",
@@ -10114,6 +15825,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     gap: 16,
+    marginHorizontal: 12,
     padding: 18,
     shadowColor: "#111111",
     shadowOffset: { height: 14, width: 0 },
@@ -10141,23 +15853,35 @@ const styles = StyleSheet.create({
   },
   profileCard: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E5E5EA",
-    borderRadius: 22,
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
     borderWidth: 1,
+    borderRadius: 22,
     flexDirection: "row",
     gap: 14,
-    padding: 16,
+    marginHorizontal: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    shadowColor: "#2B2118",
+    shadowOffset: { height: 9, width: 0 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
   },
   profileHero: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E5E5EA",
-    borderRadius: 24,
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
     borderWidth: 1,
+    borderRadius: 26,
     flexDirection: "row",
     gap: 16,
-    padding: 18,
+    marginHorizontal: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    shadowColor: "#2B2118",
+    shadowOffset: { height: 12, width: 0 },
+    shadowOpacity: 0.07,
+    shadowRadius: 20,
   },
   profileName: {
     color: "#111111",
@@ -10184,6 +15908,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     justifyContent: "space-between",
+    paddingHorizontal: 16,
   },
   resultsHeaderActions: {
     alignItems: "center",
@@ -10192,7 +15917,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   safeArea: {
-    backgroundColor: "#F5F5F7",
+    backgroundColor: "#F7F3EC",
     flex: 1,
   },
   screen: {
@@ -10200,17 +15925,103 @@ const styles = StyleSheet.create({
   },
   screenContent: {
     flexGrow: 1,
-    gap: 13,
-    paddingBottom: 18,
-    paddingTop: 4,
+    gap: 16,
+    paddingBottom: 138,
+    paddingTop: 12,
   },
-  searchPanel: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E5E5EA",
+  searchScreenContent: {
+    paddingTop: 56,
+  },
+  searchCompactPanel: {
+    gap: 10,
+    marginTop: -10,
+    paddingHorizontal: 16,
+  },
+  searchFilterIconButton: {
+    alignItems: "center",
+    backgroundColor: "#F3EEE6",
+    borderColor: "#DED5C8",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: "center",
+    width: 42,
+  },
+  searchFilterIconButtonActive: {
+    backgroundColor: "#111111",
+    borderColor: "#111111",
+  },
+  darkSearchFilterIconButtonActive: {
+    backgroundColor: "#F5F5F7",
+    borderColor: "#F5F5F7",
+  },
+  searchFilterPanel: {
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
     borderRadius: 24,
     borderWidth: 1,
     gap: 14,
     padding: 14,
+    shadowColor: "#2B2118",
+    shadowOffset: { height: 10, width: 0 },
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+  },
+  searchInlineIconButton: {
+    alignItems: "center",
+    height: 34,
+    justifyContent: "center",
+    width: 34,
+  },
+  searchKeywordInput: {
+    color: "#111111",
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "800",
+    minHeight: 50,
+    paddingVertical: 0,
+  },
+  searchKeywordRow: {
+    alignItems: "center",
+    backgroundColor: "#FFFEFB",
+    borderColor: "#D8CFC2",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    minHeight: 58,
+    paddingLeft: 16,
+    paddingRight: 8,
+    shadowColor: "#2B2118",
+    shadowOffset: { height: 10, width: 0 },
+    shadowOpacity: 0.07,
+    shadowRadius: 18,
+  },
+  searchPanel: {
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderWidth: 1,
+    borderLeftWidth: 0,
+    borderRadius: 0,
+    borderRightWidth: 0,
+    gap: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  searchModeHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between",
+    marginBottom: 2,
+    paddingHorizontal: 16,
+  },
+  searchModeTitle: {
+    color: "#111111",
+    flex: 1,
+    fontSize: 26,
+    fontWeight: "900",
+    lineHeight: 32,
   },
   secondaryButton: {
     alignItems: "center",
@@ -10252,6 +16063,24 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "900",
   },
+  screenHeader: {
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  screenTitle: {
+    color: "#111111",
+    fontSize: 30,
+    fontWeight: "900",
+    letterSpacing: 0,
+    lineHeight: 36,
+  },
+  kickerText: {
+    color: "#6E6E73",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
   settingLabelRow: {
     alignItems: "center",
     flexDirection: "row",
@@ -10265,27 +16094,30 @@ const styles = StyleSheet.create({
   },
   settingsRow: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E5E5EA",
-    borderRadius: 16,
-    borderWidth: 1,
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderTopWidth: 0,
     flexDirection: "row",
     justifyContent: "space-between",
     minHeight: 64,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 12,
   },
   successText: {
     backgroundColor: "#FFFFFF",
+    borderColor: "#E4DDD2",
     borderRadius: 12,
+    borderWidth: 1,
     color: "#6E6E73",
     fontSize: 14,
     fontWeight: "900",
+    marginHorizontal: 12,
     padding: 12,
   },
   statusPill: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#6E6E73",
+    alignSelf: "flex-start",
+    backgroundColor: "#F8F4ED",
+    borderColor: "#E4DDD2",
     borderRadius: 999,
     borderWidth: 1,
     color: "#111111",
@@ -10293,14 +16125,153 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "900",
     overflow: "hidden",
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   switchLabel: {
     color: "#111111",
     flex: 1,
     fontSize: 15,
     fontWeight: "900",
+  },
+  messageBody: {
+    color: "#111111",
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 20,
+  },
+  messageBubble: {
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 16,
+    borderWidth: 1,
+    maxWidth: "82%",
+    padding: 12,
+    position: "relative",
+  },
+  messageBubbleMine: {
+    backgroundColor: "#111111",
+    borderColor: "#111111",
+  },
+  messageBubbleRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+  },
+  messageBubbleRowMine: {
+    justifyContent: "flex-end",
+  },
+  messageComposer: {
+    alignItems: "flex-end",
+    flexDirection: "row",
+    gap: 10,
+    marginHorizontal: 16,
+    paddingVertical: 4,
+  },
+  messageComposerInput: {
+    backgroundColor: "#F8F4ED",
+    borderColor: "#E4DDD2",
+    borderRadius: 18,
+    borderWidth: 1,
+    color: "#111111",
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "700",
+    maxHeight: 120,
+    minHeight: 42,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  messageHeaderSubtitle: {
+    color: "#6E6E73",
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 2,
+  },
+  messageMetaRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 6,
+  },
+  messageMetaRowMine: {
+    justifyContent: "flex-end",
+  },
+  messageReadStatus: {
+    color: "#8A8177",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  messageReadStatusMine: {
+    color: "rgba(255,255,255,0.7)",
+  },
+  messageSendButton: {
+    alignItems: "center",
+    backgroundColor: "#111111",
+    borderRadius: 999,
+    height: 42,
+    justifyContent: "center",
+    width: 42,
+  },
+  messageThreadScroll: {
+    flex: 1,
+  },
+  messageThreadScrollContent: {
+    flexGrow: 1,
+    justifyContent: "flex-end",
+    paddingHorizontal: 16,
+  },
+  messageThreadShell: {
+    flex: 1,
+    gap: 12,
+    paddingTop: 64,
+  },
+  messageBackButton: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: "center",
+    width: 44,
+  },
+  messageList: {
+    gap: 10,
+    paddingVertical: 12,
+  },
+  messageUnreadIndicator: {
+    backgroundColor: "#FF453A",
+    borderRadius: 4,
+    height: 8,
+    position: "absolute",
+    right: 8,
+    top: 8,
+    width: 8,
+  },
+  messagesPageHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    paddingHorizontal: 16,
+  },
+  messageTime: {
+    color: "#6E6E73",
+    fontSize: 10,
+    fontWeight: "800",
+    marginTop: 6,
+  },
+  messageTimeMine: {
+    color: "rgba(255,255,255,0.7)",
+  },
+  unreadMessageBubble: {
+    backgroundColor: "#FFFEFB",
+    borderColor: "#111111",
+    borderWidth: 2,
+    paddingRight: 24,
+  },
+  darkUnreadMessageBubble: {
+    backgroundColor: "#1C1C1E",
+    borderColor: "#F5F5F7",
   },
   switchRow: {
     alignItems: "center",
@@ -10314,24 +16285,49 @@ const styles = StyleSheet.create({
   tabBar: {
     backgroundColor: "#FFFFFF",
     borderColor: "#E5E5EA",
-    borderRadius: 24,
+    borderRadius: 999,
     borderWidth: 1,
+    bottom: 36,
+    elevation: 30,
     flexDirection: "row",
     gap: 4,
-    marginTop: 8,
-    padding: 5,
-    shadowColor: "#111111",
-    shadowOffset: { height: 7, width: 0 },
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    width: "100%",
+    left: "6%",
+    padding: 4,
+    position: "absolute",
+    right: "6%",
+    shadowColor: "#FFFFFF",
+    shadowOffset: { height: 0, width: 0 },
+    shadowOpacity: 0.32,
+    shadowRadius: 18,
+    zIndex: 30,
   },
   tabButton: {
     alignItems: "center",
-    borderRadius: 20,
+    borderRadius: 999,
     flex: 1,
-    minHeight: 44,
+    minHeight: 40,
     justifyContent: "center",
+    position: "relative",
+  },
+  tabUnreadDot: {
+    alignItems: "center",
+    backgroundColor: "#FF453A",
+    borderColor: "#FFFFFF",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 18,
+    justifyContent: "center",
+    minWidth: 18,
+    paddingHorizontal: 5,
+    position: "absolute",
+    right: "26%",
+    top: 4,
+  },
+  tabUnreadText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "900",
+    lineHeight: 11,
   },
   textArea: {
     minHeight: 118,

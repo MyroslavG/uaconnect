@@ -46,6 +46,9 @@ export async function SiteHeader({ locale }: SiteHeaderProps) {
           </span>
         </Link>
         <div className="hidden items-center gap-2 sm:flex">
+          <Button asChild className="hidden sm:inline-flex" variant="ghost" size="sm">
+            <Link href="/feed">{labels.header.feed}</Link>
+          </Button>
           <Button asChild className="hidden sm:inline-flex" variant="outline" size="sm">
             <Link href="/register">{labels.header.listBusiness}</Link>
           </Button>

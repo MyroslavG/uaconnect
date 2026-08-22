@@ -24,6 +24,7 @@ export type Business = {
   servesAllCanada: boolean;
   ownedByCurrentUser?: boolean;
   isSaved?: boolean;
+  followerCount?: number;
   contentItems?: BusinessContentItem[];
   createdAt?: string;
   updatedAt?: string;

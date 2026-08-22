@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 
 import { BusinessCard } from "@/components/business-card";
+import { BusinessContentTiles } from "@/components/business-content-cards";
 import { ContactAccessCard } from "@/components/contact-access-card";
 import { ResultsMap } from "@/components/results-map";
 import { SearchPanel } from "@/components/search-panel";
@@ -11,7 +12,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { categories, cities, getCategory, getCity } from "@/lib/data";
-import { searchDirectoryBusinesses } from "@/lib/directory-data";
+import {
+  getDirectoryBusinesses,
+  searchDirectoryBusinesses,
+} from "@/lib/directory-data";
 import {
   copy,
   localizeBusinesses,
@@ -23,6 +27,7 @@ import {
 } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/locale";
 import { getCurrentUser } from "@/lib/supabase/auth";
+import type { Business } from "@/lib/types";
 
 type SearchPageProps = {
   searchParams?: Promise<{
@@ -52,6 +57,10 @@ const text = {
     noResults: "Нічого не знайдено",
     noResultsText:
       "Спробуйте змінити ключове слово, локацію або категорію.",
+    discoverTitle: "Огляд",
+    discoverText:
+      "Пости, події, послуги й продукти від українських бізнесів у Kolo.",
+    searchBusinessTitle: "Знайти бізнес",
     detectingLocation: "Підбираємо локальні результати...",
     detectingLocationText:
       "Визначаємо вашу локацію, щоб не показувати випадкові бізнеси перед першим локальним пошуком.",
@@ -69,6 +78,10 @@ const text = {
     noResults: "No results found",
     noResultsText:
       "Try changing the keyword, location, or category.",
+    discoverTitle: "Explore",
+    discoverText:
+      "Posts, events, services, and products from Ukrainian businesses on Kolo.",
+    searchBusinessTitle: "Find a business",
     detectingLocation: "Finding local results...",
     detectingLocationText:
       "We are checking your location first, so broad results do not flash before the local search is ready.",
@@ -98,8 +111,16 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     Number.isFinite(latitude) && Number.isFinite(longitude)
       ? { latitude, longitude }
       : undefined;
+  const shouldShowDiscovery =
+    !query &&
+    !citySlug &&
+    !categorySlug &&
+    !near &&
+    !coordinates &&
+    !localOnly &&
+    !locationReady;
   const shouldAutoDetectLocation =
-    !citySlug && !near && !coordinates && !locationReady;
+    !shouldShowDiscovery && !citySlug && !near && !coordinates && !locationReady;
   const city = citySlug ? getCity(citySlug) : undefined;
   const category = categorySlug ? getCategory(categorySlug) : undefined;
   const user = await getCurrentUser();
@@ -159,7 +180,15 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         localOnly,
         radiusInKm,
       });
+  const discoveryBusinesses = shouldShowDiscovery
+    ? await getDirectoryBusinesses(user?.id, { includeContentItems: true })
+    : [];
   const localizedResults = localizeBusinesses(results, locale);
+  const localizedDiscoveryBusinesses = localizeBusinesses(
+    discoveryBusinesses,
+    locale,
+  );
+  const discoveryEntries = getDiscoveryEntries(localizedDiscoveryBusinesses);
   const mapResults = localizedResults.map(({ address, id, name, slug }) => ({
     address,
     id,
@@ -178,6 +207,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   ) => string;
   const summaryText = shouldAutoDetectLocation
     ? (labels.detectingLocation as string)
+    : shouldShowDiscovery
+      ? (labels.discoverText as string)
     : near && coordinates
       ? nearSummary(
           localizedResults.length,
@@ -201,16 +232,18 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         query={query}
         radius={resolvedSearchParams.radius}
       />
-      <section className="border-b bg-card/50 py-10">
+      <section className="sticky top-16 z-30 border-b bg-background/95 py-4 backdrop-blur-xl">
         <div className="container">
           <Badge variant="accent">{labels.kicker as string}</Badge>
-          <h1 className="mt-4 text-4xl font-black tracking-normal md:text-5xl">
-            {labels.title as string}
+          <h1 className="mt-3 text-3xl font-black tracking-normal md:text-4xl">
+            {shouldShowDiscovery
+              ? (labels.discoverTitle as string)
+              : (labels.title as string)}
           </h1>
-          <p className="mt-3 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-muted-foreground">
             {summaryText}
           </p>
-          <div className="mt-6">
+          <div className="mt-4">
             <SearchPanel
               cities={localizedCities}
               categories={localizedCategories}
@@ -227,9 +260,30 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         </div>
       </section>
 
-      <section className="container grid gap-6 py-8 lg:grid-cols-[1fr_400px]">
+      <section
+        className={
+          shouldShowDiscovery
+            ? "container py-8"
+            : "container grid gap-6 py-8 lg:grid-cols-[1fr_400px]"
+        }
+      >
         <div>
-          {shouldAutoDetectLocation ? (
+          {shouldShowDiscovery ? (
+            discoveryEntries.length ? (
+              <BusinessContentTiles
+                canViewContacts={canViewContacts}
+                entries={discoveryEntries}
+                labels={getBusinessContentLabels(locale)}
+                locale={locale}
+                nextPath={nextPath}
+              />
+            ) : (
+              <SearchLoadingState
+                title={labels.discoverTitle as string}
+                text={labels.discoverText as string}
+              />
+            )
+          ) : shouldAutoDetectLocation ? (
             <SearchLoadingState
               title={labels.detectingLocation as string}
               text={labels.detectingLocationText as string}
@@ -261,6 +315,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             </div>
           )}
         </div>
+        {shouldShowDiscovery ? null : (
         <aside className="hidden lg:block">
           <div className="sticky top-24 overflow-hidden rounded-lg border border-white/70 bg-card shadow-lift dark:border-white/10">
             {shouldAutoDetectLocation ? (
@@ -290,6 +345,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             )}
           </div>
         </aside>
+        )}
       </section>
     </div>
   );
@@ -315,4 +371,60 @@ function SearchLoadingState({
       </div>
     </div>
   );
+}
+
+function getDiscoveryEntries(businesses: Business[]) {
+  return businesses
+    .flatMap((business) =>
+      (business.contentItems ?? []).map((item) => ({
+        business,
+        item,
+      })),
+    )
+    .sort(
+      (firstEntry, secondEntry) =>
+        getContentTime(secondEntry.item) - getContentTime(firstEntry.item),
+    )
+    .slice(0, 80);
+}
+
+function getContentTime(item: NonNullable<Business["contentItems"]>[number]) {
+  const value = item?.updatedAt || item?.createdAt;
+  const time = value ? new Date(value).getTime() : 0;
+
+  return Number.isFinite(time) ? time : 0;
+}
+
+function getBusinessContentLabels(locale: Locale) {
+  return locale === "uk"
+    ? {
+        contactSignInText:
+          "Контакти, локацію та посилання видно лише після входу.",
+        contactSignInTitle: "Увійдіть, щоб побачити контакти",
+        service: "Послуга",
+        event: "Подія",
+        product: "Продукт",
+        available: "В наявності",
+        outOfStock: "Немає в наявності",
+        free: "Безкоштовно",
+        link: "Посилання",
+        online: "Онлайн",
+        signIn: "Увійти",
+        businessContacts: "Контакти бізнесу",
+      }
+    : {
+        contactSignInText:
+          "Contacts, location, and external links are visible after sign-in.",
+        contactSignInTitle: "Sign in to view contacts",
+        service: "Service",
+        event: "Event",
+        product: "Product",
+        available: "Available",
+        outOfStock: "Out of stock",
+        free: "Free",
+        link: "Link",
+        online: "Online",
+        signIn: "Sign in",
+        businessContacts: "Business contacts",
+      };
 }

@@ -31,7 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Locale } from "@/lib/i18n";
 import type { Database } from "@/lib/supabase/database.types";
-import { getSafeImageUrl } from "@/lib/utils";
+import { getOptimizedImageUrl, imageOptimizationPresets } from "@/lib/utils";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -117,7 +117,10 @@ export function AdminUserProfileEditor({
   const name = profile.full_name?.trim() || labels.noName;
   const contactEmail = profile.contact_email?.trim() || "";
   const googleEmail = profile.email?.trim() || "";
-  const safeAvatarUrl = getSafeImageUrl(profile.avatar_url ?? "");
+  const safeAvatarUrl = getOptimizedImageUrl(
+    profile.avatar_url,
+    imageOptimizationPresets.avatar,
+  );
   const isCurrentUser = profile.id === currentUserId;
 
   useEffect(() => {

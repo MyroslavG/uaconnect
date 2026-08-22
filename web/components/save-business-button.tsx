@@ -25,9 +25,9 @@ export function SaveBusinessButton({
   variant = "icon",
 }: SaveBusinessButtonProps) {
   const labels = {
-    save: locale === "uk" ? "Зберегти" : "Save",
-    saved: locale === "uk" ? "Збережено" : "Saved",
-    signIn: locale === "uk" ? "Увійдіть, щоб зберегти" : "Sign in to save",
+    save: locale === "uk" ? "Стежити" : "Follow",
+    saved: locale === "uk" ? "Ви стежите" : "Following",
+    signIn: locale === "uk" ? "Увійдіть, щоб стежити" : "Sign in to follow",
   };
   const label = canSave ? (isSaved ? labels.saved : labels.save) : labels.signIn;
   const buttonClassName = cn(

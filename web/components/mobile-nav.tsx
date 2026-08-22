@@ -5,10 +5,14 @@ import {
   BarChart3,
   Bell,
   BriefcaseBusiness,
+  ClipboardList,
+  Grid3X3,
   LayoutDashboard,
   LogIn,
   LogOut,
   Menu,
+  MessageCircle,
+  RadioTower,
   Search,
   ShieldCheck,
   UsersRound,
@@ -52,6 +56,11 @@ export function MobileNav({
       label: common.search,
     },
     {
+      href: "/feed",
+      icon: MessageCircle,
+      label: labels.feed,
+    },
+    {
       href: "/register",
       icon: BriefcaseBusiness,
       label: labels.listBusiness,
@@ -62,6 +71,14 @@ export function MobileNav({
       label: labels.dashboard,
     },
   ];
+
+  if (isSignedIn) {
+    navItems.splice(2, 0, {
+      href: "/messages",
+      icon: MessageCircle,
+      label: labels.messages,
+    });
+  }
 
   return (
     <Dialog>
@@ -150,6 +167,39 @@ export function MobileNav({
                       <BarChart3 className="h-4 w-4" />
                     </span>
                     {labels.adminAnalytics}
+                  </Link>
+                </DialogClose>
+                <DialogClose asChild>
+                  <Link
+                    className="group flex min-h-12 items-center gap-3 rounded-md border border-border/70 bg-card px-4 text-sm font-black text-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:border-hover-blue-border hover:bg-hover-blue hover:text-hover-blue-foreground hover:shadow-soft"
+                    href="/admin/media"
+                  >
+                    <span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary transition-colors group-hover:bg-white/70 group-hover:text-hover-blue-foreground dark:group-hover:bg-white/10">
+                      <RadioTower className="h-4 w-4" />
+                    </span>
+                    {labels.adminMedia}
+                  </Link>
+                </DialogClose>
+                <DialogClose asChild>
+                  <Link
+                    className="group flex min-h-12 items-center gap-3 rounded-md border border-border/70 bg-card px-4 text-sm font-black text-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:border-hover-blue-border hover:bg-hover-blue hover:text-hover-blue-foreground hover:shadow-soft"
+                    href="/admin/coverage"
+                  >
+                    <span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary transition-colors group-hover:bg-white/70 group-hover:text-hover-blue-foreground dark:group-hover:bg-white/10">
+                      <Grid3X3 className="h-4 w-4" />
+                    </span>
+                    {labels.adminCoverage}
+                  </Link>
+                </DialogClose>
+                <DialogClose asChild>
+                  <Link
+                    className="group flex min-h-12 items-center gap-3 rounded-md border border-border/70 bg-card px-4 text-sm font-black text-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:border-hover-blue-border hover:bg-hover-blue hover:text-hover-blue-foreground hover:shadow-soft"
+                    href="/admin/prospects"
+                  >
+                    <span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary transition-colors group-hover:bg-white/70 group-hover:text-hover-blue-foreground dark:group-hover:bg-white/10">
+                      <ClipboardList className="h-4 w-4" />
+                    </span>
+                    {labels.adminProspects}
                   </Link>
                 </DialogClose>
               </>

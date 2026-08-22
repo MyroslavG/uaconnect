@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ExternalLink, Globe2, Lock, MapPin, Phone } from "lucide-react";
+import { ExternalLink, Globe2, Lock, MapPin, Phone, UsersRound } from "lucide-react";
 
 import { BusinessLogo } from "@/components/business-logo";
 import { SaveBusinessButton } from "@/components/save-business-button";
@@ -38,6 +38,8 @@ export function BusinessCard({
     locale === "uk"
       ? "Увійдіть, щоб побачити контакти"
       : "Sign in to view contact details";
+  const followerCount = business.followerCount ?? 0;
+  const followerLabel = getFollowerLabel(followerCount, locale);
   const descriptionPreview = truncateText(business.description, 150);
 
   return (
@@ -83,6 +85,12 @@ export function BusinessCard({
             ) : null}
           </div>
           <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            {followerCount > 0 ? (
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary px-2 py-1 font-semibold text-foreground">
+                <UsersRound className="h-3.5 w-3.5" />
+                {followerLabel}
+              </span>
+            ) : null}
             {business.servesAllCanada ? (
               <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary px-2 py-1 font-semibold text-foreground">
                 <Globe2 className="h-3.5 w-3.5" />
@@ -138,4 +146,14 @@ function truncateText(text: string, maxLength: number) {
   }
 
   return `${trimmedText.slice(0, maxLength).trimEnd()}...`;
+}
+
+function getFollowerLabel(count: number, locale: Locale) {
+  const safeCount = Math.max(0, count);
+
+  if (locale === "uk") {
+    return `${safeCount} ${safeCount === 1 ? "підписник" : "підписників"}`;
+  }
+
+  return `${safeCount} ${safeCount === 1 ? "follower" : "followers"}`;
 }

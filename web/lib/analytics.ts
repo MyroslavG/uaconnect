@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isKoloAnalyticsEventType } from "@/lib/analytics-taxonomy";
 import type {
   AnalyticsContactType,
   AnalyticsEventType,
@@ -69,16 +70,7 @@ export function trackContactClick(target: ContactAnalyticsTarget) {
 }
 
 export function isAnalyticsEventType(value: string): value is AnalyticsEventType {
-  return [
-    "app_open",
-    "business_profile_view",
-    "contact_click",
-    "content_view",
-    "page_view",
-    "search",
-    "share",
-    "signup",
-  ].includes(value);
+  return isKoloAnalyticsEventType(value);
 }
 
 function getOrCreateStoredId(key: string, prefix: string) {

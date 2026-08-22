@@ -1,24 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import type {
+  AnalyticsContactType,
+  AnalyticsEventType,
+} from "./analytics-taxonomy";
 import { isSupabaseConfigured, supabase } from "./supabase";
 import type { Business, BusinessContentItem } from "./types";
-
-type AnalyticsContactType =
-  | "address"
-  | "instagram"
-  | "link"
-  | "phone"
-  | "route"
-  | "website";
-type AnalyticsEventType =
-  | "app_open"
-  | "business_profile_view"
-  | "contact_click"
-  | "content_view"
-  | "page_view"
-  | "search"
-  | "share"
-  | "signup";
 
 type TrackMobileAnalyticsEventInput = {
   business?: Business;

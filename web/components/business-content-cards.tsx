@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   ExternalLink,
   Globe2,
   Instagram,
@@ -18,6 +20,7 @@ import {
 
 import { signInWithGoogle } from "@/app/auth/actions";
 import { AnalyticsLink } from "@/components/analytics-link";
+import { BusinessLogo } from "@/components/business-logo";
 import { ShareLinkButton } from "@/components/share-link-button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -34,8 +37,14 @@ import {
   formatInstagramHandle,
   formatPriceWithCurrency,
   getInstagramUrl,
+  getOptimizedImageUrl,
+  imageOptimizationPresets,
+  cn,
+  type ImageOptimizationOptions,
 } from "@/lib/utils";
 import type { Locale } from "@/lib/i18n";
+
+const TILE_BATCH_SIZE = 20;
 
 export type BusinessContentCardLabels = {
   contactSignInText: string;
@@ -60,9 +69,11 @@ export type BusinessContentCardEntry = {
   business?: Pick<
     Business,
     | "address"
+    | "category"
     | "city"
     | "id"
     | "instagram"
+    | "logoUrl"
     | "name"
     | "phone"
     | "slug"
@@ -153,6 +164,131 @@ export function BusinessContentCards({
   );
 }
 
+export function BusinessContentTiles({
+  canViewContacts = false,
+  entries,
+  labels,
+  locale = "uk",
+  nextPath = "/",
+}: BusinessContentCardsProps) {
+  const [selectedEntry, setSelectedEntry] = useSharedContentEntry(entries);
+  const [visibleCount, setVisibleCount] = useState(TILE_BATCH_SIZE);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const imageEntries = useMemo(
+    () =>
+      entries.filter((entry) =>
+        Boolean(
+          getContentImageUrls(entry.item, imageOptimizationPresets.thumbnail)[0],
+        ),
+      ),
+    [entries],
+  );
+  const tileEntries = imageEntries.length ? imageEntries : entries;
+  const visibleEntries = tileEntries.slice(0, visibleCount);
+  const hasMoreTiles = visibleCount < tileEntries.length;
+
+  useEffect(() => {
+    setVisibleCount(TILE_BATCH_SIZE);
+  }, [entries]);
+
+  useEffect(() => {
+    if (!hasMoreTiles) {
+      return;
+    }
+
+    const sentinel = sentinelRef.current;
+
+    if (!sentinel) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setVisibleCount((currentCount) =>
+            Math.min(currentCount + TILE_BATCH_SIZE, tileEntries.length),
+          );
+        }
+      },
+      { rootMargin: "640px 0px" },
+    );
+
+    observer.observe(sentinel);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasMoreTiles, tileEntries.length, visibleCount]);
+
+  return (
+    <>
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-2 md:grid-cols-4 xl:grid-cols-5">
+        {visibleEntries.map((entry) => {
+          const coverImageUrl = getContentImageUrls(
+            entry.item,
+            imageOptimizationPresets.thumbnail,
+          )[0];
+
+          return (
+            <article
+              className="group relative aspect-[4/5] overflow-hidden rounded-sm bg-muted text-left ring-1 ring-border/70 transition hover:ring-2 hover:ring-foreground/30"
+              key={`${entry.business?.slug ?? "content"}-${entry.item.id}`}
+              onClick={() => setSelectedEntry(entry)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setSelectedEntry(entry);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+            >
+              {coverImageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  alt=""
+                  className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                  decoding="async"
+                  loading="lazy"
+                  src={coverImageUrl}
+                />
+              ) : (
+                <div className="h-full w-full bg-secondary" />
+              )}
+              <span className="absolute inset-0 bg-black/0 transition group-hover:bg-black/15" />
+            </article>
+          );
+        })}
+      </div>
+
+      {hasMoreTiles ? (
+        <div
+          ref={sentinelRef}
+          className="mt-5 grid grid-cols-3 gap-1.5 sm:gap-2 md:grid-cols-4 xl:grid-cols-5"
+        >
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div
+              className="aspect-[4/5] animate-pulse rounded-sm bg-muted"
+              key={`content-tile-loading-${index}`}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      <ContentDetailDialog
+        canViewContacts={canViewContacts}
+        entries={tileEntries}
+        labels={labels}
+        locale={locale}
+        nextPath={nextPath}
+        onClose={() => setSelectedEntry(null)}
+        onSelectEntry={setSelectedEntry}
+        selectedEntry={selectedEntry}
+      />
+    </>
+  );
+}
+
 export function BusinessContentPulseList({
   canViewContacts = false,
   entries,
@@ -221,19 +357,30 @@ export function BusinessContentPulseList({
 
 function ContentDetailDialog({
   canViewContacts,
+  entries,
   labels,
   locale,
   nextPath,
   onClose,
+  onSelectEntry,
   selectedEntry,
 }: {
   canViewContacts: boolean;
+  entries?: BusinessContentCardEntry[];
   labels: BusinessContentCardLabels;
   locale: Locale;
   nextPath: string;
   onClose: () => void;
+  onSelectEntry?: (entry: BusinessContentCardEntry) => void;
   selectedEntry: BusinessContentCardEntry | null;
 }) {
+  const selectedIndex =
+    selectedEntry && entries
+      ? entries.findIndex((entry) => entry.item.id === selectedEntry.item.id)
+      : -1;
+  const canNavigate =
+    Boolean(entries?.length && entries.length > 1) && selectedIndex >= 0;
+
   useEffect(() => {
     if (!selectedEntry) {
       return;
@@ -261,14 +408,36 @@ function ContentDetailDialog({
         }
       }}
     >
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-6xl overflow-hidden p-0 sm:max-w-6xl">
         {selectedEntry ? (
           <ContentDetail
             canViewContacts={canViewContacts}
             entry={selectedEntry}
+            hasNext={canNavigate}
+            hasPrevious={canNavigate}
             labels={labels}
             locale={locale}
             nextPath={nextPath}
+            onNext={
+              canNavigate && entries && onSelectEntry
+                ? () =>
+                    onSelectEntry(
+                      entries[(selectedIndex + 1) % entries.length],
+                    )
+                : undefined
+            }
+            onPrevious={
+              canNavigate && entries && onSelectEntry
+                ? () =>
+                    onSelectEntry(
+                      entries[
+                        selectedIndex === 0
+                          ? entries.length - 1
+                          : selectedIndex - 1
+                      ],
+                    )
+                : undefined
+            }
           />
         ) : null}
       </DialogContent>
@@ -290,7 +459,10 @@ function ContentCardBody({
   showBusinessName: boolean;
 }) {
   const { business, item } = entry;
-  const coverImageUrl = getContentImageUrls(item)[0];
+  const coverImageUrl = getContentImageUrls(
+    item,
+    imageOptimizationPresets.thumbnail,
+  )[0];
 
   return (
     <>
@@ -342,71 +514,170 @@ function ContentCardBody({
 function ContentDetail({
   canViewContacts,
   entry,
+  hasNext = false,
+  hasPrevious = false,
   labels,
   locale,
   nextPath,
+  onNext,
+  onPrevious,
 }: {
   canViewContacts: boolean;
   entry: BusinessContentCardEntry;
+  hasNext?: boolean;
+  hasPrevious?: boolean;
   labels: BusinessContentCardLabels;
   locale: Locale;
   nextPath: string;
+  onNext?: () => void;
+  onPrevious?: () => void;
 }) {
   const { business, item } = entry;
+  const [isCaptionExpanded, setIsCaptionExpanded] = useState(false);
   const businessContacts = getBusinessContactItems(business);
   const hasLockedContacts =
     !canViewContacts &&
     Boolean(item.location || item.linkUrl || businessContacts.length);
-  const imageUrls = getContentImageUrls(item);
+  const imageUrls = getContentImageUrls(item, imageOptimizationPresets.detail);
+  const hasImages = imageUrls.length > 0;
+  const hasLongDescription = item.description.trim().length > 260;
+
+  useEffect(() => {
+    setIsCaptionExpanded(false);
+  }, [item.id]);
 
   return (
-    <div className="grid gap-5">
-      <ContentImageGallery imageUrls={imageUrls} />
-      <DialogHeader>
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
-          <ContentBadges item={item} labels={labels} />
-          <ShareLinkButton
-            href={getContentShareHref(entry)}
-            locale={locale}
-            text={getContentShareText(entry, locale)}
-            title={item.title}
-            variant="full"
-          />
-        </div>
-        <DialogTitle className="text-3xl font-black tracking-normal">
-          {item.title}
-        </DialogTitle>
-        {business ? (
-          <DialogDescription asChild>
-            <Link
-              className="inline-flex w-fit items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm font-bold text-foreground transition hover:border-hover-blue-border hover:bg-hover-blue"
-              href={`/business/${business.slug}`}
+    <div
+      className={cn(
+        "grid max-h-[90vh] overflow-hidden",
+        hasImages ? "lg:grid-cols-[minmax(0,1fr)_420px]" : null,
+      )}
+    >
+      {hasImages ? (
+        <div className="relative min-h-0 bg-black">
+          <ContentImageGallery imageUrls={imageUrls} />
+          {hasPrevious && onPrevious ? (
+            <button
+              aria-label="Previous"
+              className="absolute left-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/35 text-white backdrop-blur transition hover:bg-black/55"
+              onClick={onPrevious}
+              type="button"
             >
-              {business.name}
-              <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-            </Link>
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+          ) : null}
+          {hasNext && onNext ? (
+            <button
+              aria-label="Next"
+              className="absolute right-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/35 text-white backdrop-blur transition hover:bg-black/55"
+              onClick={onNext}
+              type="button"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="flex min-h-0 flex-col bg-background">
+        <DialogHeader className="border-b border-border/80 p-4 pr-12">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            {business ? (
+              <Link
+                className="flex min-w-0 items-center gap-3 rounded-md transition hover:text-primary"
+                href={`/business/${business.slug}`}
+              >
+                <BusinessLogo
+                  className="h-10 w-10 bg-card"
+                  logoUrl={business.logoUrl}
+                  name={business.name}
+                />
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-black leading-5">
+                    {business.name}
+                  </span>
+                  <span className="block truncate text-xs font-bold text-muted-foreground">
+                    {getContentTypeLabel(item, labels)}
+                  </span>
+                </span>
+              </Link>
+            ) : (
+              <span className="text-xs font-black uppercase text-muted-foreground">
+                {getContentTypeLabel(item, labels)}
+              </span>
+            )}
+            <ShareLinkButton
+              className="shrink-0"
+              href={getContentShareHref(entry)}
+              locale={locale}
+              text={getContentShareText(entry, locale)}
+              title={item.title}
+            />
+          </div>
+          <DialogTitle className="mt-4 line-clamp-2 text-2xl font-black tracking-normal">
+            {item.title}
+          </DialogTitle>
+          <DialogDescription asChild>
+            <div className="mt-2">
+              <ContentBadges item={item} labels={labels} />
+            </div>
           </DialogDescription>
-        ) : null}
-      </DialogHeader>
-      <p className="whitespace-pre-line text-sm leading-7 text-muted-foreground">
-        {item.description}
-      </p>
-      <ContentMeta
-        business={business}
-        canViewContacts={canViewContacts}
-        item={item}
-        labels={labels}
-      />
-      {businessContacts.length > 0 ? (
-        <BusinessContactBlock
-          businessContacts={businessContacts}
-          canViewContacts={canViewContacts}
-          labels={labels}
-        />
-      ) : null}
-      {hasLockedContacts ? (
-        <LockedContentContacts labels={labels} nextPath={nextPath} />
-      ) : null}
+        </DialogHeader>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="rounded-lg border bg-card p-4">
+            <p
+              className={cn(
+                "whitespace-pre-line text-sm leading-7 text-muted-foreground",
+                hasLongDescription && !isCaptionExpanded
+                  ? "line-clamp-5"
+                  : null,
+                hasLongDescription && isCaptionExpanded
+                  ? "max-h-56 overflow-y-auto pr-2"
+                  : null,
+              )}
+            >
+              {item.description}
+            </p>
+            {hasLongDescription ? (
+              <button
+                className="mt-3 inline-flex items-center gap-1 text-xs font-black text-foreground transition hover:text-primary"
+                onClick={() =>
+                  setIsCaptionExpanded((currentValue) => !currentValue)
+                }
+                type="button"
+              >
+                {isCaptionExpanded ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+                <span className="sr-only">
+                  {isCaptionExpanded ? "Close" : "More"}
+                </span>
+              </button>
+            ) : null}
+          </div>
+          <div className="mt-4 grid gap-4">
+            <ContentMeta
+              business={business}
+              canViewContacts={canViewContacts}
+              item={item}
+              labels={labels}
+            />
+            {businessContacts.length > 0 ? (
+              <BusinessContactBlock
+                businessContacts={businessContacts}
+                canViewContacts={canViewContacts}
+                labels={labels}
+              />
+            ) : null}
+            {hasLockedContacts ? (
+              <LockedContentContacts labels={labels} nextPath={nextPath} />
+            ) : null}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -415,18 +686,23 @@ function ContentImageGallery({ imageUrls }: { imageUrls: string[] }) {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const activeImageUrl = imageUrls[activeImageIndex];
   const hasMultipleImages = imageUrls.length > 1;
+  const imageUrlsKey = imageUrls.join("|");
+
+  useEffect(() => {
+    setActiveImageIndex(0);
+  }, [imageUrlsKey]);
 
   if (!activeImageUrl) {
     return null;
   }
 
   return (
-    <div className="-mx-6 -mt-6 overflow-hidden bg-black sm:-mx-6">
-      <div className="relative h-[62vh] min-h-[22rem] w-full">
+    <div className="h-full overflow-hidden bg-black">
+      <div className="relative h-[46vh] min-h-[18rem] w-full lg:h-[90vh] lg:min-h-[40rem]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           alt=""
-          className="h-full w-full object-cover"
+          className="h-full w-full object-contain"
           decoding="async"
           src={activeImageUrl}
         />
@@ -514,7 +790,7 @@ function BusinessContactBlock({
   }
 
   return (
-    <div className="grid gap-3 rounded-md border bg-muted/40 p-4 text-sm">
+    <div className="grid gap-3 rounded-lg border bg-card p-4 text-sm">
       <h3 className="font-black">
         {labels.businessContacts ?? "Business contacts"}
       </h3>
@@ -527,7 +803,7 @@ function BusinessContactBlock({
               businessSlug: contact.businessSlug,
               contactType: contact.type,
             }}
-            className="flex min-w-0 items-center gap-2 rounded-md border bg-background px-3 py-2 font-semibold text-foreground transition hover:border-hover-blue-border hover:bg-hover-blue"
+            className="flex min-w-0 items-center gap-3 rounded-lg border bg-background px-3 py-2.5 font-semibold text-foreground transition hover:border-hover-blue-border hover:bg-hover-blue"
             href={contact.href}
             key={`${contact.type}-${contact.value}`}
             rel={contact.external ? "noreferrer" : undefined}
@@ -576,11 +852,16 @@ function ContentMeta({
       className={
         compact
           ? "mt-1 grid gap-2 text-sm font-semibold text-muted-foreground"
-          : "grid gap-3 rounded-md border bg-muted/40 p-4 text-sm font-semibold text-muted-foreground"
+          : "grid gap-2 text-sm font-semibold text-muted-foreground"
       }
     >
       {item.startsAt ? (
-        <span className="flex items-center gap-2">
+        <span
+          className={cn(
+            "flex items-center gap-2",
+            compact ? null : "rounded-lg border bg-card px-3 py-2.5",
+          )}
+        >
           <CalendarDays className="h-4 w-4 text-primary" />
           {formatContentDate(item.startsAt)}
         </span>
@@ -601,7 +882,7 @@ function ContentMeta({
               contentItemId: item.id,
               contentType: item.type,
             }}
-            className="flex items-center gap-2 text-foreground transition hover:text-primary"
+            className="flex items-center gap-3 rounded-lg border bg-card px-3 py-2.5 text-foreground transition hover:border-hover-blue-border hover:bg-hover-blue"
             href={formatMapLink(item.location)}
             rel="noreferrer"
             target="_blank"
@@ -627,7 +908,7 @@ function ContentMeta({
             contentItemId: item.id,
             contentType: item.type,
           }}
-          className="flex min-w-0 items-center gap-2 text-foreground transition hover:text-primary"
+            className="flex min-w-0 items-center gap-3 rounded-lg border bg-card px-3 py-2.5 text-foreground transition hover:border-hover-blue-border hover:bg-hover-blue"
           href={linkUrl}
           onClick={(event) => event.stopPropagation()}
           rel="noreferrer"
@@ -656,7 +937,7 @@ function LockedContentContacts({
   nextPath: string;
 }) {
   return (
-    <div className="rounded-md border bg-muted/40 p-4 text-sm">
+    <div className="rounded-lg border bg-card p-4 text-sm">
       <div className="flex gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
           <Lock className="h-4 w-4" />
@@ -819,12 +1100,15 @@ function getContentTypeLabel(
   return labels.service;
 }
 
-function getContentImageUrls(item: BusinessContentItem) {
+function getContentImageUrls(
+  item: BusinessContentItem,
+  options: ImageOptimizationOptions = imageOptimizationPresets.detail,
+) {
   const imageUrls =
     item.imageUrls
-      ?.map((url) => url.trim())
+      ?.map((url) => getOptimizedImageUrl(url, options))
       .filter((url): url is string => Boolean(url)) ?? [];
-  const coverImageUrl = item.imageUrl?.trim();
+  const coverImageUrl = getOptimizedImageUrl(item.imageUrl, options);
 
   if (coverImageUrl && !imageUrls.includes(coverImageUrl)) {
     return [coverImageUrl, ...imageUrls];

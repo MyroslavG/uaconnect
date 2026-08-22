@@ -13,6 +13,7 @@ import {
   BusinessContentCards,
   BusinessContentPulseList,
 } from "@/components/business-content-cards";
+import { BusinessLogo } from "@/components/business-logo";
 import { CategoryGrid } from "@/components/category-grid";
 import { OfficialKoloEventCard } from "@/components/official-kolo-event-card";
 import { SearchPanel } from "@/components/search-panel";
@@ -73,6 +74,7 @@ export default async function HomePage() {
                 locale={locale}
               />
             </div>
+            <HomeStoryStrip businesses={featuredBusinesses} />
             <div className="mt-5 flex flex-wrap gap-2">
               {localizedCities.map((city) => (
                 <Link
@@ -224,6 +226,39 @@ export default async function HomePage() {
       </section>
 
     </>
+  );
+}
+
+function HomeStoryStrip({ businesses }: { businesses: Business[] }) {
+  const businessesWithLogos = businesses
+    .filter((business) => business.logoUrl)
+    .slice(0, 12);
+
+  if (businessesWithLogos.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-5 flex gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {businessesWithLogos.map((business) => (
+        <Link
+          className="group grid w-20 shrink-0 gap-2 text-center"
+          href={`/business/${business.slug}`}
+          key={business.id}
+        >
+          <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl border bg-card shadow-sm transition group-hover:-translate-y-0.5 group-hover:border-hover-blue-border group-hover:shadow-soft">
+            <BusinessLogo
+              className="h-12 w-12 bg-transparent shadow-none ring-0"
+              logoUrl={business.logoUrl}
+              name={business.name}
+            />
+          </span>
+          <span className="line-clamp-2 text-xs font-bold leading-4 text-muted-foreground group-hover:text-foreground">
+            {business.name}
+          </span>
+        </Link>
+      ))}
+    </div>
   );
 }
 

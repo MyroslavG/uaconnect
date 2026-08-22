@@ -36,10 +36,10 @@ export function OfficialKoloEventCard({
   return (
     <article className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-soft">
       <div className="grid gap-0 lg:grid-cols-[0.95fr_1.05fr]">
-        <div className="relative min-h-[280px] overflow-hidden bg-secondary dark:bg-black md:min-h-[360px]">
+        <div className="relative aspect-[3/2] overflow-hidden">
           <Image
             alt={labels.imageAlt}
-            className="object-contain"
+            className="object-cover"
             fill
             priority={isFull}
             sizes="(min-width: 1024px) 48vw, 100vw"

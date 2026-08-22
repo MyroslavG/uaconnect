@@ -50,6 +50,8 @@ import {
   formatExternalUrl,
   formatInstagramHandle,
   formatPriceWithCurrency,
+  getOptimizedImageUrl,
+  imageOptimizationPresets,
 } from "@/lib/utils";
 
 type Registration =
@@ -1115,9 +1117,14 @@ function toDateTimeLocal(value?: string | null) {
 
 function getContentImageUrls(item: BusinessContentRow) {
   const imageUrls = Array.isArray(item.image_urls)
-    ? item.image_urls.filter((url): url is string => typeof url === "string" && Boolean(url.trim()))
+    ? item.image_urls
+        .map((url) => getOptimizedImageUrl(url, imageOptimizationPresets.thumbnail))
+        .filter((url): url is string => Boolean(url))
     : [];
-  const coverImageUrl = item.image_url?.trim();
+  const coverImageUrl = getOptimizedImageUrl(
+    item.image_url,
+    imageOptimizationPresets.thumbnail,
+  );
 
   if (coverImageUrl && !imageUrls.includes(coverImageUrl)) {
     return [coverImageUrl, ...imageUrls];

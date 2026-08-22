@@ -24,11 +24,46 @@ export type AnalyticsEventType =
   | "business_profile_view"
   | "contact_click"
   | "content_view"
+  | "business_submit"
+  | "business_update"
+  | "content_create"
+  | "content_delete"
+  | "content_update"
+  | "notification_dismiss"
+  | "notification_view"
   | "page_view"
   | "search"
+  | "search_zero_results"
+  | "save_business"
   | "share"
-  | "signup";
+  | "signin"
+  | "signup"
+  | "unsave_business";
 export type AnalyticsPlatform = "mobile" | "server" | "web";
+export type MediaCampaignType =
+  | "announcement"
+  | "guest_call"
+  | "interview"
+  | "partnership"
+  | "social"
+  | "other";
+export type MediaChannel =
+  | "instagram"
+  | "tiktok"
+  | "youtube"
+  | "facebook"
+  | "linkedin"
+  | "newsletter"
+  | "website"
+  | "offline"
+  | "other";
+export type OutreachProspectStatus =
+  | "new"
+  | "contacted"
+  | "interested"
+  | "added"
+  | "rejected";
+export type OutreachProspectPriority = "low" | "medium" | "high";
 
 export type Database = {
   public: {
@@ -318,6 +353,153 @@ export type Database = {
         };
         Relationships: [];
       };
+      business_conversations: {
+        Row: {
+          id: string;
+          business_id: string;
+          business_owner_id: string;
+          customer_id: string;
+          customer_name: string | null;
+          customer_email: string | null;
+          last_message_preview: string;
+          last_message_at: string | null;
+          last_sender_id: string | null;
+          customer_last_read_at: string | null;
+          owner_last_read_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          business_id: string;
+          business_owner_id: string;
+          customer_id: string;
+          customer_name?: string | null;
+          customer_email?: string | null;
+          last_message_preview?: string;
+          last_message_at?: string | null;
+          last_sender_id?: string | null;
+          customer_last_read_at?: string | null;
+          owner_last_read_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          business_id?: string;
+          business_owner_id?: string;
+          customer_id?: string;
+          customer_name?: string | null;
+          customer_email?: string | null;
+          last_message_preview?: string;
+          last_message_at?: string | null;
+          last_sender_id?: string | null;
+          customer_last_read_at?: string | null;
+          owner_last_read_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      business_messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          sender_id: string;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          sender_id: string;
+          body: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          sender_id?: string;
+          body?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      feed_posts: {
+        Row: {
+          id: string;
+          author_id: string;
+          business_id: string | null;
+          body: string;
+          status: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          author_id: string;
+          business_id?: string | null;
+          body: string;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          author_id?: string;
+          business_id?: string | null;
+          body?: string;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      feed_post_likes: {
+        Row: {
+          post_id: string;
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          post_id: string;
+          user_id: string;
+          created_at?: string;
+        };
+        Update: {
+          post_id?: string;
+          user_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      feed_post_comments: {
+        Row: {
+          id: string;
+          post_id: string;
+          author_id: string;
+          body: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          post_id: string;
+          author_id: string;
+          body: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          post_id?: string;
+          author_id?: string;
+          body?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       app_notifications: {
         Row: {
           id: string;
@@ -450,6 +632,126 @@ export type Database = {
         };
         Relationships: [];
       };
+      media_kpi_snapshots: {
+        Row: {
+          id: string;
+          campaign_name: string;
+          campaign_type: MediaCampaignType;
+          channel: MediaChannel;
+          url: string | null;
+          snapshot_date: string;
+          followers: number;
+          views: number;
+          watch_time_minutes: number;
+          clicks: number;
+          registrations: number;
+          business_leads: number;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          campaign_name: string;
+          campaign_type: MediaCampaignType;
+          channel: MediaChannel;
+          url?: string | null;
+          snapshot_date?: string;
+          followers?: number;
+          views?: number;
+          watch_time_minutes?: number;
+          clicks?: number;
+          registrations?: number;
+          business_leads?: number;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          campaign_name?: string;
+          campaign_type?: MediaCampaignType;
+          channel?: MediaChannel;
+          url?: string | null;
+          snapshot_date?: string;
+          followers?: number;
+          views?: number;
+          watch_time_minutes?: number;
+          clicks?: number;
+          registrations?: number;
+          business_leads?: number;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      outreach_prospects: {
+        Row: {
+          id: string;
+          business_name: string;
+          contact_name: string | null;
+          city: string;
+          category_slug: string;
+          website: string | null;
+          instagram: string | null;
+          email: string | null;
+          phone: string | null;
+          status: OutreachProspectStatus;
+          priority: OutreachProspectPriority;
+          source: string | null;
+          notes: string | null;
+          next_step: string | null;
+          next_follow_up_at: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          business_name: string;
+          contact_name?: string | null;
+          city: string;
+          category_slug: string;
+          website?: string | null;
+          instagram?: string | null;
+          email?: string | null;
+          phone?: string | null;
+          status?: OutreachProspectStatus;
+          priority?: OutreachProspectPriority;
+          source?: string | null;
+          notes?: string | null;
+          next_step?: string | null;
+          next_follow_up_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          business_name?: string;
+          contact_name?: string | null;
+          city?: string;
+          category_slug?: string;
+          website?: string | null;
+          instagram?: string | null;
+          email?: string | null;
+          phone?: string | null;
+          status?: OutreachProspectStatus;
+          priority?: OutreachProspectPriority;
+          source?: string | null;
+          notes?: string | null;
+          next_step?: string | null;
+          next_follow_up_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -472,6 +774,106 @@ export type Database = {
           invited_email: string | null;
           expires_at: string;
         }[];
+      };
+      get_business_follower_counts: {
+        Args: {
+          business_ids: string[];
+        };
+        Returns: {
+          business_id: string;
+          follower_count: number;
+        }[];
+      };
+      get_feed_post_stats: {
+        Args: {
+          post_ids: string[];
+        };
+        Returns: {
+          post_id: string;
+          like_count: number;
+          comment_count: number;
+          liked_by_current_user: boolean;
+        }[];
+      };
+      create_feed_post: {
+        Args: {
+          body: string;
+          target_business_id?: string | null;
+        };
+        Returns: string;
+      };
+      toggle_feed_post_like: {
+        Args: {
+          target_post_id: string;
+          should_like?: boolean;
+        };
+        Returns: boolean;
+      };
+      create_feed_comment: {
+        Args: {
+          target_post_id: string;
+          body: string;
+        };
+        Returns: string;
+      };
+      get_public_feed_authors: {
+        Args: {
+          author_ids: string[];
+        };
+        Returns: {
+          author_id: string;
+          author_name: string | null;
+          author_avatar_url: string | null;
+        }[];
+      };
+      can_access_business_conversation: {
+        Args: {
+          target_conversation_id: string;
+        };
+        Returns: boolean;
+      };
+      start_business_conversation: {
+        Args: {
+          target_business_id: string;
+          customer_name?: string | null;
+          customer_email?: string | null;
+        };
+        Returns: string;
+      };
+      send_business_message: {
+        Args: {
+          target_conversation_id: string;
+          message_body: string;
+        };
+        Returns: string;
+      };
+      send_business_message_to_business: {
+        Args: {
+          target_business_id: string;
+          message_body: string;
+          customer_name?: string | null;
+          customer_email?: string | null;
+        };
+        Returns: {
+          conversation_id: string;
+          message_id: string;
+        }[];
+      };
+      get_my_business_conversations: {
+        Args: Record<string, never>;
+        Returns: Database["public"]["Tables"]["business_conversations"]["Row"][];
+      };
+      get_business_conversation_messages: {
+        Args: {
+          target_conversation_id: string;
+        };
+        Returns: Database["public"]["Tables"]["business_messages"]["Row"][];
+      };
+      mark_business_conversation_read: {
+        Args: {
+          target_conversation_id: string;
+        };
+        Returns: string;
       };
       get_public_business_owners: {
         Args: {

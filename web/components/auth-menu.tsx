@@ -1,5 +1,15 @@
 import Link from "next/link";
-import { BarChart3, Bell, ShieldCheck, UserRound, UsersRound } from "lucide-react";
+import {
+  BarChart3,
+  Bell,
+  ClipboardList,
+  Grid3X3,
+  MessageCircle,
+  RadioTower,
+  ShieldCheck,
+  UserRound,
+  UsersRound,
+} from "lucide-react";
 
 import { signInWithGoogle, signOut } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
@@ -105,8 +115,47 @@ export async function AuthMenu({
               {labels.adminAnalytics}
             </Link>
           </Button>
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="hidden md:inline-flex"
+          >
+            <Link href="/admin/media">
+              <RadioTower className="h-4 w-4" />
+              {labels.adminMedia}
+            </Link>
+          </Button>
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="hidden md:inline-flex"
+          >
+            <Link href="/admin/coverage">
+              <Grid3X3 className="h-4 w-4" />
+              {labels.adminCoverage}
+            </Link>
+          </Button>
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="hidden md:inline-flex"
+          >
+            <Link href="/admin/prospects">
+              <ClipboardList className="h-4 w-4" />
+              {labels.adminProspects}
+            </Link>
+          </Button>
         </>
       ) : null}
+      <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
+        <Link href="/messages">
+          <MessageCircle className="h-4 w-4" />
+          {labels.messages}
+        </Link>
+      </Button>
       <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
         <Link href="/dashboard">{labels.dashboard}</Link>
       </Button>

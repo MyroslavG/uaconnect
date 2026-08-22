@@ -64,9 +64,9 @@ const text = {
     pending: "На перевірці",
     pendingShort: "Перевірка",
     fallbackName: "Власник бізнесу",
-    savedTitle: "Збережені бізнеси",
-    savedIntro: "Швидкий доступ до бізнесів, які ви хочете переглянути пізніше.",
-    savedEmpty: "Поки що немає збережених бізнесів.",
+    savedTitle: "Підписки",
+    savedIntro: "Бізнеси, за якими ви стежите, щоб швидко повернутися до них.",
+    savedEmpty: "Поки що немає бізнесів, за якими ви стежите.",
   },
   en: {
     kicker: "Dashboard",
@@ -85,9 +85,9 @@ const text = {
     pending: "Pending",
     pendingShort: "Pending",
     fallbackName: "Business owner",
-    savedTitle: "Saved businesses",
-    savedIntro: "Quick access to businesses you want to revisit later.",
-    savedEmpty: "No saved businesses yet.",
+    savedTitle: "Following",
+    savedIntro: "Businesses you follow so you can return to them quickly.",
+    savedEmpty: "You are not following any businesses yet.",
   },
 } satisfies Record<Locale, Record<string, string>>;
 

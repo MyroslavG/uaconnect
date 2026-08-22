@@ -12,12 +12,18 @@ export function AnalyticsTracker() {
   const searchParamsString = searchParams.toString();
 
   useEffect(() => {
+    const acquisitionMetadata = getAcquisitionMetadata({
+      pathname,
+      searchParams,
+      searchParamsString,
+    });
+
     if (!hasTrackedOpen.current) {
       hasTrackedOpen.current = true;
       void trackAnalyticsEvent({
         event_type: "app_open",
         metadata: {
-          path: pathname,
+          ...acquisitionMetadata,
           source: "web",
         },
       });
@@ -26,8 +32,8 @@ export function AnalyticsTracker() {
     void trackAnalyticsEvent({
       event_type: "page_view",
       metadata: {
-        path: pathname,
-        search: searchParamsString,
+        ...acquisitionMetadata,
+        source: "web",
       },
     });
 
@@ -43,8 +49,10 @@ export function AnalyticsTracker() {
         city: city || null,
         event_type: "search",
         metadata: {
+          ...acquisitionMetadata,
           localOnly,
           radius,
+          source: "web_search",
         },
         search_query: query || null,
       });
@@ -73,6 +81,7 @@ export function AnalyticsTracker() {
         city: pathSegments[0],
         event_type: "search",
         metadata: {
+          ...acquisitionMetadata,
           localOnly: searchParams.get("localOnly") === "1",
           source: "city_category_route",
         },
@@ -82,4 +91,30 @@ export function AnalyticsTracker() {
   }, [pathname, searchParams, searchParamsString]);
 
   return null;
+}
+
+function getAcquisitionMetadata({
+  pathname,
+  searchParams,
+  searchParamsString,
+}: {
+  pathname: string;
+  searchParams: ReturnType<typeof useSearchParams>;
+  searchParamsString: string;
+}) {
+  const fullPath = `${pathname}${
+    searchParamsString ? `?${searchParamsString}` : ""
+  }`;
+
+  return {
+    landingPath: fullPath,
+    path: pathname,
+    referrer: document.referrer || undefined,
+    search: searchParamsString || undefined,
+    utmCampaign: searchParams.get("utm_campaign") ?? undefined,
+    utmContent: searchParams.get("utm_content") ?? undefined,
+    utmMedium: searchParams.get("utm_medium") ?? undefined,
+    utmSource: searchParams.get("utm_source") ?? undefined,
+    utmTerm: searchParams.get("utm_term") ?? undefined,
+  };
 }

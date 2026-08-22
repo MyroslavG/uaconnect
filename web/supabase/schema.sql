@@ -185,6 +185,97 @@ on public.saved_businesses (user_id, created_at desc);
 create index if not exists saved_businesses_business_idx
 on public.saved_businesses (business_id);
 
+create table if not exists public.business_conversations (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  business_owner_id uuid not null references auth.users(id) on delete cascade,
+  customer_id uuid not null references auth.users(id) on delete cascade,
+  customer_name text,
+  customer_email text,
+  last_message_preview text not null default '',
+  last_message_at timestamptz,
+  last_sender_id uuid references auth.users(id) on delete set null,
+  customer_last_read_at timestamptz,
+  owner_last_read_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (business_id, customer_id)
+);
+
+alter table public.business_conversations
+  add column if not exists customer_name text,
+  add column if not exists customer_email text,
+  add column if not exists last_message_preview text not null default '',
+  add column if not exists last_message_at timestamptz,
+  add column if not exists last_sender_id uuid references auth.users(id) on delete set null,
+  add column if not exists customer_last_read_at timestamptz,
+  add column if not exists owner_last_read_at timestamptz;
+
+create index if not exists business_conversations_customer_idx
+on public.business_conversations (customer_id, updated_at desc);
+
+create index if not exists business_conversations_owner_idx
+on public.business_conversations (business_owner_id, updated_at desc);
+
+create index if not exists business_conversations_business_idx
+on public.business_conversations (business_id);
+
+create table if not exists public.business_messages (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references public.business_conversations(id) on delete cascade,
+  sender_id uuid not null references auth.users(id) on delete cascade,
+  body text not null check (char_length(trim(body)) between 1 and 2000),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists business_messages_conversation_created_idx
+on public.business_messages (conversation_id, created_at);
+
+create table if not exists public.feed_posts (
+  id uuid primary key default gen_random_uuid(),
+  author_id uuid not null references auth.users(id) on delete cascade,
+  business_id uuid references public.businesses(id) on delete set null,
+  body text not null check (char_length(trim(body)) between 1 and 2000),
+  status text not null default 'published' check (status in ('published', 'hidden')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists feed_posts_status_created_idx
+on public.feed_posts (status, created_at desc);
+
+create index if not exists feed_posts_author_idx
+on public.feed_posts (author_id, created_at desc);
+
+create index if not exists feed_posts_business_idx
+on public.feed_posts (business_id, created_at desc)
+where business_id is not null;
+
+create table if not exists public.feed_post_likes (
+  post_id uuid not null references public.feed_posts(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (post_id, user_id)
+);
+
+create index if not exists feed_post_likes_user_idx
+on public.feed_post_likes (user_id, created_at desc);
+
+create table if not exists public.feed_post_comments (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references public.feed_posts(id) on delete cascade,
+  author_id uuid not null references auth.users(id) on delete cascade,
+  body text not null check (char_length(trim(body)) between 1 and 1000),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists feed_post_comments_post_created_idx
+on public.feed_post_comments (post_id, created_at asc);
+
+create index if not exists feed_post_comments_author_idx
+on public.feed_post_comments (author_id, created_at desc);
+
 create table if not exists public.app_notifications (
   id uuid primary key default gen_random_uuid(),
   badge_uk text not null default 'Нове',
@@ -221,13 +312,24 @@ create table if not exists public.analytics_events (
   event_type text not null check (
     event_type in (
       'app_open',
+      'business_submit',
+      'business_update',
       'business_profile_view',
       'contact_click',
+      'content_create',
+      'content_delete',
+      'content_update',
       'content_view',
+      'notification_dismiss',
+      'notification_view',
       'page_view',
       'search',
+      'search_zero_results',
+      'save_business',
       'share',
-      'signup'
+      'signin',
+      'signup',
+      'unsave_business'
     )
   ),
   platform text not null check (platform in ('mobile', 'server', 'web')),
@@ -250,6 +352,52 @@ create table if not exists public.analytics_events (
   occurred_at timestamptz not null default now()
 );
 
+alter table public.analytics_events
+  drop constraint if exists analytics_events_event_type_check;
+
+alter table public.analytics_events
+  add constraint analytics_events_event_type_check
+  check (
+    event_type in (
+      'app_open',
+      'business_submit',
+      'business_update',
+      'business_profile_view',
+      'contact_click',
+      'content_create',
+      'content_delete',
+      'content_update',
+      'content_view',
+      'notification_dismiss',
+      'notification_view',
+      'page_view',
+      'search',
+      'search_zero_results',
+      'save_business',
+      'share',
+      'signin',
+      'signup',
+      'unsave_business'
+    )
+  );
+
+alter table public.analytics_events
+  drop constraint if exists analytics_events_platform_check;
+
+alter table public.analytics_events
+  add constraint analytics_events_platform_check
+  check (platform in ('mobile', 'server', 'web'));
+
+alter table public.analytics_events
+  drop constraint if exists analytics_events_contact_type_check;
+
+alter table public.analytics_events
+  add constraint analytics_events_contact_type_check
+  check (
+    contact_type is null
+    or contact_type in ('address', 'instagram', 'link', 'phone', 'route', 'website')
+  );
+
 create index if not exists analytics_events_occurred_at_idx
 on public.analytics_events (occurred_at desc);
 
@@ -269,6 +417,136 @@ where event_type = 'search';
 create index if not exists analytics_events_search_category_idx
 on public.analytics_events (category_slug, occurred_at desc)
 where event_type = 'search';
+
+create index if not exists analytics_events_zero_result_search_idx
+on public.analytics_events (city, category_slug, occurred_at desc)
+where event_type = 'search_zero_results';
+
+create table if not exists public.media_kpi_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  campaign_name text not null,
+  campaign_type text not null check (
+    campaign_type in (
+      'announcement',
+      'guest_call',
+      'interview',
+      'partnership',
+      'social',
+      'other'
+    )
+  ),
+  channel text not null check (
+    channel in (
+      'instagram',
+      'tiktok',
+      'youtube',
+      'facebook',
+      'linkedin',
+      'newsletter',
+      'website',
+      'offline',
+      'other'
+    )
+  ),
+  url text,
+  snapshot_date date not null default current_date,
+  followers integer not null default 0 check (followers >= 0),
+  views integer not null default 0 check (views >= 0),
+  watch_time_minutes integer not null default 0 check (watch_time_minutes >= 0),
+  clicks integer not null default 0 check (clicks >= 0),
+  registrations integer not null default 0 check (registrations >= 0),
+  business_leads integer not null default 0 check (business_leads >= 0),
+  notes text,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.media_kpi_snapshots
+  drop constraint if exists media_kpi_snapshots_campaign_type_check;
+
+alter table public.media_kpi_snapshots
+  add constraint media_kpi_snapshots_campaign_type_check
+  check (
+    campaign_type in (
+      'announcement',
+      'guest_call',
+      'interview',
+      'partnership',
+      'social',
+      'other'
+    )
+  );
+
+alter table public.media_kpi_snapshots
+  drop constraint if exists media_kpi_snapshots_channel_check;
+
+alter table public.media_kpi_snapshots
+  add constraint media_kpi_snapshots_channel_check
+  check (
+    channel in (
+      'instagram',
+      'tiktok',
+      'youtube',
+      'facebook',
+      'linkedin',
+      'newsletter',
+      'website',
+      'offline',
+      'other'
+    )
+  );
+
+create index if not exists media_kpi_snapshots_date_idx
+on public.media_kpi_snapshots (snapshot_date desc, created_at desc);
+
+create index if not exists media_kpi_snapshots_channel_idx
+on public.media_kpi_snapshots (channel, snapshot_date desc);
+
+create table if not exists public.outreach_prospects (
+  id uuid primary key default gen_random_uuid(),
+  business_name text not null,
+  contact_name text,
+  city text not null,
+  category_slug text not null,
+  website text,
+  instagram text,
+  email text,
+  phone text,
+  status text not null default 'new',
+  priority text not null default 'medium',
+  source text,
+  notes text,
+  next_step text,
+  next_follow_up_at date,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.outreach_prospects
+  drop constraint if exists outreach_prospects_status_check;
+
+alter table public.outreach_prospects
+  add constraint outreach_prospects_status_check
+  check (status in ('new', 'contacted', 'interested', 'added', 'rejected'));
+
+alter table public.outreach_prospects
+  drop constraint if exists outreach_prospects_priority_check;
+
+alter table public.outreach_prospects
+  add constraint outreach_prospects_priority_check
+  check (priority in ('low', 'medium', 'high'));
+
+create index if not exists outreach_prospects_status_updated_idx
+on public.outreach_prospects (status, updated_at desc);
+
+create index if not exists outreach_prospects_city_category_idx
+on public.outreach_prospects (city, category_slug);
+
+create index if not exists outreach_prospects_follow_up_idx
+on public.outreach_prospects (next_follow_up_at)
+where next_follow_up_at is not null;
 
 insert into storage.buckets (
   id,
@@ -381,9 +659,83 @@ create trigger business_content_items_set_updated_at
 before update on public.business_content_items
 for each row execute function public.set_updated_at();
 
+drop trigger if exists business_conversations_set_updated_at on public.business_conversations;
+create trigger business_conversations_set_updated_at
+before update on public.business_conversations
+for each row execute function public.set_updated_at();
+
+create or replace function public.sync_business_conversation_message_summary()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.business_conversations
+  set
+    last_message_at = new.created_at,
+    last_message_preview = left(new.body, 180),
+    last_sender_id = new.sender_id
+  where id = new.conversation_id
+    and (
+      last_message_at is null
+      or new.created_at >= last_message_at
+    );
+
+  return new;
+end;
+$$;
+
+drop trigger if exists business_messages_sync_conversation_summary on public.business_messages;
+create trigger business_messages_sync_conversation_summary
+after insert on public.business_messages
+for each row execute function public.sync_business_conversation_message_summary();
+
+with latest_business_messages as (
+  select distinct on (conversation_id)
+    conversation_id,
+    sender_id,
+    body,
+    created_at
+  from public.business_messages
+  order by conversation_id, created_at desc
+)
+update public.business_conversations
+set
+  last_message_at = latest_business_messages.created_at,
+  last_message_preview = left(latest_business_messages.body, 180),
+  last_sender_id = latest_business_messages.sender_id
+from latest_business_messages
+where public.business_conversations.id = latest_business_messages.conversation_id
+  and (
+    public.business_conversations.last_message_at is null
+    or public.business_conversations.last_message_at < latest_business_messages.created_at
+    or trim(public.business_conversations.last_message_preview) = ''
+  );
+
+drop trigger if exists feed_posts_set_updated_at on public.feed_posts;
+create trigger feed_posts_set_updated_at
+before update on public.feed_posts
+for each row execute function public.set_updated_at();
+
+drop trigger if exists feed_post_comments_set_updated_at on public.feed_post_comments;
+create trigger feed_post_comments_set_updated_at
+before update on public.feed_post_comments
+for each row execute function public.set_updated_at();
+
 drop trigger if exists app_notifications_set_updated_at on public.app_notifications;
 create trigger app_notifications_set_updated_at
 before update on public.app_notifications
+for each row execute function public.set_updated_at();
+
+drop trigger if exists media_kpi_snapshots_set_updated_at on public.media_kpi_snapshots;
+create trigger media_kpi_snapshots_set_updated_at
+before update on public.media_kpi_snapshots
+for each row execute function public.set_updated_at();
+
+drop trigger if exists outreach_prospects_set_updated_at on public.outreach_prospects;
+create trigger outreach_prospects_set_updated_at
+before update on public.outreach_prospects
 for each row execute function public.set_updated_at();
 
 create or replace function public.handle_new_user()
@@ -763,15 +1115,750 @@ begin
 end;
 $$;
 
+create or replace function public.get_business_follower_counts(business_ids uuid[])
+returns table (
+  business_id uuid,
+  follower_count bigint
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    saved_businesses.business_id,
+    count(*)::bigint as follower_count
+  from public.saved_businesses
+  join public.businesses
+    on businesses.id = saved_businesses.business_id
+  where saved_businesses.business_id = any(business_ids)
+    and businesses.status = 'published'
+  group by saved_businesses.business_id;
+$$;
+
+grant execute on function public.get_business_follower_counts(uuid[]) to anon, authenticated;
+
+create or replace function public.can_access_business_conversation(target_conversation_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.business_conversations
+    where business_conversations.id = target_conversation_id
+      and (
+        business_conversations.customer_id = (select auth.uid())
+        or business_conversations.business_owner_id = (select auth.uid())
+        or public.is_admin()
+        or exists (
+          select 1
+          from public.business_messages
+          where business_messages.conversation_id = target_conversation_id
+            and business_messages.sender_id = (select auth.uid())
+        )
+      )
+  );
+$$;
+
+grant execute on function public.can_access_business_conversation(uuid) to authenticated;
+
+create or replace function public.get_my_business_conversations()
+returns table (
+  id uuid,
+  business_id uuid,
+  business_owner_id uuid,
+  customer_id uuid,
+  customer_name text,
+  customer_email text,
+  last_message_preview text,
+  last_message_at timestamptz,
+  last_sender_id uuid,
+  customer_last_read_at timestamptz,
+  owner_last_read_at timestamptz,
+  created_at timestamptz,
+  updated_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with current_request as (
+    select auth.uid() as user_id
+  ),
+  latest_messages as (
+    select distinct on (business_messages.conversation_id)
+      business_messages.conversation_id,
+      business_messages.sender_id,
+      business_messages.body,
+      business_messages.created_at
+    from public.business_messages
+    order by business_messages.conversation_id, business_messages.created_at desc
+  )
+  select
+    business_conversations.id,
+    business_conversations.business_id,
+    business_conversations.business_owner_id,
+    business_conversations.customer_id,
+    coalesce(
+      nullif(customer_profiles.full_name, ''),
+      nullif(auth_customers.raw_user_meta_data ->> 'full_name', ''),
+      nullif(auth_customers.raw_user_meta_data ->> 'name', ''),
+      nullif(business_conversations.customer_name, '')
+    ) as customer_name,
+    coalesce(
+      nullif(customer_profiles.contact_email, ''),
+      nullif(customer_profiles.email, ''),
+      nullif(auth_customers.email, ''),
+      nullif(business_conversations.customer_email, '')
+    ) as customer_email,
+    coalesce(
+      nullif(trim(business_conversations.last_message_preview), ''),
+      latest_messages.body,
+      ''
+    ) as last_message_preview,
+    coalesce(
+      business_conversations.last_message_at,
+      latest_messages.created_at
+    ) as last_message_at,
+    coalesce(
+      business_conversations.last_sender_id,
+      latest_messages.sender_id
+    ) as last_sender_id,
+    business_conversations.customer_last_read_at,
+    business_conversations.owner_last_read_at,
+    business_conversations.created_at,
+    business_conversations.updated_at
+  from public.business_conversations
+  join latest_messages
+    on latest_messages.conversation_id = business_conversations.id
+  left join public.profiles customer_profiles
+    on customer_profiles.id = business_conversations.customer_id
+  left join auth.users auth_customers
+    on auth_customers.id = business_conversations.customer_id
+  cross join current_request
+  where current_request.user_id is not null
+    and (
+      business_conversations.customer_id = current_request.user_id
+      or business_conversations.business_owner_id = current_request.user_id
+      or latest_messages.sender_id = current_request.user_id
+      or public.is_admin()
+    )
+  order by
+    coalesce(business_conversations.last_message_at, latest_messages.created_at) desc,
+    business_conversations.updated_at desc;
+$$;
+
+grant execute on function public.get_my_business_conversations() to authenticated;
+
+update public.business_conversations
+set
+  customer_name = coalesce(
+    nullif(profiles.full_name, ''),
+    nullif(auth_users.raw_user_meta_data ->> 'full_name', ''),
+    nullif(auth_users.raw_user_meta_data ->> 'name', ''),
+    public.business_conversations.customer_name
+  ),
+  customer_email = coalesce(
+    nullif(profiles.contact_email, ''),
+    nullif(profiles.email, ''),
+    nullif(auth_users.email, ''),
+    public.business_conversations.customer_email
+  )
+from auth.users auth_users
+left join public.profiles
+  on profiles.id = auth_users.id
+where public.business_conversations.customer_id = auth_users.id
+  and (
+    public.business_conversations.customer_name is distinct from coalesce(
+      nullif(profiles.full_name, ''),
+      nullif(auth_users.raw_user_meta_data ->> 'full_name', ''),
+      nullif(auth_users.raw_user_meta_data ->> 'name', ''),
+      public.business_conversations.customer_name
+    )
+    or public.business_conversations.customer_email is distinct from coalesce(
+      nullif(profiles.contact_email, ''),
+      nullif(profiles.email, ''),
+      nullif(auth_users.email, ''),
+      public.business_conversations.customer_email
+    )
+  );
+
+create or replace function public.get_business_conversation_messages(target_conversation_id uuid)
+returns table (
+  id uuid,
+  conversation_id uuid,
+  sender_id uuid,
+  body text,
+  created_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    business_messages.id,
+    business_messages.conversation_id,
+    business_messages.sender_id,
+    business_messages.body,
+    business_messages.created_at
+  from public.business_messages
+  where business_messages.conversation_id = target_conversation_id
+    and public.can_access_business_conversation(target_conversation_id)
+  order by business_messages.created_at asc;
+$$;
+
+grant execute on function public.get_business_conversation_messages(uuid) to authenticated;
+
+create or replace function public.start_business_conversation(
+  target_business_id uuid,
+  customer_name text default null,
+  customer_email text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  target_owner_id uuid;
+  conversation_id uuid;
+begin
+  if current_user_id is null then
+    raise exception 'Authentication is required to start a conversation'
+      using errcode = '28000';
+  end if;
+
+  select owner_id
+  into target_owner_id
+  from public.businesses
+  where id = target_business_id
+    and status = 'published';
+
+  if target_owner_id is null then
+    raise exception 'Messaging is not available for this business'
+      using errcode = 'P0001';
+  end if;
+
+  if target_owner_id = current_user_id then
+    raise exception 'Owners cannot start conversations with their own business'
+      using errcode = 'P0001';
+  end if;
+
+  insert into public.business_conversations (
+    business_id,
+    business_owner_id,
+    customer_id,
+    customer_name,
+    customer_email,
+    customer_last_read_at
+  )
+  values (
+    target_business_id,
+    target_owner_id,
+    current_user_id,
+    nullif(trim(coalesce(customer_name, '')), ''),
+    nullif(trim(coalesce(customer_email, '')), ''),
+    now()
+  )
+  on conflict (business_id, customer_id)
+  do update set
+    customer_name = coalesce(
+      nullif(trim(coalesce(excluded.customer_name, '')), ''),
+      business_conversations.customer_name
+    ),
+    customer_email = coalesce(
+      nullif(trim(coalesce(excluded.customer_email, '')), ''),
+      business_conversations.customer_email
+    ),
+    customer_last_read_at = coalesce(
+      business_conversations.customer_last_read_at,
+      excluded.customer_last_read_at
+    )
+  returning id into conversation_id;
+
+  return conversation_id;
+end;
+$$;
+
+grant execute on function public.start_business_conversation(uuid, text, text) to authenticated;
+
+create or replace function public.send_business_message(
+  target_conversation_id uuid,
+  message_body text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  trimmed_body text := nullif(trim(coalesce(message_body, '')), '');
+  new_message_id uuid;
+  target_business_owner_id uuid;
+  target_customer_id uuid;
+begin
+  if current_user_id is null then
+    raise exception 'Authentication is required to send a message'
+      using errcode = '28000';
+  end if;
+
+  if trimmed_body is null or length(trimmed_body) > 2000 then
+    raise exception 'Message must include text and be under 2000 characters'
+      using errcode = '22023';
+  end if;
+
+  select business_owner_id, customer_id
+  into target_business_owner_id, target_customer_id
+  from public.business_conversations
+  where id = target_conversation_id;
+
+  if target_business_owner_id is null then
+    raise exception 'Conversation not found'
+      using errcode = 'P0001';
+  end if;
+
+  if current_user_id <> target_business_owner_id
+    and current_user_id <> target_customer_id
+    and not public.is_admin()
+  then
+    raise exception 'You cannot send messages in this conversation'
+      using errcode = '42501';
+  end if;
+
+  insert into public.business_messages (
+    conversation_id,
+    sender_id,
+    body
+  )
+  values (
+    target_conversation_id,
+    current_user_id,
+    trimmed_body
+  )
+  returning id into new_message_id;
+
+  update public.business_conversations
+  set
+    customer_last_read_at = case
+      when current_user_id = target_customer_id then now()
+      else customer_last_read_at
+    end,
+    last_message_at = now(),
+    last_message_preview = left(trimmed_body, 180),
+    last_sender_id = current_user_id,
+    owner_last_read_at = case
+      when current_user_id = target_business_owner_id then now()
+      else owner_last_read_at
+    end
+  where id = target_conversation_id;
+
+  return new_message_id;
+end;
+$$;
+
+grant execute on function public.send_business_message(uuid, text) to authenticated;
+
+create or replace function public.mark_business_conversation_read(target_conversation_id uuid)
+returns timestamptz
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  target_business_owner_id uuid;
+  target_customer_id uuid;
+  read_at timestamptz := now();
+begin
+  if current_user_id is null then
+    raise exception 'Authentication is required to mark a conversation as read'
+      using errcode = '28000';
+  end if;
+
+  select business_owner_id, customer_id
+  into target_business_owner_id, target_customer_id
+  from public.business_conversations
+  where id = target_conversation_id;
+
+  if target_business_owner_id is null then
+    raise exception 'Conversation not found'
+      using errcode = 'P0001';
+  end if;
+
+  if current_user_id <> target_business_owner_id
+    and current_user_id <> target_customer_id
+    and not public.is_admin()
+  then
+    raise exception 'You cannot read this conversation'
+      using errcode = '42501';
+  end if;
+
+  update public.business_conversations
+  set
+    customer_last_read_at = case
+      when current_user_id = target_customer_id then read_at
+      else customer_last_read_at
+    end,
+    owner_last_read_at = case
+      when current_user_id = target_business_owner_id then read_at
+      else owner_last_read_at
+    end
+  where id = target_conversation_id;
+
+  return read_at;
+end;
+$$;
+
+grant execute on function public.mark_business_conversation_read(uuid) to authenticated;
+
+create or replace function public.send_business_message_to_business(
+  target_business_id uuid,
+  message_body text,
+  customer_name text default null,
+  customer_email text default null
+)
+returns table (
+  conversation_id uuid,
+  message_id uuid
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  trimmed_body text := nullif(trim(coalesce(message_body, '')), '');
+  target_owner_id uuid;
+  target_conversation_id uuid;
+  target_message_id uuid;
+begin
+  if current_user_id is null then
+    raise exception 'Authentication is required to send a message'
+      using errcode = '28000';
+  end if;
+
+  if trimmed_body is null or length(trimmed_body) > 2000 then
+    raise exception 'Message must include text and be under 2000 characters'
+      using errcode = '22023';
+  end if;
+
+  select owner_id
+  into target_owner_id
+  from public.businesses
+  where id = target_business_id
+    and status = 'published';
+
+  if target_owner_id is null then
+    raise exception 'Messaging is not available for this business'
+      using errcode = 'P0001';
+  end if;
+
+  if target_owner_id = current_user_id then
+    raise exception 'Owners cannot start conversations with their own business'
+      using errcode = 'P0001';
+  end if;
+
+  insert into public.business_conversations (
+    business_id,
+    business_owner_id,
+    customer_id,
+    customer_name,
+    customer_email
+  )
+  values (
+    target_business_id,
+    target_owner_id,
+    current_user_id,
+    nullif(trim(coalesce(customer_name, '')), ''),
+    nullif(trim(coalesce(customer_email, '')), '')
+  )
+  on conflict (business_id, customer_id)
+  do update set
+    customer_name = coalesce(
+      nullif(trim(coalesce(excluded.customer_name, '')), ''),
+      business_conversations.customer_name
+    ),
+    customer_email = coalesce(
+      nullif(trim(coalesce(excluded.customer_email, '')), ''),
+      business_conversations.customer_email
+    )
+  returning id into target_conversation_id;
+
+  insert into public.business_messages (
+    conversation_id,
+    sender_id,
+    body
+  )
+  values (
+    target_conversation_id,
+    current_user_id,
+    trimmed_body
+  )
+  returning id into target_message_id;
+
+  update public.business_conversations
+  set
+    customer_last_read_at = now(),
+    last_message_at = now(),
+    last_message_preview = left(trimmed_body, 180),
+    last_sender_id = current_user_id
+  where id = target_conversation_id;
+
+  conversation_id := target_conversation_id;
+  message_id := target_message_id;
+  return next;
+end;
+$$;
+
+grant execute on function public.send_business_message_to_business(uuid, text, text, text) to authenticated;
+
+create or replace function public.get_public_feed_authors(author_ids uuid[])
+returns table (
+  author_id uuid,
+  author_name text,
+  author_avatar_url text
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    profiles.id as author_id,
+    coalesce(
+      nullif(profiles.full_name, ''),
+      nullif(auth_users.raw_user_meta_data ->> 'full_name', ''),
+      nullif(auth_users.raw_user_meta_data ->> 'name', '')
+    ) as author_name,
+    coalesce(
+      nullif(profiles.avatar_url, ''),
+      nullif(auth_users.raw_user_meta_data ->> 'avatar_url', ''),
+      nullif(auth_users.raw_user_meta_data ->> 'picture', '')
+    ) as author_avatar_url
+  from public.profiles
+  left join auth.users as auth_users
+    on auth_users.id = profiles.id
+  where profiles.id = any(author_ids);
+$$;
+
+grant execute on function public.get_public_feed_authors(uuid[]) to anon, authenticated;
+
+create or replace function public.get_feed_post_stats(post_ids uuid[])
+returns table (
+  post_id uuid,
+  like_count bigint,
+  comment_count bigint,
+  liked_by_current_user boolean
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    feed_posts.id as post_id,
+    count(distinct feed_post_likes.user_id)::bigint as like_count,
+    count(distinct feed_post_comments.id)::bigint as comment_count,
+    bool_or(feed_post_likes.user_id = (select auth.uid())) is true as liked_by_current_user
+  from public.feed_posts
+  left join public.feed_post_likes
+    on feed_post_likes.post_id = feed_posts.id
+  left join public.feed_post_comments
+    on feed_post_comments.post_id = feed_posts.id
+  where feed_posts.id = any(post_ids)
+    and feed_posts.status = 'published'
+  group by feed_posts.id;
+$$;
+
+grant execute on function public.get_feed_post_stats(uuid[]) to anon, authenticated;
+
+create or replace function public.create_feed_post(
+  body text,
+  target_business_id uuid default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  normalized_body text := trim(coalesce(body, ''));
+  public_business_id uuid := null;
+  post_id uuid;
+begin
+  if current_user_id is null then
+    raise exception 'Authentication is required to create a feed post'
+      using errcode = '28000';
+  end if;
+
+  if char_length(normalized_body) < 1 or char_length(normalized_body) > 2000 then
+    raise exception 'Feed post must be between 1 and 2000 characters'
+      using errcode = '22001';
+  end if;
+
+  if target_business_id is not null then
+    select businesses.id
+    into public_business_id
+    from public.businesses
+    where businesses.status = 'published'
+      and businesses.owner_id = current_user_id
+      and (
+        businesses.id = target_business_id
+        or businesses.registration_id = target_business_id
+      )
+    limit 1;
+
+    if public_business_id is null then
+      raise exception 'You can only post as a published business you own'
+        using errcode = '42501';
+    end if;
+  end if;
+
+  insert into public.feed_posts (
+    author_id,
+    body,
+    business_id
+  )
+  values (
+    current_user_id,
+    normalized_body,
+    public_business_id
+  )
+  returning id into post_id;
+
+  return post_id;
+end;
+$$;
+
+grant execute on function public.create_feed_post(text, uuid) to authenticated;
+
+create or replace function public.toggle_feed_post_like(
+  target_post_id uuid,
+  should_like boolean default true
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_user_id uuid := auth.uid();
+begin
+  if current_user_id is null then
+    raise exception 'Authentication is required to like feed posts'
+      using errcode = '28000';
+  end if;
+
+  if not exists (
+    select 1
+    from public.feed_posts
+    where id = target_post_id
+      and status = 'published'
+  ) then
+    raise exception 'Feed post is not available'
+      using errcode = 'P0001';
+  end if;
+
+  if should_like then
+    insert into public.feed_post_likes (
+      post_id,
+      user_id
+    )
+    values (
+      target_post_id,
+      current_user_id
+    )
+    on conflict (post_id, user_id) do nothing;
+
+    return true;
+  end if;
+
+  delete from public.feed_post_likes
+  where post_id = target_post_id
+    and user_id = current_user_id;
+
+  return false;
+end;
+$$;
+
+grant execute on function public.toggle_feed_post_like(uuid, boolean) to authenticated;
+
+create or replace function public.create_feed_comment(
+  target_post_id uuid,
+  body text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  normalized_body text := trim(coalesce(body, ''));
+  comment_id uuid;
+begin
+  if current_user_id is null then
+    raise exception 'Authentication is required to comment on feed posts'
+      using errcode = '28000';
+  end if;
+
+  if char_length(normalized_body) < 1 or char_length(normalized_body) > 1000 then
+    raise exception 'Comment must be between 1 and 1000 characters'
+      using errcode = '22001';
+  end if;
+
+  if not exists (
+    select 1
+    from public.feed_posts
+    where id = target_post_id
+      and status = 'published'
+  ) then
+    raise exception 'Feed post is not available'
+      using errcode = 'P0001';
+  end if;
+
+  insert into public.feed_post_comments (
+    post_id,
+    author_id,
+    body
+  )
+  values (
+    target_post_id,
+    current_user_id,
+    normalized_body
+  )
+  returning id into comment_id;
+
+  return comment_id;
+end;
+$$;
+
+grant execute on function public.create_feed_comment(uuid, text) to authenticated;
+
 alter table public.profiles enable row level security;
 alter table public.business_registrations enable row level security;
 alter table public.businesses enable row level security;
 alter table public.business_claim_invites enable row level security;
 alter table public.business_content_items enable row level security;
 alter table public.saved_businesses enable row level security;
+alter table public.business_conversations enable row level security;
+alter table public.business_messages enable row level security;
+alter table public.feed_posts enable row level security;
+alter table public.feed_post_likes enable row level security;
+alter table public.feed_post_comments enable row level security;
 alter table public.app_notifications enable row level security;
 alter table public.notification_dismissals enable row level security;
 alter table public.analytics_events enable row level security;
+alter table public.media_kpi_snapshots enable row level security;
+alter table public.outreach_prospects enable row level security;
 
 drop policy if exists "Profiles are visible to owner and admins" on public.profiles;
 create policy "Profiles are visible to owner and admins"
@@ -926,6 +2013,162 @@ create policy "Users can remove their saved businesses"
 on public.saved_businesses for delete
 using ((select auth.uid()) = user_id);
 
+drop policy if exists "Participants can view business conversations" on public.business_conversations;
+create policy "Participants can view business conversations"
+on public.business_conversations for select
+to authenticated
+using (
+  (select auth.uid()) = customer_id
+  or (select auth.uid()) = business_owner_id
+  or public.is_admin()
+);
+
+drop policy if exists "Customers can create business conversations" on public.business_conversations;
+create policy "Customers can create business conversations"
+on public.business_conversations for insert
+to authenticated
+with check (
+  (select auth.uid()) = customer_id
+  and exists (
+    select 1
+    from public.businesses
+    where businesses.id = business_conversations.business_id
+      and businesses.owner_id = business_conversations.business_owner_id
+      and businesses.status = 'published'
+  )
+);
+
+drop policy if exists "Participants can update business conversations" on public.business_conversations;
+create policy "Participants can update business conversations"
+on public.business_conversations for update
+to authenticated
+using (
+  (select auth.uid()) = customer_id
+  or (select auth.uid()) = business_owner_id
+  or public.is_admin()
+)
+with check (
+  (select auth.uid()) = customer_id
+  or (select auth.uid()) = business_owner_id
+  or public.is_admin()
+);
+
+drop policy if exists "Participants can view business messages" on public.business_messages;
+create policy "Participants can view business messages"
+on public.business_messages for select
+to authenticated
+using (public.can_access_business_conversation(conversation_id));
+
+drop policy if exists "Participants can send business messages" on public.business_messages;
+create policy "Participants can send business messages"
+on public.business_messages for insert
+to authenticated
+with check (
+  sender_id = (select auth.uid())
+  and public.can_access_business_conversation(conversation_id)
+);
+
+drop policy if exists "Published feed posts are public" on public.feed_posts;
+create policy "Published feed posts are public"
+on public.feed_posts for select
+using (status = 'published' or author_id = (select auth.uid()) or public.is_admin());
+
+drop policy if exists "Users can create feed posts" on public.feed_posts;
+create policy "Users can create feed posts"
+on public.feed_posts for insert
+to authenticated
+with check (
+  author_id = (select auth.uid())
+  and (
+    business_id is null
+    or exists (
+      select 1
+      from public.businesses
+      where businesses.id = feed_posts.business_id
+        and businesses.owner_id = (select auth.uid())
+        and businesses.status = 'published'
+    )
+  )
+);
+
+drop policy if exists "Authors and admins can update feed posts" on public.feed_posts;
+create policy "Authors and admins can update feed posts"
+on public.feed_posts for update
+to authenticated
+using (author_id = (select auth.uid()) or public.is_admin())
+with check (author_id = (select auth.uid()) or public.is_admin());
+
+drop policy if exists "Authors and admins can delete feed posts" on public.feed_posts;
+create policy "Authors and admins can delete feed posts"
+on public.feed_posts for delete
+to authenticated
+using (author_id = (select auth.uid()) or public.is_admin());
+
+drop policy if exists "Users can like published feed posts" on public.feed_post_likes;
+create policy "Users can like published feed posts"
+on public.feed_post_likes for insert
+to authenticated
+with check (
+  user_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.feed_posts
+    where feed_posts.id = feed_post_likes.post_id
+      and feed_posts.status = 'published'
+  )
+);
+
+drop policy if exists "Users can remove their feed likes" on public.feed_post_likes;
+create policy "Users can remove their feed likes"
+on public.feed_post_likes for delete
+to authenticated
+using (user_id = (select auth.uid()) or public.is_admin());
+
+drop policy if exists "Users can view their feed likes" on public.feed_post_likes;
+create policy "Users can view their feed likes"
+on public.feed_post_likes for select
+to authenticated
+using (user_id = (select auth.uid()) or public.is_admin());
+
+drop policy if exists "Published feed comments are public" on public.feed_post_comments;
+create policy "Published feed comments are public"
+on public.feed_post_comments for select
+using (
+  exists (
+    select 1
+    from public.feed_posts
+    where feed_posts.id = feed_post_comments.post_id
+      and feed_posts.status = 'published'
+  )
+);
+
+drop policy if exists "Users can create feed comments" on public.feed_post_comments;
+create policy "Users can create feed comments"
+on public.feed_post_comments for insert
+to authenticated
+with check (
+  author_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.feed_posts
+    where feed_posts.id = feed_post_comments.post_id
+      and feed_posts.status = 'published'
+  )
+);
+
+drop policy if exists "Authors and admins can update feed comments" on public.feed_post_comments;
+create policy "Authors and admins can update feed comments"
+on public.feed_post_comments for update
+to authenticated
+using (author_id = (select auth.uid()) or public.is_admin())
+with check (author_id = (select auth.uid()) or public.is_admin());
+
+drop policy if exists "Authors and admins can delete feed comments" on public.feed_post_comments;
+create policy "Authors and admins can delete feed comments"
+on public.feed_post_comments for delete
+to authenticated
+using (author_id = (select auth.uid()) or public.is_admin());
+
 drop policy if exists "Authenticated users can view published notifications" on public.app_notifications;
 create policy "Authenticated users can view published notifications"
 on public.app_notifications for select
@@ -984,6 +2227,56 @@ on public.analytics_events for select
 to authenticated
 using (public.is_admin());
 
+drop policy if exists "Admins can view media KPI snapshots" on public.media_kpi_snapshots;
+create policy "Admins can view media KPI snapshots"
+on public.media_kpi_snapshots for select
+to authenticated
+using (public.is_admin());
+
+drop policy if exists "Admins can create media KPI snapshots" on public.media_kpi_snapshots;
+create policy "Admins can create media KPI snapshots"
+on public.media_kpi_snapshots for insert
+to authenticated
+with check (public.is_admin());
+
+drop policy if exists "Admins can update media KPI snapshots" on public.media_kpi_snapshots;
+create policy "Admins can update media KPI snapshots"
+on public.media_kpi_snapshots for update
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "Admins can delete media KPI snapshots" on public.media_kpi_snapshots;
+create policy "Admins can delete media KPI snapshots"
+on public.media_kpi_snapshots for delete
+to authenticated
+using (public.is_admin());
+
+drop policy if exists "Admins can view outreach prospects" on public.outreach_prospects;
+create policy "Admins can view outreach prospects"
+on public.outreach_prospects for select
+to authenticated
+using (public.is_admin());
+
+drop policy if exists "Admins can create outreach prospects" on public.outreach_prospects;
+create policy "Admins can create outreach prospects"
+on public.outreach_prospects for insert
+to authenticated
+with check (public.is_admin());
+
+drop policy if exists "Admins can update outreach prospects" on public.outreach_prospects;
+create policy "Admins can update outreach prospects"
+on public.outreach_prospects for update
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "Admins can delete outreach prospects" on public.outreach_prospects;
+create policy "Admins can delete outreach prospects"
+on public.outreach_prospects for delete
+to authenticated
+using (public.is_admin());
+
 drop policy if exists "Anyone can view business logos" on storage.objects;
 create policy "Anyone can view business logos"
 on storage.objects for select
@@ -1033,6 +2326,8 @@ grant execute on function public.get_public_business_owners(uuid[]) to anon, aut
 grant execute on function public.delete_current_user_account() to authenticated;
 grant insert on table public.analytics_events to anon, authenticated;
 grant select on table public.analytics_events to authenticated;
+grant select, insert, update, delete on table public.media_kpi_snapshots to authenticated;
+grant select, insert, update, delete on table public.outreach_prospects to authenticated;
 
 notify pgrst, 'reload schema';
 

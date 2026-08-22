@@ -211,6 +211,9 @@ async function getPublishedBusinesses({
   const savedBusinessIds = currentUserId
     ? await getSavedBusinessIds(currentUserId)
     : new Set<string>();
+  const followerCountsByBusinessId = await getBusinessFollowerCounts(
+    data.map((row) => row.id),
+  );
 
   if (ownerIds.length > 0) {
     const { data: owners, error: ownersError } = await supabase.rpc(
@@ -236,6 +239,7 @@ async function getPublishedBusinesses({
       row.registration_id
         ? rankingSignalsByRegistrationId.get(row.registration_id)
         : undefined,
+      followerCountsByBusinessId.get(row.id) ?? 0,
     ),
   );
 }
@@ -252,6 +256,29 @@ async function getSavedBusinessIds(currentUserId: string) {
   }
 
   return new Set((data as SavedBusinessRow[]).map((row) => row.business_id));
+}
+
+async function getBusinessFollowerCounts(businessIds: string[]) {
+  const followerCountsByBusinessId = new Map<string, number>();
+
+  if (businessIds.length === 0) {
+    return followerCountsByBusinessId;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_business_follower_counts", {
+    business_ids: businessIds,
+  });
+
+  if (error || !data) {
+    return followerCountsByBusinessId;
+  }
+
+  for (const row of data) {
+    followerCountsByBusinessId.set(row.business_id, row.follower_count);
+  }
+
+  return followerCountsByBusinessId;
 }
 
 async function getPublishedBusinessContentItems(
@@ -424,6 +451,7 @@ function mapPublishedBusiness(
   contentItems: BusinessContentItem[] = [],
   isSaved = false,
   rankingSignals?: BusinessRankingSignals,
+  followerCount = 0,
 ): Business {
   const categorySlug = normalizeCategorySlug(row.category_slug);
   const category =
@@ -462,6 +490,7 @@ function mapPublishedBusiness(
     image: "",
     gallery: [],
     featured: false,
+    followerCount,
     hours: "",
     isSaved,
     tags: [category.name],

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { cn, getSafeImageUrl } from "@/lib/utils";
+import { cn, getOptimizedImageUrl, imageOptimizationPresets } from "@/lib/utils";
 
 type BusinessLogoProps = {
   className?: string;
@@ -17,7 +17,10 @@ export function BusinessLogo({
   logoUrl,
   name,
 }: BusinessLogoProps) {
-  const safeLogoUrl = getSafeImageUrl(logoUrl);
+  const safeLogoUrl = getOptimizedImageUrl(
+    logoUrl,
+    imageOptimizationPresets.logo,
+  );
   const [hasImageError, setHasImageError] = useState(false);
   const canShowLogo = Boolean(safeLogoUrl && !hasImageError);
 

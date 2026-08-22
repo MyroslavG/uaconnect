@@ -44,6 +44,70 @@ export function getSafeImageUrl(value: string | null | undefined) {
   }
 }
 
+export type ImageOptimizationOptions = {
+  height?: number;
+  quality?: number;
+  resize?: "cover" | "contain" | "fill";
+  width?: number;
+};
+
+export const imageOptimizationPresets = {
+  avatar: { height: 160, quality: 70, resize: "cover", width: 160 },
+  detail: { quality: 72, resize: "contain", width: 1200 },
+  logo: { height: 220, quality: 72, resize: "contain", width: 220 },
+  thumbnail: { height: 520, quality: 62, resize: "cover", width: 520 },
+} satisfies Record<string, ImageOptimizationOptions>;
+
+export function getOptimizedImageUrl(
+  value: string | null | undefined,
+  options: ImageOptimizationOptions = imageOptimizationPresets.detail,
+) {
+  const safeImageUrl = getSafeImageUrl(value);
+
+  if (!safeImageUrl) {
+    return "";
+  }
+
+  try {
+    const url = new URL(safeImageUrl);
+    const publicObjectPath = "/storage/v1/object/public/";
+    const renderImagePath = "/storage/v1/render/image/public/";
+
+    if (
+      !url.pathname.includes(publicObjectPath) &&
+      !url.pathname.includes(renderImagePath)
+    ) {
+      return safeImageUrl;
+    }
+
+    if (/\.(svg)(\?|$)/i.test(url.pathname)) {
+      return safeImageUrl;
+    }
+
+    url.pathname = url.pathname.replace(publicObjectPath, renderImagePath);
+
+    if (options.width) {
+      url.searchParams.set("width", String(options.width));
+    }
+
+    if (options.height) {
+      url.searchParams.set("height", String(options.height));
+    }
+
+    if (options.quality) {
+      url.searchParams.set("quality", String(options.quality));
+    }
+
+    if (options.resize) {
+      url.searchParams.set("resize", options.resize);
+    }
+
+    return url.toString();
+  } catch {
+    return safeImageUrl;
+  }
+}
+
 export function formatLocationParts(...parts: Array<string | null | undefined>) {
   const normalizedParts = new Set<string>();
   const displayParts = parts

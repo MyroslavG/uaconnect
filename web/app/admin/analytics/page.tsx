@@ -4,12 +4,15 @@ import Link from "next/link";
 import {
   BarChart3,
   CalendarClock,
+  ClipboardList,
   type LucideIcon,
   MousePointerClick,
+  RadioTower,
   Search,
   ShieldCheck,
   TrendingUp,
   UsersRound,
+  Grid3X3,
 } from "lucide-react";
 
 import { signInWithGoogle } from "@/app/auth/actions";
@@ -59,12 +62,31 @@ const text = {
     registrations: "Перевірка бізнесів",
     users: "Користувачі",
     updates: "Оновлення",
+    media: "Media KPI",
+    coverage: "Coverage",
+    prospects: "Prospects",
     activeDay: "Активні за день",
     activeMonth: "Активні за місяць",
     searches: "Пошуки",
     profileViews: "Перегляди бізнесів",
     contactClicks: "Контакт-кліки",
     contactedBusinesses: "Бізнесів з контактами",
+    funnel: "Базова воронка",
+    funnelSubtitle: "Останні 30 днів",
+    funnelStart: "Відкрили Kolo",
+    funnelSignedIn: "Увійшли / мають акаунт",
+    funnelSearched: "Зробили пошук",
+    funnelViewedBusiness: "Відкрили бізнес",
+    funnelContacted: "Натиснули контакт",
+    conversionFromPrevious: "від попереднього кроку",
+    acquisition: "Джерела залучення",
+    acquisitionSubtitle:
+      "Перший зафіксований канал користувача за останні 60 днів.",
+    visitorsLabel: "відвідувачі",
+    searchesLabel: "пошуки",
+    viewsLabel: "перегляди",
+    contactsLabel: "контакти",
+    conversionLabel: "конверсія",
     retention: "Повернення користувачів",
     topCities: "Найчастіші міста",
     topCategories: "Найчастіші категорії",
@@ -100,12 +122,31 @@ const text = {
     registrations: "Business review",
     users: "Users",
     updates: "Updates",
+    media: "Media KPI",
+    coverage: "Coverage",
+    prospects: "Prospects",
     activeDay: "Active today",
     activeMonth: "Active this month",
     searches: "Searches",
     profileViews: "Business views",
     contactClicks: "Contact clicks",
     contactedBusinesses: "Businesses contacted",
+    funnel: "Baseline funnel",
+    funnelSubtitle: "Last 30 days",
+    funnelStart: "Opened Kolo",
+    funnelSignedIn: "Signed in / has account",
+    funnelSearched: "Searched",
+    funnelViewedBusiness: "Opened a business",
+    funnelContacted: "Clicked contact",
+    conversionFromPrevious: "from previous step",
+    acquisition: "Acquisition sources",
+    acquisitionSubtitle:
+      "The first recorded user channel within the last 60 days.",
+    visitorsLabel: "visitors",
+    searchesLabel: "searches",
+    viewsLabel: "views",
+    contactsLabel: "contacts",
+    conversionLabel: "conversion",
     retention: "User retention",
     topCities: "Top searched cities",
     topCategories: "Top searched categories",
@@ -182,6 +223,14 @@ export default async function AdminAnalyticsPage() {
   const topCategories = getTopSearchValues(events, "category_slug", locale);
   const contactBreakdown = getContactBreakdown(events);
   const contactedBusinesses = getContactedBusinesses(events);
+  const funnelStages = getFunnelStages(events, {
+    contacted: labels.funnelContacted as string,
+    opened: labels.funnelStart as string,
+    searched: labels.funnelSearched as string,
+    signedIn: labels.funnelSignedIn as string,
+    viewedBusiness: labels.funnelViewedBusiness as string,
+  });
+  const acquisitionRows = getAcquisitionRows(events);
 
   return (
     <main className="container grid gap-8 py-10">
@@ -214,6 +263,24 @@ export default async function AdminAnalyticsPage() {
             <Link href="/admin/notifications">
               <CalendarClock className="h-4 w-4" />
               {labels.updates as string}
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/admin/media">
+              <RadioTower className="h-4 w-4" />
+              {labels.media as string}
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/admin/coverage">
+              <Grid3X3 className="h-4 w-4" />
+              {labels.coverage as string}
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/admin/prospects">
+              <ClipboardList className="h-4 w-4" />
+              {labels.prospects as string}
             </Link>
           </Button>
         </div>
@@ -257,6 +324,27 @@ export default async function AdminAnalyticsPage() {
           Icon={TrendingUp}
           label={labels.contactedBusinesses as string}
           value={summary.contactedBusinesses}
+        />
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1.4fr)]">
+        <FunnelCard
+          conversionLabel={labels.conversionFromPrevious as string}
+          empty={labels.noData as string}
+          stages={funnelStages}
+          subtitle={labels.funnelSubtitle as string}
+          title={labels.funnel as string}
+        />
+        <AcquisitionCard
+          contactsLabel={labels.contactsLabel as string}
+          conversionLabel={labels.conversionLabel as string}
+          empty={labels.noData as string}
+          rows={acquisitionRows}
+          searchesLabel={labels.searchesLabel as string}
+          subtitle={labels.acquisitionSubtitle as string}
+          title={labels.acquisition as string}
+          viewsLabel={labels.viewsLabel as string}
+          visitorsLabel={labels.visitorsLabel as string}
         />
       </section>
 
@@ -372,6 +460,148 @@ function MetricCard({
   );
 }
 
+function FunnelCard({
+  conversionLabel,
+  empty,
+  stages,
+  subtitle,
+  title,
+}: {
+  conversionLabel: string;
+  empty: string;
+  stages: Array<{ count: number; label: string; percent: number }>;
+  subtitle: string;
+  title: string;
+}) {
+  const maxCount = Math.max(1, ...stages.map((stage) => stage.count));
+
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-black">{title}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+          </div>
+          <Badge variant="outline">{stages.length}</Badge>
+        </div>
+        <div className="mt-5 grid gap-3">
+          {stages.some((stage) => stage.count > 0) ? (
+            stages.map((stage) => (
+              <div
+                className="rounded-md border bg-muted/30 p-3"
+                key={stage.label}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black">{stage.label}</p>
+                    <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                      {stage.percent}% {conversionLabel}
+                    </p>
+                  </div>
+                  <Badge>{stage.count}</Badge>
+                </div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{
+                      width: `${Math.max(
+                        4,
+                        Math.round((stage.count / maxCount) * 100),
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="rounded-md border bg-muted/30 p-4 text-sm font-semibold text-muted-foreground">
+              {empty}
+            </p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AcquisitionCard({
+  contactsLabel,
+  conversionLabel,
+  empty,
+  rows,
+  searchesLabel,
+  subtitle,
+  title,
+  viewsLabel,
+  visitorsLabel,
+}: {
+  contactsLabel: string;
+  conversionLabel: string;
+  empty: string;
+  rows: AcquisitionRow[];
+  searchesLabel: string;
+  subtitle: string;
+  title: string;
+  viewsLabel: string;
+  visitorsLabel: string;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-black">{title}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+          </div>
+          <Badge variant="outline">{rows.length}</Badge>
+        </div>
+        <div className="mt-5 grid gap-3">
+          {rows.length ? (
+            rows.slice(0, 8).map((row) => (
+              <div
+                className="rounded-md border bg-muted/30 p-3"
+                key={row.source}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black">{row.source}</p>
+                    <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                      {row.conversion}% {conversionLabel}
+                    </p>
+                  </div>
+                  <Badge>{row.visitors}</Badge>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <MiniStat label={visitorsLabel} value={row.visitors} />
+                  <MiniStat label={searchesLabel} value={row.searchers} />
+                  <MiniStat label={viewsLabel} value={row.businessViewers} />
+                  <MiniStat label={contactsLabel} value={row.contactActors} />
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="rounded-md border bg-muted/30 p-4 text-sm font-semibold text-muted-foreground">
+              {empty}
+            </p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md bg-background/70 p-2">
+      <p className="text-sm font-black">{value}</p>
+      <p className="mt-1 truncate text-[11px] font-bold uppercase tracking-normal text-muted-foreground">
+        {label}
+      </p>
+    </div>
+  );
+}
+
 function RetentionRow({
   label,
   value,
@@ -465,7 +695,9 @@ function getAnalyticsSummary(events: AnalyticsEventRow[]) {
       day7: getRetention(events, 7),
       day30: getRetention(events, 30),
     },
-    searches: countEvents(last30DayEvents, "search"),
+    searches:
+      countEvents(last30DayEvents, "search") +
+      countEvents(last30DayEvents, "search_zero_results"),
   };
 }
 
@@ -477,6 +709,231 @@ function filterEventsWithinDays(events: AnalyticsEventRow[], days: number) {
 
 function countEvents(events: AnalyticsEventRow[], eventType: string) {
   return events.filter((event) => event.event_type === eventType).length;
+}
+
+function getFunnelStages(
+  events: AnalyticsEventRow[],
+  labels: {
+    contacted: string;
+    opened: string;
+    searched: string;
+    signedIn: string;
+    viewedBusiness: string;
+  },
+) {
+  const recentEvents = filterEventsWithinDays(events, 30);
+  const openedActors = getUniqueActorsFor(recentEvents, (event) =>
+    ["app_open", "page_view"].includes(event.event_type),
+  );
+  const signedInActors = getUniqueActorsFor(
+    recentEvents,
+    (event) =>
+      Boolean(event.user_id) || ["signin", "signup"].includes(event.event_type),
+  );
+  const searchedActors = getUniqueActorsFor(recentEvents, (event) =>
+    ["search", "search_zero_results"].includes(event.event_type),
+  );
+  const businessViewActors = getUniqueActorsFor(
+    recentEvents,
+    (event) => event.event_type === "business_profile_view",
+  );
+  const contactActors = getUniqueActorsFor(
+    recentEvents,
+    (event) => event.event_type === "contact_click",
+  );
+  const stages = [
+    { count: openedActors.size, label: labels.opened },
+    { count: signedInActors.size, label: labels.signedIn },
+    { count: searchedActors.size, label: labels.searched },
+    { count: businessViewActors.size, label: labels.viewedBusiness },
+    { count: contactActors.size, label: labels.contacted },
+  ];
+
+  return stages.map((stage, index) => ({
+    ...stage,
+    percent:
+      index === 0
+        ? 100
+        : getPercent(stage.count, Math.max(1, stages[index - 1]?.count ?? 0)),
+  }));
+}
+
+type AcquisitionRow = {
+  businessViewers: number;
+  contactActors: number;
+  conversion: number;
+  searchers: number;
+  source: string;
+  visitors: number;
+};
+
+function getAcquisitionRows(events: AnalyticsEventRow[]): AcquisitionRow[] {
+  const sortedEvents = [...events].sort(
+    (first, second) => getEventTime(first) - getEventTime(second),
+  );
+  const firstEventByActor = new Map<string, AnalyticsEventRow>();
+
+  for (const event of sortedEvents) {
+    const actorId = getActorId(event);
+
+    if (!actorId || firstEventByActor.has(actorId)) {
+      continue;
+    }
+
+    firstEventByActor.set(actorId, event);
+  }
+
+  const sourceByActor = new Map<string, string>();
+
+  for (const [actorId, event] of firstEventByActor) {
+    sourceByActor.set(actorId, getAcquisitionSource(event));
+  }
+
+  const rows = new Map<
+    string,
+    {
+      businessViewers: Set<string>;
+      contactActors: Set<string>;
+      searchers: Set<string>;
+      visitors: Set<string>;
+    }
+  >();
+
+  for (const [actorId, source] of sourceByActor) {
+    getOrCreateAcquisitionBucket(rows, source).visitors.add(actorId);
+  }
+
+  for (const event of filterEventsWithinDays(events, 30)) {
+    const actorId = getActorId(event);
+    const source = actorId ? sourceByActor.get(actorId) : null;
+
+    if (!actorId || !source) {
+      continue;
+    }
+
+    const bucket = getOrCreateAcquisitionBucket(rows, source);
+
+    if (["search", "search_zero_results"].includes(event.event_type)) {
+      bucket.searchers.add(actorId);
+    }
+
+    if (event.event_type === "business_profile_view") {
+      bucket.businessViewers.add(actorId);
+    }
+
+    if (event.event_type === "contact_click") {
+      bucket.contactActors.add(actorId);
+    }
+  }
+
+  return [...rows.entries()]
+    .map(([source, bucket]) => ({
+      businessViewers: bucket.businessViewers.size,
+      contactActors: bucket.contactActors.size,
+      conversion: getPercent(bucket.contactActors.size, bucket.visitors.size),
+      searchers: bucket.searchers.size,
+      source,
+      visitors: bucket.visitors.size,
+    }))
+    .sort((first, second) => second.visitors - first.visitors);
+}
+
+function getOrCreateAcquisitionBucket(
+  rows: Map<
+    string,
+    {
+      businessViewers: Set<string>;
+      contactActors: Set<string>;
+      searchers: Set<string>;
+      visitors: Set<string>;
+    }
+  >,
+  source: string,
+) {
+  const existingBucket = rows.get(source);
+
+  if (existingBucket) {
+    return existingBucket;
+  }
+
+  const nextBucket = {
+    businessViewers: new Set<string>(),
+    contactActors: new Set<string>(),
+    searchers: new Set<string>(),
+    visitors: new Set<string>(),
+  };
+
+  rows.set(source, nextBucket);
+
+  return nextBucket;
+}
+
+function getUniqueActorsFor(
+  events: AnalyticsEventRow[],
+  predicate: (event: AnalyticsEventRow) => boolean,
+) {
+  return new Set(
+    events.filter(predicate).map(getActorId).filter(Boolean) as string[],
+  );
+}
+
+function getPercent(value: number, total: number) {
+  return total ? Math.round((value / total) * 100) : 0;
+}
+
+function getAcquisitionSource(event: AnalyticsEventRow) {
+  const utmSource =
+    getMetadataString(event, "utmSource") ??
+    getMetadataString(event, "utm_source");
+
+  if (utmSource) {
+    return getReadableLabel(utmSource);
+  }
+
+  const source = getMetadataString(event, "source");
+
+  if (source && !["mobile", "web"].includes(source.toLowerCase())) {
+    return getReadableLabel(source);
+  }
+
+  const referrer = getMetadataString(event, "referrer");
+  const referrerHost = getReferrerHost(referrer);
+
+  if (referrerHost) {
+    return referrerHost;
+  }
+
+  return event.platform === "mobile" ? "Mobile app" : "Direct";
+}
+
+function getMetadataString(event: AnalyticsEventRow, key: string) {
+  const metadata = event.metadata;
+
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const value = metadata[key];
+
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function getReferrerHost(referrer: string | null) {
+  if (!referrer) {
+    return null;
+  }
+
+  try {
+    const hostname = new URL(referrer).hostname.replace(/^www\./, "");
+
+    return hostname.includes("koloapp.ca") ||
+      hostname.includes("uaconnect.vercel.app") ||
+      hostname.includes("ua-connect.netlify.app")
+      ? null
+      : hostname;
+  } catch {
+    return null;
+  }
 }
 
 function getUniqueActorCount(events: AnalyticsEventRow[]) {
@@ -535,7 +992,7 @@ function getTopSearchValues(
   const counts = new Map<string, number>();
 
   for (const event of filterEventsWithinDays(events, 30)) {
-    if (event.event_type !== "search") {
+    if (!["search", "search_zero_results"].includes(event.event_type)) {
       continue;
     }
 

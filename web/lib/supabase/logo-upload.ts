@@ -36,6 +36,7 @@ export async function uploadBusinessLogo(
 
   const path = `${ownerId}/${scopeId}/${randomUUID()}.${extension}`;
   const { error } = await supabase.storage.from(logoBucket).upload(path, value, {
+    cacheControl: "31536000",
     contentType: value.type,
     upsert: false,
   });

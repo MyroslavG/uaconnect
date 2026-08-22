@@ -98,6 +98,11 @@ type SavedBusinessRow = {
   business_id: string;
 };
 
+type FollowerCountRow = {
+  business_id: string;
+  follower_count: number;
+};
+
 export async function fetchPublishedBusinesses(currentUserId?: string) {
   if (!isSupabaseConfigured) {
     return [];
@@ -116,6 +121,9 @@ export async function fetchPublishedBusinesses(currentUserId?: string) {
   const savedBusinessIds = currentUserId
     ? await fetchSavedBusinessIds(currentUserId)
     : new Set<string>();
+  const followerCounts = await fetchBusinessFollowerCounts(
+    rows.map((business) => business.id),
+  );
 
   return rows.map((business) =>
     mapPublicBusiness(
@@ -124,6 +132,7 @@ export async function fetchPublishedBusinesses(currentUserId?: string) {
       currentUserId,
       contentMap.get(business.registration_id ?? "") ?? [],
       savedBusinessIds.has(business.id),
+      followerCounts.get(business.id) ?? 0,
     ),
   );
 }
@@ -149,6 +158,28 @@ export async function fetchSavedBusinessIds(userId: string) {
   return new Set(
     ((data ?? []) as SavedBusinessRow[]).map((row) => row.business_id),
   );
+}
+
+export async function fetchBusinessFollowerCounts(businessIds: string[]) {
+  const followerCounts = new Map<string, number>();
+
+  if (!isSupabaseConfigured || businessIds.length === 0) {
+    return followerCounts;
+  }
+
+  const { data, error } = await supabase.rpc("get_business_follower_counts", {
+    business_ids: businessIds,
+  });
+
+  if (error) {
+    return followerCounts;
+  }
+
+  for (const row of (data ?? []) as FollowerCountRow[]) {
+    followerCounts.set(row.business_id, row.follower_count);
+  }
+
+  return followerCounts;
 }
 
 export async function saveBusiness(businessId: string, userId: string) {
@@ -727,6 +758,7 @@ async function uploadImageToBucket({
 
   const imagePath = `${path}.${extension}`;
   const { error } = await supabase.storage.from(bucket).upload(imagePath, fileBody, {
+    cacheControl: "31536000",
     contentType: mimeType,
     upsert: false,
   });
@@ -832,6 +864,7 @@ function mapPublicBusiness(
   currentUserId?: string,
   contentItems: BusinessContentItem[] = [],
   isSaved = false,
+  followerCount = 0,
 ): Business {
   return {
     address: business.address ?? undefined,
@@ -851,6 +884,7 @@ function mapPublicBusiness(
     ownerName: owner?.owner_name ?? "",
     phone: business.phone ?? "",
     registrationId: business.registration_id ?? undefined,
+    followerCount,
     isSaved,
     servesAllCanada: business.serves_all_canada,
     slug: business.slug,

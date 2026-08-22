@@ -9,6 +9,7 @@ import {
   MapPin,
   Phone,
   ShieldCheck,
+  UsersRound,
 } from "lucide-react";
 
 import { BusinessContentCards } from "@/components/business-content-cards";
@@ -18,6 +19,7 @@ import { BusinessViewTracker } from "@/components/business-view-tracker";
 import { ContactAccessCard } from "@/components/contact-access-card";
 import { AnalyticsLink } from "@/components/analytics-link";
 import { MapEmbed } from "@/components/map-embed";
+import { MessageBusinessButton } from "@/components/message-business-button";
 import { SaveBusinessButton } from "@/components/save-business-button";
 import { ShareBusinessButton } from "@/components/share-business-button";
 import { Badge } from "@/components/ui/badge";
@@ -119,6 +121,8 @@ export default async function BusinessProfilePage({
       )}`;
   const nextPath = `/business/${rawBusiness.slug}`;
   const contentLabels = getBusinessContentLabels(locale);
+  const followerCount = rawBusiness.followerCount ?? 0;
+  const followerLabel = getFollowerLabel(followerCount, locale);
   const serviceItems = (business.contentItems ?? []).filter(
     (item) => item.type === "service",
   );
@@ -154,8 +158,8 @@ export default async function BusinessProfilePage({
           <span>{business.name}</span>
         </div>
 
-        <div className="relative overflow-hidden rounded-lg border bg-[linear-gradient(135deg,hsl(var(--primary)/0.12),hsl(var(--accent)/0.18)_48%,hsl(var(--muted)))] p-6 md:p-10">
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0,transparent_39px,hsl(var(--foreground)/0.05)_40px),linear-gradient(0deg,transparent_0,transparent_39px,hsl(var(--foreground)/0.05)_40px)] bg-[size:40px_40px]" />
+        <div className="relative overflow-hidden rounded-2xl border bg-card p-6 shadow-sm md:p-10">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-muted-foreground/35 to-transparent" />
           <div className="relative max-w-4xl">
             <div className="flex flex-wrap items-center gap-3">
               <BusinessLogo
@@ -184,6 +188,12 @@ export default async function BusinessProfilePage({
                 <Badge variant="green" className="h-8 gap-1.5 px-3">
                   <ShieldCheck className="h-3.5 w-3.5" />
                   {labels.business.verified}
+                </Badge>
+              ) : null}
+              {followerCount > 0 ? (
+                <Badge variant="outline" className="h-8 gap-1.5 bg-background/70 px-3">
+                  <UsersRound className="h-3.5 w-3.5" />
+                  {followerLabel}
                 </Badge>
               ) : null}
             </div>
@@ -326,6 +336,16 @@ export default async function BusinessProfilePage({
                 />
               </div>
             </div>
+            <div className="mt-4">
+              <MessageBusinessButton
+                businessId={rawBusiness.id}
+                businessOwnerId={rawBusiness.ownerId}
+                isOwner={isOwner}
+                isSignedIn={canViewContacts}
+                locale={locale}
+                slug={rawBusiness.slug}
+              />
+            </div>
             {canViewContacts ? (
               <div className="mt-4 grid gap-3 text-sm">
                 {business.phone ? (
@@ -434,9 +454,11 @@ function BusinessContentSection({
   business: Pick<
     Business,
     | "address"
+    | "category"
     | "city"
     | "id"
     | "instagram"
+    | "logoUrl"
     | "name"
     | "phone"
     | "slug"
@@ -521,4 +543,14 @@ function getWebsiteUrl(value: string) {
   return /^https?:\/\//i.test(trimmedValue)
     ? trimmedValue
     : `https://${trimmedValue}`;
+}
+
+function getFollowerLabel(count: number, locale: "uk" | "en") {
+  const safeCount = Math.max(0, count);
+
+  if (locale === "uk") {
+    return `${safeCount} ${safeCount === 1 ? "підписник" : "підписників"}`;
+  }
+
+  return `${safeCount} ${safeCount === 1 ? "follower" : "followers"}`;
 }

@@ -36,6 +36,7 @@ export async function uploadProfileAvatar(
   const { error } = await supabase.storage
     .from(avatarBucket)
     .upload(path, value, {
+      cacheControl: "31536000",
       contentType: value.type,
       upsert: false,
     });

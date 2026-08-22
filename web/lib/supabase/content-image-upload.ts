@@ -38,6 +38,7 @@ export async function uploadBusinessContentImage(
   const { error } = await supabase.storage
     .from(contentImageBucket)
     .upload(path, value, {
+      cacheControl: "31536000",
       contentType: value.type,
       upsert: false,
     });

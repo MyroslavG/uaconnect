@@ -77,6 +77,7 @@ export type Business = {
   contentItems?: BusinessContentItem[];
   distanceInKm?: number;
   isSaved?: boolean;
+  followerCount?: number;
   verifiedAt?: string;
   createdAt?: string;
   rankingSignals?: BusinessRankingSignals;

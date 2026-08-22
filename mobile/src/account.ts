@@ -160,6 +160,7 @@ async function uploadProfileAvatar(avatar: ProfileAvatarInput, userId: string) {
   const { error } = await supabase.storage
     .from(avatarBucket)
     .upload(imagePath, fileBody, {
+      cacheControl: "31536000",
       contentType: mimeType,
       upsert: false,
     });
