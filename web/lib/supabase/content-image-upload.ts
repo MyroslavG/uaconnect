@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { prepareImageUpload } from "@/lib/supabase/image-upload";
 import type { Database } from "@/lib/supabase/database.types";
 
 const contentImageBucket = "business-content-images";
@@ -20,26 +21,25 @@ export async function uploadBusinessContentImage(
   registrationId: string,
   contentItemId: string,
 ) {
-  if (!(value instanceof File) || value.size === 0) {
+  const upload = await prepareImageUpload(value, {
+    allowedTypes: allowedContentImageTypes,
+    maxEdge: 1800,
+    maxSize: maxContentImageSize,
+    quality: 76,
+    sizeError: "Image must be smaller than 5 MB.",
+    typeError: "Image must be a PNG, JPG, WebP, or GIF image.",
+  });
+
+  if (!upload) {
     return null;
   }
 
-  const extension = allowedContentImageTypes.get(value.type);
-
-  if (!extension) {
-    throw new Error("Image must be a PNG, JPG, WebP, or GIF image.");
-  }
-
-  if (value.size > maxContentImageSize) {
-    throw new Error("Image must be smaller than 5 MB.");
-  }
-
-  const path = `${ownerId}/${registrationId}/${contentItemId}/${randomUUID()}.${extension}`;
+  const path = `${ownerId}/${registrationId}/${contentItemId}/${randomUUID()}.${upload.extension}`;
   const { error } = await supabase.storage
     .from(contentImageBucket)
-    .upload(path, value, {
+    .upload(path, upload.body, {
       cacheControl: "31536000",
-      contentType: value.type,
+      contentType: upload.contentType,
       upsert: false,
     });
 

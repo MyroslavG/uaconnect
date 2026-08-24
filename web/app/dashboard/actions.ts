@@ -174,6 +174,7 @@ export async function updateBusinessRegistration(
   const categorySlug = String(formData.get("categorySlug") ?? "").trim();
   const city = String(formData.get("city") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
+  const keywords = optionalText(formData.get("keywords"));
   const servesAllCanada = formData.get("servesAllCanada") === "on";
 
   if (!id || !businessName || !categorySlug || !city || !description) {
@@ -265,6 +266,7 @@ export async function updateBusinessRegistration(
     address: optionalText(formData.get("address")),
     serves_all_canada: servesAllCanada,
     description,
+    keywords,
     phone: optionalText(formData.get("phone")),
     website: optionalText(formData.get("website")),
     instagram: optionalText(formData.get("instagram")),
@@ -318,6 +320,7 @@ export async function updateBusinessRegistration(
       address: optionalText(formData.get("address")) ?? "",
       serves_all_canada: servesAllCanada,
       description,
+      keywords,
       phone: optionalText(formData.get("phone")),
       website: optionalText(formData.get("website")),
       instagram: optionalText(formData.get("instagram")),

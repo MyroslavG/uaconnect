@@ -55,6 +55,7 @@ export async function submitBusinessRegistration(
   const categorySlug = String(formData.get("categorySlug") ?? "").trim();
   const city = String(formData.get("city") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
+  const keywords = optionalText(formData.get("keywords"));
   const servesAllCanada = formData.get("servesAllCanada") === "on";
 
   if (!businessName || !categorySlug || !city || !description) {
@@ -106,6 +107,7 @@ export async function submitBusinessRegistration(
     address: optionalText(formData.get("address")),
     serves_all_canada: servesAllCanada,
     description,
+    keywords,
     phone: optionalText(formData.get("phone")),
     website: optionalText(formData.get("website")),
     instagram: optionalText(formData.get("instagram")),

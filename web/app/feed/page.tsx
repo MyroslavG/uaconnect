@@ -1,14 +1,25 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Heart, MessageCircle, SendHorizontal, Sparkles, Store, UserRound } from "lucide-react";
+import {
+  Heart,
+  MessageCircle,
+  Pencil,
+  SendHorizontal,
+  Sparkles,
+  Store,
+  Trash2,
+  UserRound,
+} from "lucide-react";
 
 import { signInWithGoogle } from "@/app/auth/actions";
 import {
   createFeedComment,
   createFeedPost,
   deleteFeedComment,
+  deleteFeedPost,
   toggleFeedPostLike,
   updateFeedComment,
+  updateFeedPost,
 } from "@/app/feed/actions";
 import { BusinessLogo } from "@/components/business-logo";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +63,7 @@ const text = {
     edit: "Редагувати",
     delete: "Видалити",
     save: "Зберегти",
+    cancel: "Скасувати",
   },
   en: {
     kicker: "Feed",
@@ -78,6 +90,7 @@ const text = {
     edit: "Edit",
     delete: "Delete",
     save: "Save",
+    cancel: "Cancel",
   },
 } satisfies Record<Locale, Record<string, string>>;
 
@@ -227,6 +240,7 @@ function FeedPostCard({
     post.author?.author_id.slice(0, 8) ||
     labels.user;
   const avatarUrl = post.business?.logo_url || post.author?.author_avatar_url;
+  const isOwnPost = post.author_id === userId;
 
   return (
     <Card className="overflow-hidden border-border bg-card shadow-sm">
@@ -270,6 +284,36 @@ function FeedPostCard({
         </div>
 
         <p className="whitespace-pre-wrap text-base leading-7">{post.body}</p>
+
+        {isOwnPost ? (
+          <div className="flex flex-wrap items-start gap-2">
+            <details className="min-w-0 flex-1 rounded-md border bg-background p-2">
+              <summary className="inline-flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm font-black transition hover:bg-hover-blue hover:text-hover-blue-foreground">
+                <Pencil className="h-4 w-4" />
+                {labels.edit}
+              </summary>
+              <form action={updateFeedPost} className="mt-3 grid gap-2">
+                <input type="hidden" name="postId" value={post.id} />
+                <Textarea
+                  defaultValue={post.body}
+                  maxLength={2000}
+                  name="body"
+                  required
+                />
+                <Button className="justify-self-start" size="sm" type="submit">
+                  {labels.save}
+                </Button>
+              </form>
+            </details>
+            <form action={deleteFeedPost}>
+              <input type="hidden" name="postId" value={post.id} />
+              <Button size="sm" type="submit" variant="outline">
+                <Trash2 className="h-4 w-4" />
+                {labels.delete}
+              </Button>
+            </form>
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap items-center gap-2 border-y py-3">
           <form action={toggleFeedPostLike}>

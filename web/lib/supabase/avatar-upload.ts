@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { prepareImageUpload } from "@/lib/supabase/image-upload";
 import type { Database } from "@/lib/supabase/database.types";
 
 const avatarBucket = "profile-avatars";
@@ -18,26 +19,25 @@ export async function uploadProfileAvatar(
   value: FormDataEntryValue | null,
   ownerId: string,
 ) {
-  if (!(value instanceof File) || value.size === 0) {
+  const upload = await prepareImageUpload(value, {
+    allowedTypes: allowedAvatarTypes,
+    maxEdge: 900,
+    maxSize: maxAvatarSize,
+    quality: 78,
+    sizeError: "Profile photo must be smaller than 2 MB.",
+    typeError: "Profile photo must be a PNG, JPG, WebP, or GIF image.",
+  });
+
+  if (!upload) {
     return null;
   }
 
-  const extension = allowedAvatarTypes.get(value.type);
-
-  if (!extension) {
-    throw new Error("Profile photo must be a PNG, JPG, WebP, or GIF image.");
-  }
-
-  if (value.size > maxAvatarSize) {
-    throw new Error("Profile photo must be smaller than 2 MB.");
-  }
-
-  const path = `${ownerId}/${randomUUID()}.${extension}`;
+  const path = `${ownerId}/${randomUUID()}.${upload.extension}`;
   const { error } = await supabase.storage
     .from(avatarBucket)
-    .upload(path, value, {
+    .upload(path, upload.body, {
       cacheControl: "31536000",
-      contentType: value.type,
+      contentType: upload.contentType,
       upsert: false,
     });
 

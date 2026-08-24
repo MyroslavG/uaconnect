@@ -36,6 +36,28 @@ pnpm web:build
 pnpm mobile:typecheck
 ```
 
+## Image Compression Migration
+
+The storage compression script is dry-run by default:
+
+```bash
+pnpm web:compress-images
+```
+
+To run it for real, set `SUPABASE_SERVICE_ROLE_KEY` locally and pass `--write`:
+
+```bash
+pnpm web:compress-images -- --write
+```
+
+Useful safer test run:
+
+```bash
+pnpm web:compress-images -- --bucket business-content-images --limit 10
+```
+
+Never commit the service-role key. Keep it only in your local shell or local `.env.local`.
+
 ## Structure
 
 ```text

@@ -79,6 +79,9 @@ const text = {
     city: "Місто або локація",
     address: "Адреса",
     description: "Опис бізнесу",
+    keywords: "Ключові слова для пошуку",
+    keywordsHint:
+      "Наприклад: нігті, манікюр, брови, ремонт iPhone, кейтеринг. Розділяйте комами.",
     edit: "Редагувати",
     editTitle: "Редагувати профіль бізнесу",
     logoFile: "Логотип",
@@ -149,6 +152,9 @@ const text = {
     city: "City or location",
     address: "Address",
     description: "Business description",
+    keywords: "Search keywords",
+    keywordsHint:
+      "Example: nails, manicure, brows, iPhone repair, catering. Separate with commas.",
     edit: "Edit",
     editTitle: "Edit business profile",
     logoFile: "Logo",
@@ -470,6 +476,22 @@ export function DashboardBusinessEditor({
                       defaultValue={registration.description}
                       required
                       rows={4}
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <FieldLabel
+                      htmlFor={`keywords-${registration.id}`}
+                      badge={labels.optional}
+                    >
+                      {labels.keywords}
+                    </FieldLabel>
+                    <Textarea
+                      id={`keywords-${registration.id}`}
+                      name="keywords"
+                      defaultValue={registration.keywords ?? ""}
+                      placeholder={labels.keywordsHint}
+                      rows={3}
                     />
                   </div>
 

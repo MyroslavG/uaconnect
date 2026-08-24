@@ -11,6 +11,7 @@
     "web:build": "pnpm --filter kolo-web build",
     "web:lint": "pnpm --filter kolo-web lint",
     "web:typecheck": "pnpm --filter kolo-web typecheck",
+    "web:compress-images": "pnpm --filter kolo-web compress:images",
     "mobile:dev": "pnpm --filter kolo-mobile start",
     "mobile:start": "pnpm --filter kolo-mobile start",
     "mobile:android": "pnpm --filter kolo-mobile android",

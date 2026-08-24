@@ -1,7 +1,7 @@
 "use client";
 
 import { Search } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { SearchPanel } from "@/components/search-panel";
 import {
@@ -25,6 +25,7 @@ type SearchLauncherProps = {
   defaultQuery?: string;
   defaultLocation?: string;
   defaultCoordinates?: Coordinates;
+  defaultOpen?: boolean;
   locale: Locale;
   className?: string;
   tone?: "default" | "hero" | "header";
@@ -39,11 +40,12 @@ export function SearchLauncher({
   defaultQuery,
   defaultLocation,
   defaultCoordinates,
+  defaultOpen = false,
   locale,
   className,
   tone = "default",
 }: SearchLauncherProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(defaultOpen);
   const labels = copy[locale];
   const title = locale === "uk" ? "Пошук бізнесів" : "Search businesses";
   const displayText = getDisplayText({
@@ -55,6 +57,12 @@ export function SearchLauncher({
     defaultQuery,
     fallback: labels.search.placeholder,
   });
+
+  useEffect(() => {
+    if (defaultOpen) {
+      setIsOpen(true);
+    }
+  }, [defaultOpen]);
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>

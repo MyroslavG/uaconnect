@@ -63,6 +63,7 @@ create table if not exists public.business_registrations (
   logo_url text,
   serves_all_canada boolean not null default false,
   description text not null,
+  keywords text,
   status public.business_registration_status not null default 'pending',
   reviewer_id uuid references auth.users(id) on delete set null,
   review_note text,
@@ -84,6 +85,9 @@ alter table public.business_registrations
 alter table public.business_registrations
   add column if not exists serves_all_canada boolean not null default false;
 
+alter table public.business_registrations
+  add column if not exists keywords text;
+
 create table if not exists public.businesses (
   id uuid primary key default gen_random_uuid(),
   registration_id uuid unique references public.business_registrations(id) on delete set null,
@@ -99,6 +103,7 @@ create table if not exists public.businesses (
   logo_url text,
   serves_all_canada boolean not null default false,
   description text not null,
+  keywords text,
   status text not null default 'published' check (status in ('published', 'hidden')),
   verified_at timestamptz,
   created_at timestamptz not null default now(),
@@ -110,6 +115,9 @@ alter table public.businesses
 
 alter table public.businesses
   add column if not exists serves_all_canada boolean not null default false;
+
+alter table public.businesses
+  add column if not exists keywords text;
 
 create table if not exists public.business_claim_invites (
   id uuid primary key default gen_random_uuid(),
@@ -864,6 +872,7 @@ begin
       logo_url = new.logo_url,
       serves_all_canada = new.serves_all_canada,
       description = new.description,
+      keywords = new.keywords,
       status = 'published',
       updated_at = now()
     where registration_id = old.id;
@@ -981,6 +990,7 @@ begin
     logo_url,
     serves_all_canada,
     description,
+    keywords,
     status,
     reviewer_id,
     reviewed_at
@@ -997,6 +1007,7 @@ begin
     business_row.logo_url,
     business_row.serves_all_canada,
     business_row.description,
+    business_row.keywords,
     'approved',
     invite_row.created_by,
     now()
@@ -1059,6 +1070,7 @@ begin
     logo_url = registration_row.logo_url,
     serves_all_canada = registration_row.serves_all_canada,
     description = registration_row.description,
+    keywords = registration_row.keywords,
     status = 'published',
     updated_at = now()
   where public.businesses.registration_id = registration_row.id
@@ -1152,13 +1164,6 @@ as $$
       and (
         business_conversations.customer_id = (select auth.uid())
         or business_conversations.business_owner_id = (select auth.uid())
-        or public.is_admin()
-        or exists (
-          select 1
-          from public.business_messages
-          where business_messages.conversation_id = target_conversation_id
-            and business_messages.sender_id = (select auth.uid())
-        )
       )
   );
 $$;
@@ -1244,8 +1249,6 @@ as $$
     and (
       business_conversations.customer_id = current_request.user_id
       or business_conversations.business_owner_id = current_request.user_id
-      or latest_messages.sender_id = current_request.user_id
-      or public.is_admin()
     )
   order by
     coalesce(business_conversations.last_message_at, latest_messages.created_at) desc,
@@ -1426,7 +1429,6 @@ begin
 
   if current_user_id <> target_business_owner_id
     and current_user_id <> target_customer_id
-    and not public.is_admin()
   then
     raise exception 'You cannot send messages in this conversation'
       using errcode = '42501';
@@ -1494,7 +1496,6 @@ begin
 
   if current_user_id <> target_business_owner_id
     and current_user_id <> target_customer_id
-    and not public.is_admin()
   then
     raise exception 'You cannot read this conversation'
       using errcode = '42501';
@@ -1739,6 +1740,102 @@ end;
 $$;
 
 grant execute on function public.create_feed_post(text, uuid) to authenticated;
+
+create or replace function public.update_feed_post(
+  target_post_id uuid,
+  body text
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  normalized_body text := trim(coalesce(body, ''));
+  updated_count integer := 0;
+begin
+  if current_user_id is null then
+    raise exception 'Authentication is required to edit feed posts'
+      using errcode = '28000';
+  end if;
+
+  if char_length(normalized_body) < 1 or char_length(normalized_body) > 2000 then
+    raise exception 'Feed post must be between 1 and 2000 characters'
+      using errcode = '22001';
+  end if;
+
+  update public.feed_posts
+  set body = normalized_body
+  where id = target_post_id
+    and (
+      author_id = current_user_id
+      or public.is_admin(current_user_id)
+    );
+
+  get diagnostics updated_count = row_count;
+
+  if updated_count = 0 then
+    if exists (
+      select 1
+      from public.feed_posts
+      where id = target_post_id
+    ) then
+      raise exception 'You can only edit your own feed posts'
+        using errcode = '42501';
+    end if;
+
+    return false;
+  end if;
+
+  return true;
+end;
+$$;
+
+grant execute on function public.update_feed_post(uuid, text) to authenticated;
+
+create or replace function public.delete_feed_post(target_post_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  deleted_count integer := 0;
+begin
+  if current_user_id is null then
+    raise exception 'Authentication is required to delete feed posts'
+      using errcode = '28000';
+  end if;
+
+  delete from public.feed_posts
+  where id = target_post_id
+    and (
+      author_id = current_user_id
+      or public.is_admin(current_user_id)
+    );
+
+  get diagnostics deleted_count = row_count;
+
+  if deleted_count = 0 then
+    if exists (
+      select 1
+      from public.feed_posts
+      where id = target_post_id
+    ) then
+      raise exception 'You can only delete your own feed posts'
+        using errcode = '42501';
+    end if;
+
+    return false;
+  end if;
+
+  return true;
+end;
+$$;
+
+grant execute on function public.delete_feed_post(uuid) to authenticated;
 
 create or replace function public.toggle_feed_post_like(
   target_post_id uuid,
@@ -2020,7 +2117,6 @@ to authenticated
 using (
   (select auth.uid()) = customer_id
   or (select auth.uid()) = business_owner_id
-  or public.is_admin()
 );
 
 drop policy if exists "Customers can create business conversations" on public.business_conversations;
@@ -2045,12 +2141,10 @@ to authenticated
 using (
   (select auth.uid()) = customer_id
   or (select auth.uid()) = business_owner_id
-  or public.is_admin()
 )
 with check (
   (select auth.uid()) = customer_id
   or (select auth.uid()) = business_owner_id
-  or public.is_admin()
 );
 
 drop policy if exists "Participants can view business messages" on public.business_messages;

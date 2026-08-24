@@ -227,6 +227,87 @@ export async function toggleMobileFeedLike({
   }
 }
 
+export async function updateMobileFeedPost({
+  authorId,
+  body,
+  postId,
+}: {
+  authorId: string;
+  body: string;
+  postId: string;
+}) {
+  const trimmedBody = body.trim();
+
+  if (!trimmedBody || trimmedBody.length > 2000) {
+    throw new Error("Post must include text and be under 2000 characters.");
+  }
+
+  const { error } = await supabase.rpc("update_feed_post", {
+    body: trimmedBody,
+    target_post_id: postId,
+  });
+
+  if (!error) {
+    return;
+  }
+
+  if (!isMissingRpcError(error)) {
+    throw error;
+  }
+
+  const { data, error: updateError } = await supabase
+    .from("feed_posts")
+    .update({ body: trimmedBody })
+    .eq("id", postId)
+    .eq("author_id", authorId)
+    .select("id")
+    .maybeSingle();
+
+  if (updateError) {
+    throw updateError;
+  }
+
+  if (!data) {
+    throw new Error("Post was not updated. Make sure this account owns the post.");
+  }
+}
+
+export async function deleteMobileFeedPost({
+  authorId,
+  postId,
+}: {
+  authorId: string;
+  postId: string;
+}) {
+  const { error } = await supabase.rpc("delete_feed_post", {
+    target_post_id: postId,
+  });
+
+  if (!error) {
+    return;
+  }
+
+  if (!isMissingRpcError(error)) {
+    throw error;
+  }
+
+  const { data, error: deleteError } = await supabase
+    .from("feed_posts")
+    .delete()
+    .eq("id", postId)
+    .eq("author_id", authorId)
+    .select("id")
+    .maybeSingle();
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  if (!data) {
+    throw new Error("Post was not deleted. Make sure this account owns the post.");
+  }
+}
+
 export async function createMobileFeedComment({
   authorId,
   body,

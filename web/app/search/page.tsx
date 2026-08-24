@@ -40,6 +40,7 @@ type SearchPageProps = {
     radius?: string;
     localOnly?: string;
     locationReady?: string;
+    openSearch?: string;
   }>;
 };
 
@@ -107,6 +108,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const radiusInKm = Number(resolvedSearchParams.radius) || 75;
   const localOnly = resolvedSearchParams.localOnly === "1";
   const locationReady = resolvedSearchParams.locationReady === "1";
+  const shouldOpenSearch = resolvedSearchParams.openSearch === "1";
   const coordinates =
     Number.isFinite(latitude) && Number.isFinite(longitude)
       ? { latitude, longitude }
@@ -258,6 +260,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               defaultCoordinates={coordinates}
               defaultLocalOnly={localOnly}
               defaultLocation={near}
+              defaultOpen={shouldOpenSearch}
               defaultQuery={query}
               locale={locale}
             />

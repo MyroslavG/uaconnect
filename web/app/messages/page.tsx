@@ -5,6 +5,7 @@ import { Inbox, MessageCircle, SendHorizontal } from "lucide-react";
 import { signInWithGoogle } from "@/app/auth/actions";
 import { sendBusinessMessage } from "@/app/messages/actions";
 import { BusinessLogo } from "@/components/business-logo";
+import { MessageAutoRefresh } from "@/components/message-auto-refresh";
 import { MessageReadMarker } from "@/components/message-read-marker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -103,6 +104,7 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
 
   return (
     <section className="container py-8 md:py-12">
+      <MessageAutoRefresh />
       <div className="mb-6 max-w-3xl">
         <Badge variant="accent">{labels.kicker}</Badge>
         <h1 className="mt-4 text-4xl font-black tracking-normal md:text-5xl">

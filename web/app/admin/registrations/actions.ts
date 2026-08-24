@@ -135,6 +135,7 @@ async function publishRegistrationBusiness(
     logo_url: registration.logo_url,
     serves_all_canada: registration.serves_all_canada,
     description: registration.description,
+    keywords: registration.keywords,
     status: "published",
     verified_at: verifiedAt,
   };

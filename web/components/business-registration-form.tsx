@@ -40,6 +40,9 @@ const text = {
     servesAllCanadaHint:
       "Оберіть, якщо ваш бізнес може працювати з клієнтами з будь-якого міста Канади.",
     description: "Опис бізнесу",
+    keywords: "Ключові слова для пошуку",
+    keywordsHint:
+      "Наприклад: нігті, манікюр, брови, ремонт iPhone, кейтеринг. Розділяйте комами.",
     submit: "Надіслати на перевірку",
     pending: "Надсилаємо...",
     success: "Заявку успішно надіслано на перевірку.",
@@ -65,6 +68,9 @@ const text = {
     servesAllCanadaHint:
       "Choose this if your business can serve clients from any city in Canada.",
     description: "Business description",
+    keywords: "Search keywords",
+    keywordsHint:
+      "Example: nails, manicure, brows, iPhone repair, catering. Separate with commas.",
     submit: "Submit for review",
     pending: "Submitting...",
     success: "Your business was successfully submitted for review.",
@@ -172,6 +178,17 @@ export function BusinessRegistrationForm({
 
       <div className="grid gap-4 border-t pt-5">
         <FormSectionTitle title={labels.optionalSection} />
+        <div className="grid gap-2">
+          <FieldLabel htmlFor="keywords" badge={labels.optional}>
+            {labels.keywords}
+          </FieldLabel>
+          <Textarea
+            id="keywords"
+            name="keywords"
+            placeholder={labels.keywordsHint}
+            rows={3}
+          />
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
             <FieldLabel htmlFor="address" badge={labels.optional}>

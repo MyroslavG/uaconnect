@@ -478,6 +478,7 @@ function mapPublishedBusiness(
     neighborhood: cityResolution?.kind === "nearby" ? rawLocation : "",
     servesAllCanada: row.serves_all_canada,
     description: row.description,
+    keywords: row.keywords ?? "",
     longDescription: row.description,
     phone: row.phone ?? "",
     website: row.website ?? "",
@@ -493,13 +494,20 @@ function mapPublishedBusiness(
     followerCount,
     hours: "",
     isSaved,
-    tags: [category.name],
+    tags: [category.name, ...(row.keywords ? splitKeywords(row.keywords) : [])],
     contentItems,
     createdAt: row.created_at,
     rankingSignals,
     updatedAt: row.updated_at,
     verifiedAt: row.verified_at ?? undefined,
   };
+}
+
+function splitKeywords(value: string) {
+  return value
+    .split(/[,;\n]/)
+    .map((keyword) => keyword.trim())
+    .filter(Boolean);
 }
 
 function mapBusinessContentItem(row: BusinessContentRow): BusinessContentItem {

@@ -62,6 +62,8 @@ export function getOptimizedImageUrl(
   value: string | null | undefined,
   options: ImageOptimizationOptions = imageOptimizationPresets.detail,
 ) {
+  void options;
+
   const safeImageUrl = getSafeImageUrl(value);
 
   if (!safeImageUrl) {
@@ -70,41 +72,22 @@ export function getOptimizedImageUrl(
 
   try {
     const url = new URL(safeImageUrl);
-    const publicObjectPath = "/storage/v1/object/public/";
-    const renderImagePath = "/storage/v1/render/image/public/";
 
-    if (
-      !url.pathname.includes(publicObjectPath) &&
-      !url.pathname.includes(renderImagePath)
-    ) {
-      return safeImageUrl;
-    }
-
-    if (/\.(svg)(\?|$)/i.test(url.pathname)) {
-      return safeImageUrl;
-    }
-
-    url.pathname = url.pathname.replace(publicObjectPath, renderImagePath);
-
-    if (options.width) {
-      url.searchParams.set("width", String(options.width));
-    }
-
-    if (options.height) {
-      url.searchParams.set("height", String(options.height));
-    }
-
-    if (options.quality) {
-      url.searchParams.set("quality", String(options.quality));
-    }
-
-    if (options.resize) {
-      url.searchParams.set("resize", options.resize);
-    }
+    url.pathname = url.pathname.replace(
+      "/storage/v1/render/image/public/",
+      "/storage/v1/object/public/",
+    );
+    url.searchParams.delete("height");
+    url.searchParams.delete("quality");
+    url.searchParams.delete("resize");
+    url.searchParams.delete("width");
 
     return url.toString();
   } catch {
-    return safeImageUrl;
+    return safeImageUrl.replace(
+      "/storage/v1/render/image/public/",
+      "/storage/v1/object/public/",
+    );
   }
 }
 

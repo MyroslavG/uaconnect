@@ -59,10 +59,12 @@ function getSearchScore(business: Business, query?: string) {
     { value: business.name, weight: 70 },
     { value: business.category, weight: 38 },
     { value: business.categorySlug, weight: 28 },
+    { value: getCategorySearchAliases(business.categorySlug), weight: 32 },
     { value: business.city, weight: 24 },
     { value: business.neighborhood, weight: 18 },
     { value: business.address, weight: 14 },
     { value: business.description, weight: 22 },
+    { value: business.keywords, weight: 56 },
     { value: business.tags.join(" "), weight: 18 },
     {
       value: (business.contentItems ?? [])
@@ -259,4 +261,13 @@ function getTimestamp(value: string | undefined) {
 
 function normalize(value: string | undefined) {
   return value?.trim().toLowerCase() ?? "";
+}
+
+function getCategorySearchAliases(categorySlug: string) {
+  const aliases: Record<string, string> = {
+    beauty:
+      "beauty hair nails manicure pedicure makeup brows salon краса волосся нігті манікюр педикюр макіяж брови салон ногти маникюр педикюр",
+  };
+
+  return aliases[categorySlug] ?? "";
 }

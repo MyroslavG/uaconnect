@@ -15,6 +15,7 @@ export type BusinessRegistrationInput = {
   city: string;
   address?: string;
   description: string;
+  keywords?: string;
   instagram?: string;
   logo?: BusinessLogoInput | null;
   phone?: string;
@@ -44,6 +45,7 @@ type PublicBusinessRow = {
   logo_url: string | null;
   serves_all_canada: boolean;
   description: string;
+  keywords?: string | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -62,6 +64,7 @@ type RegistrationRow = {
   logo_url: string | null;
   serves_all_canada: boolean;
   description: string;
+  keywords?: string | null;
   status: string;
   created_at?: string;
   updated_at?: string;
@@ -489,6 +492,7 @@ export async function createBusinessRegistration(
       category_slug: input.categorySlug,
       city: input.city.trim(),
       description: input.description.trim(),
+      keywords: normalizeNullable(input.keywords),
       instagram: normalizeNullable(input.instagram),
       owner_id: ownerId,
       phone: normalizeNullable(input.phone),
@@ -537,6 +541,7 @@ export async function updateOwnedBusiness(business: Business, ownerId: string) {
     category_slug: business.categorySlug,
     city: business.city.trim(),
     description: business.description.trim(),
+    keywords: normalizeNullable(business.keywords),
     instagram: normalizeNullable(business.instagram),
     logo_url: normalizeNullable(business.logoUrl),
     phone: normalizeNullable(business.phone),
@@ -563,6 +568,7 @@ export async function updateOwnedBusiness(business: Business, ownerId: string) {
       category_slug: registrationPayload.category_slug,
       city: registrationPayload.city,
       description: registrationPayload.description,
+      keywords: registrationPayload.keywords,
       instagram: registrationPayload.instagram,
       logo_url: registrationPayload.logo_url,
       name: registrationPayload.business_name,
@@ -872,6 +878,7 @@ function mapPublicBusiness(
     city: business.city,
     createdAt: business.created_at,
     description: business.description,
+    keywords: business.keywords ?? undefined,
     id: business.id,
     instagram: business.instagram ?? undefined,
     logoUrl: business.logo_url ?? undefined,
@@ -901,6 +908,7 @@ function mapRegistration(registration: RegistrationRow): Business {
     city: registration.city,
     createdAt: registration.created_at,
     description: registration.description,
+    keywords: registration.keywords ?? undefined,
     id: registration.id,
     instagram: registration.instagram ?? undefined,
     logoUrl: registration.logo_url ?? undefined,

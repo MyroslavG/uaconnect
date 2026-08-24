@@ -4,6 +4,7 @@ import DateTimePicker, {
   type DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import * as AppleAuthentication from "expo-apple-authentication";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import * as Linking from "expo-linking";
 import * as ImagePicker from "expo-image-picker";
 import * as ExpoLocation from "expo-location";
@@ -22,6 +23,7 @@ import {
   PanResponder,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   Share as NativeShare,
   StatusBar,
@@ -60,6 +62,7 @@ import {
   Megaphone,
   MessageCircle,
   Moon,
+  MoreHorizontal,
   Pencil,
   Phone,
   Plane,
@@ -116,9 +119,11 @@ import {
   createMobileFeedComment,
   createMobileFeedPost,
   deleteMobileFeedComment,
+  deleteMobileFeedPost,
   fetchMobileFeedPosts,
   toggleMobileFeedLike,
   updateMobileFeedComment,
+  updateMobileFeedPost,
   type MobileFeedPost,
 } from "./src/feed";
 import {
@@ -186,6 +191,7 @@ type AppTourFocus =
   | "addBusinessForm"
   | "businessDashboard"
   | "eventsFeed"
+  | "feedActions"
   | "homeDiscovery"
   | "profileControls"
   | "searchFilters";
@@ -257,33 +263,37 @@ const copy = {
     close: "Закрити",
     walkthroughTitle: "Ознайомлення з Kolo",
     walkthroughIntro:
-      "Проведемо вас по основних сторінках і підсвітимо місця, з якими можна взаємодіяти.",
-    walkthroughHomeTitle: "Головна",
+      "Коротко покажемо нові вкладки: головну, пошук-контент, стрічку, події та профіль.",
+    walkthroughHomeTitle: "Головна Kolo",
     walkthroughHomeText:
-      "Натискайте на пошук, категорії, рекомендації або нові публікації, щоб швидко перейти до результатів.",
-    walkthroughHomeTarget: "Пошук, категорії та рекомендації",
-    walkthroughSearchTitle: "Знаходьте потрібне поруч",
+      "Зверху бізнеси показані як сторіс, нижче є горизонтальні добірки категорій, контенту й рекомендацій.",
+    walkthroughHomeTarget: "Сторіс бізнесів і горизонтальні добірки",
+    walkthroughSearchTitle: "Огляд і пошук",
     walkthroughSearchText:
-      "Тут можна змінити запит, локацію, категорію, локальний режим і відкрити потрібний бізнес.",
-    walkthroughSearchTarget: "Поля пошуку та фільтри",
+      "Пошук починається з плитки фото. Натисніть поле зверху, щоб знайти бізнес за назвою, послугою, категорією чи ключовими словами.",
+    walkthroughSearchTarget: "Поле пошуку і плитка контенту",
+    walkthroughFeedTitle: "Стрічка і повідомлення",
+    walkthroughFeedText:
+      "У стрічці можна читати пости, лайкати, коментувати, поширювати й додавати свій пост через плюс. Іконка справа відкриває повідомлення.",
+    walkthroughFeedTarget: "Плюс для поста та іконка повідомлень",
     walkthroughEventsTitle: "Події поруч",
     walkthroughEventsText:
-      "Вибирайте локацію, переглядайте події та відкривайте їх, щоб побачити деталі й контакти.",
-    walkthroughEventsTarget: "Локація та список подій",
+      "Події показуються поруч із вашою локацією. Іконка налаштувань відкриває вибір міста та локальний режим.",
+    walkthroughEventsTarget: "Кнопка налаштувань і картки подій",
     walkthroughProfileTitle: "Профіль",
     walkthroughProfileText:
-      "Тут знаходиться вхід, підписки, тема, особисті дані та повторне ознайомлення.",
-    walkthroughProfileTarget: "Акаунт, тема та підписки",
+      "У профілі зібрані акаунт, підписки, тема, додавання бізнесу й кабінет власника в одному місці.",
+    walkthroughProfileTarget: "Перемикачі профілю та особисті дані",
     walkthroughAddBusinessTitle: "Додати бізнес",
     walkthroughAddBusinessText:
-      "Заповніть форму, додайте контакти й логотип, а потім надішліть бізнес на перевірку.",
+      "Відкрийте вкладку «Додати», щоб надіслати бізнес: контакти, логотип, категорія, опис і ключові слова.",
     walkthroughAddBusinessTarget: "Форма додавання бізнесу",
-    walkthroughBusinessTitle: "Кабінет бізнесу",
+    walkthroughBusinessTitle: "Бізнес власника",
     walkthroughBusinessText:
-      "Власник може перемикатися між профілем, послугами, продуктами й подіями та редагувати кожну частину.",
-    walkthroughBusinessTarget: "Редагування бізнесу і контенту",
+      "У вкладці «Бізнес» власник бачить профіль як користувачі й редагує інформацію, послуги, продукти та події.",
+    walkthroughBusinessTarget: "Профіль бізнесу і вкладки контенту",
     walkthroughAgain: "Показати ознайомлення",
-    walkthroughShowOnPage: "Показати на сторінці",
+    walkthroughShowOnPage: "Показати де це",
     walkthroughSkip: "Пропустити ознайомлення",
     walkthroughTargetLabel: "Тут можна взаємодіяти",
     contactEmail: "Робочий email",
@@ -297,6 +307,8 @@ const copy = {
     noComments: "Коментарів поки немає.",
     contentDescription: "Опис",
     contentItems: "записів",
+    keywords: "Ключові слова",
+    keywordsHint: "Наприклад: нігті, манікюр, брови, ремонт iPhone, кейтеринг",
     contentLink: "Посилання",
     community: "Спільнота",
     contentPhoto: "Фото",
@@ -321,6 +333,8 @@ const copy = {
     deleteContentTitle: "Видалити запис?",
     deleteCommentMessage: "Цей коментар буде видалено зі стрічки.",
     deleteCommentTitle: "Видалити коментар?",
+    deletePostMessage: "Цей пост і його коментарі буде видалено зі стрічки.",
+    deletePostTitle: "Видалити пост?",
     description: "Опис",
     done: "Готово",
     edit: "Редагувати",
@@ -532,33 +546,37 @@ const copy = {
     close: "Close",
     walkthroughTitle: "Kolo introduction",
     walkthroughIntro:
-      "We will move through the main pages and highlight the places people can interact with.",
-    walkthroughHomeTitle: "Home",
+      "A quick look at the new tabs: home, visual search, feed, events, and profile.",
+    walkthroughHomeTitle: "Kolo home",
     walkthroughHomeText:
-      "Tap search, categories, recommendations, or new posts to quickly jump into results.",
-    walkthroughHomeTarget: "Search, categories, and recommendations",
-    walkthroughSearchTitle: "Find what you need nearby",
+      "Business logos appear like stories at the top, followed by horizontal rows for categories, content, and recommendations.",
+    walkthroughHomeTarget: "Business stories and horizontal rows",
+    walkthroughSearchTitle: "Explore and search",
     walkthroughSearchText:
-      "Change the query, location, category, local-only mode, and open a business from here.",
-    walkthroughSearchTarget: "Search fields and filters",
+      "Search starts with a photo grid. Tap the field at the top to find a business by name, service, category, or keywords.",
+    walkthroughSearchTarget: "Search field and content grid",
+    walkthroughFeedTitle: "Feed and messages",
+    walkthroughFeedText:
+      "Read posts, like, comment, share, and add your own post with the plus button. The icon on the right opens messages.",
+    walkthroughFeedTarget: "Post plus button and messages icon",
     walkthroughEventsTitle: "Events nearby",
     walkthroughEventsText:
-      "Choose a location, browse events, and open them to view details and contacts.",
-    walkthroughEventsTarget: "Location and events list",
+      "Events are shown near your location. The settings icon opens city selection and local-only mode.",
+    walkthroughEventsTarget: "Settings button and event cards",
     walkthroughProfileTitle: "Profile",
     walkthroughProfileText:
-      "Profile contains sign-in, following, theme, personal details, and this introduction.",
-    walkthroughProfileTarget: "Account, theme, and following",
+      "Profile now holds account settings, following, theme, business submission, and the owner dashboard in one place.",
+    walkthroughProfileTarget: "Profile switches and personal details",
     walkthroughAddBusinessTitle: "Add business",
     walkthroughAddBusinessText:
-      "Fill out the form, add contacts and a logo, then submit the business for review.",
+      "Open Add to submit a business with contacts, logo, category, description, and keywords.",
     walkthroughAddBusinessTarget: "Business submission form",
-    walkthroughBusinessTitle: "Business dashboard",
+    walkthroughBusinessTitle: "Owner business",
     walkthroughBusinessText:
-      "Owners can switch between profile, services, products, and events, then edit each part.",
-    walkthroughBusinessTarget: "Business editing and content",
+      "In Business, owners see the public profile preview and edit info, services, products, and events.",
+    walkthroughBusinessTarget: "Business profile and content tabs",
     walkthroughAgain: "Show introduction",
-    walkthroughShowOnPage: "Show on page",
+    walkthroughShowOnPage: "Show me where",
     walkthroughSkip: "Skip introduction",
     walkthroughTargetLabel: "You can interact here",
     contactEmail: "Work email",
@@ -572,6 +590,8 @@ const copy = {
     noComments: "No comments yet.",
     contentDescription: "Description",
     contentItems: "items",
+    keywords: "Keywords",
+    keywordsHint: "Example: nails, manicure, brows, iPhone repair, catering",
     contentLink: "Link",
     community: "Community",
     contentPhoto: "Photo",
@@ -595,6 +615,8 @@ const copy = {
     deleteContentTitle: "Delete item?",
     deleteCommentMessage: "This comment will be removed from the feed.",
     deleteCommentTitle: "Delete comment?",
+    deletePostMessage: "This post and its comments will be removed from the feed.",
+    deletePostTitle: "Delete post?",
     description: "Description",
     done: "Done",
     edit: "Edit",
@@ -960,7 +982,13 @@ export default function App() {
   const [discoveryReturnPostKey, setDiscoveryReturnPostKey] = useState<
     string | null
   >(null);
+  const [businessReturnFeedPostId, setBusinessReturnFeedPostId] = useState<
+    string | null
+  >(null);
   const [selectedFeedPostId, setSelectedFeedPostId] = useState<string | null>(null);
+  const homeScrollOffset = useRef(0);
+  const pageTransition = useRef(new Animated.Value(1)).current;
+  const lastPageTransitionKey = useRef("");
   const hasTrackedAppOpen = useRef(false);
   const lastTrackedSearchKey = useRef("");
   const [pendingBusinessSlug, setPendingBusinessSlug] = useState<string | null>(
@@ -1281,6 +1309,18 @@ export default function App() {
       isMounted = false;
     };
   }, [messageRefreshKey, session?.user.id]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !session?.user.id) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setMessageRefreshKey((value) => value + 1);
+    }, activeTab === "messages" ? 4500 : 8000);
+
+    return () => clearInterval(interval);
+  }, [activeTab, session?.user.id]);
 
   const selectedConversation = useMemo(
     () =>
@@ -1703,6 +1743,26 @@ export default function App() {
         : null,
     [feedPosts, selectedFeedPostId],
   );
+  const pageTransitionKey = [
+    activeTab,
+    selectedBusiness?.id ?? "",
+    selectedFeedPostId ?? "",
+    isMessageThreadOpen ? selectedConversationId ?? "thread" : "",
+  ].join(":");
+  const pageTransitionStyle = {
+    opacity: pageTransition.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.74, 1],
+    }),
+    transform: [
+      {
+        scale: pageTransition.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0.965, 1],
+        }),
+      },
+    ],
+  };
 
   const results = useMemo(
     () => {
@@ -1715,7 +1775,7 @@ export default function App() {
           .map((item) => `${item.title} ${item.description} ${item.location ?? ""}`)
           .join(" ");
         const haystack = normalize(
-          `${business.name} ${business.description} ${business.city} ${locationAliases} ${category} ${aliases} ${contentText}`,
+          `${business.name} ${business.description} ${business.keywords ?? ""} ${business.city} ${locationAliases} ${category} ${aliases} ${contentText}`,
         );
         const matchesQuery =
           !searchQuery || haystack.includes(normalize(searchQuery));
@@ -1740,6 +1800,21 @@ export default function App() {
   );
 
   const profileName = getProfileDisplayName(currentProfile, session);
+
+  useEffect(() => {
+    if (lastPageTransitionKey.current === pageTransitionKey) {
+      return;
+    }
+
+    lastPageTransitionKey.current = pageTransitionKey;
+    pageTransition.setValue(0);
+    Animated.timing(pageTransition, {
+      duration: 210,
+      easing: Easing.out(Easing.cubic),
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  }, [pageTransition, pageTransitionKey]);
 
   useEffect(() => {
     if (hasTrackedAppOpen.current) {
@@ -2257,6 +2332,99 @@ export default function App() {
       return false;
     } finally {
       setIsFeedSubmitting(false);
+    }
+  }
+
+  async function handleUpdateFeedPost(post: MobileFeedPost, body: string) {
+    if (!session?.user.id || post.author_id !== session.user.id) {
+      setActiveProfilePanel("account");
+      setActiveTab("profile");
+      return;
+    }
+
+    const trimmedBody = body.trim();
+
+    if (!trimmedBody || trimmedBody === post.body) {
+      return;
+    }
+
+    const updatedAt = new Date().toISOString();
+
+    setFeedPosts((currentPosts) =>
+      currentPosts.map((feedPost) =>
+        feedPost.id === post.id
+          ? { ...feedPost, body: trimmedBody, updated_at: updatedAt }
+          : feedPost,
+      ),
+    );
+
+    try {
+      await updateMobileFeedPost({
+        authorId: session.user.id,
+        body: trimmedBody,
+        postId: post.id,
+      });
+    } catch (error) {
+      setFeedPosts((currentPosts) =>
+        currentPosts.map((feedPost) =>
+          feedPost.id === post.id ? post : feedPost,
+        ),
+      );
+      console.error("[kolo:mobile-feed-post-update]", error);
+      Alert.alert(labels.feed, getErrorMessage(error));
+    }
+  }
+
+  function handleDeleteFeedPost(post: MobileFeedPost) {
+    if (!session?.user.id || post.author_id !== session.user.id) {
+      setActiveProfilePanel("account");
+      setActiveTab("profile");
+      return;
+    }
+
+    Alert.alert(labels.deletePostTitle, labels.deletePostMessage, [
+      {
+        style: "cancel",
+        text: labels.cancel,
+      },
+      {
+        onPress: () => {
+          void deleteFeedPost(post);
+        },
+        style: "destructive",
+        text: labels.delete,
+      },
+    ]);
+  }
+
+  async function deleteFeedPost(post: MobileFeedPost) {
+    if (!session?.user.id || post.author_id !== session.user.id) {
+      return;
+    }
+
+    if (selectedFeedPostId === post.id) {
+      setSelectedFeedPostId(null);
+    }
+
+    setFeedPosts((currentPosts) =>
+      currentPosts.filter((feedPost) => feedPost.id !== post.id),
+    );
+
+    try {
+      await deleteMobileFeedPost({
+        authorId: session.user.id,
+        postId: post.id,
+      });
+    } catch (error) {
+      setFeedPosts((currentPosts) =>
+        [...currentPosts, post].sort(
+          (firstPost, secondPost) =>
+            new Date(secondPost.created_at).getTime() -
+            new Date(firstPost.created_at).getTime(),
+        ),
+      );
+      console.error("[kolo:mobile-feed-post-delete]", error);
+      Alert.alert(labels.feed, getErrorMessage(error));
     }
   }
 
@@ -2810,6 +2978,10 @@ export default function App() {
   }
 
   function openBusinessScreen(business: Business, returnTab = getActiveMainTab()) {
+    if (returnTab !== "feed") {
+      setBusinessReturnFeedPostId(null);
+    }
+
     setBusinessReturnTab(returnTab);
     setSelectedBusiness(business);
     setActiveTab("business");
@@ -2820,7 +2992,43 @@ export default function App() {
     openBusinessScreen(business, "search");
   }
 
+  function getBusinessForFeedPost(post: MobileFeedPost) {
+    if (!post.business_id && !post.business?.slug) {
+      return null;
+    }
+
+    return (
+      businesses.find(
+        (business) =>
+          business.id === post.business_id ||
+          Boolean(post.business?.slug && business.slug === post.business.slug),
+      ) ?? null
+    );
+  }
+
+  function openBusinessFromFeedPost(post: MobileFeedPost) {
+    const business = getBusinessForFeedPost(post);
+
+    if (!business) {
+      return;
+    }
+
+    setBusinessReturnFeedPostId(post.id);
+    setSelectedFeedPostId(null);
+    openBusinessScreen(business, "feed");
+  }
+
   function closeBusinessScreen() {
+    if (businessReturnFeedPostId) {
+      const postId = businessReturnFeedPostId;
+
+      setBusinessReturnFeedPostId(null);
+      setSelectedBusiness(null);
+      setActiveTab("feed");
+      setSelectedFeedPostId(postId);
+      return;
+    }
+
     setSelectedBusiness(null);
     setActiveTab(businessReturnTab);
   }
@@ -2855,6 +3063,8 @@ export default function App() {
 
   function openMainTab(tab: MainTab) {
     setDiscoveryReturnPostKey(null);
+    setBusinessReturnFeedPostId(null);
+    setSelectedFeedPostId(null);
     setSelectedBusiness(null);
     setIsMessageThreadOpen(false);
     setMessageDraft("");
@@ -2880,7 +3090,7 @@ export default function App() {
           onDismiss={handleDismissAnnouncement}
           onDismissAll={handleDismissAllAnnouncements}
         />
-        <View style={styles.contentArea}>
+        <Animated.View style={[styles.contentArea, pageTransitionStyle]}>
           {activeTab === "home" ? (
             <HomeScreen
               businesses={businesses}
@@ -2893,10 +3103,15 @@ export default function App() {
               onBusinessPress={openBusinessScreen}
               onContentPress={handleStandaloneContentPress}
               onFeedPostPress={(post) => setSelectedFeedPostId(post.id)}
+              onOpenSearch={() => setActiveTab("search")}
+              initialScrollOffset={homeScrollOffset.current}
               onCategoryPress={(categorySlug) => {
                 setSelectedCategory(categorySlug);
                 setQuery("");
                 setActiveTab("search");
+              }}
+              onScrollOffsetChange={(offset) => {
+                homeScrollOffset.current = offset;
               }}
               onShareContent={handleShareContent}
               profile={currentProfile}
@@ -2962,8 +3177,10 @@ export default function App() {
               }
               onCreateComment={handleCreateFeedComment}
               onDeleteComment={handleDeleteFeedComment}
+              onDeletePost={handleDeleteFeedPost}
               onCreatePost={handleCreateFeedPost}
               onOpenPost={(post) => setSelectedFeedPostId(post.id)}
+              onOpenPostBusiness={openBusinessFromFeedPost}
               onOpenMessages={() => {
                 openMessagesInbox("feed");
               }}
@@ -2974,6 +3191,7 @@ export default function App() {
               }}
               onToggleLike={handleToggleFeedLike}
               onUpdateComment={handleUpdateFeedComment}
+              onUpdatePost={handleUpdateFeedPost}
               ownedBusiness={feedPostingBusiness}
               postAsBusiness={feedPostAsBusiness}
               posts={feedPosts}
@@ -3085,7 +3303,7 @@ export default function App() {
               setIsDarkMode={setIsDarkMode}
             />
           ) : null}
-        </View>
+        </Animated.View>
 
         <View style={[styles.tabBar, isDarkMode ? styles.darkTabBar : null]}>
           <TabButton
@@ -3186,6 +3404,17 @@ export default function App() {
           }
         }}
         onDeleteComment={handleDeleteFeedComment}
+        onOpenPostBusiness={
+          selectedFeedPost?.business_id || selectedFeedPost?.business
+            ? () => {
+                if (!selectedFeedPost) {
+                  return;
+                }
+
+            openBusinessFromFeedPost(selectedFeedPost);
+              }
+            : undefined
+        }
         onRequireSignIn={() => {
           setSelectedFeedPostId(null);
           setActiveProfilePanel("account");
@@ -3318,6 +3547,9 @@ function SearchScreen({
   const [visibleDiscoveryTileCount, setVisibleDiscoveryTileCount] = useState(
     DISCOVERY_TILE_BATCH_SIZE,
   );
+  const [discoveryShuffleSeed, setDiscoveryShuffleSeed] = useState(() =>
+    Date.now(),
+  );
   const searchInputRef = useRef<TextInput>(null);
   const shouldFocusSearchInput = useRef(false);
   const hasActiveFilters = hasSearchFilters(
@@ -3332,8 +3564,8 @@ function SearchScreen({
     Boolean(location.trim()) || selectedCategory !== "all" || localOnly;
   const showBusinessSearch = isBusinessSearchOpen || hasBusinessSearchIntent;
   const discoveryTiles = useMemo(
-    () => getDiscoveryTiles(businesses, labels),
-    [businesses, labels],
+    () => shuffleDiscoveryTiles(getDiscoveryTiles(businesses, labels), discoveryShuffleSeed),
+    [businesses, discoveryShuffleSeed, labels],
   );
   const visibleDiscoveryTiles = discoveryTiles.slice(0, visibleDiscoveryTileCount);
   const resultCountLabel =
@@ -3472,6 +3704,17 @@ function SearchScreen({
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
           onScroll={handleDiscoveryScroll}
+          refreshControl={
+            <RefreshControl
+              onRefresh={() => {
+                setDiscoveryShuffleSeed(Date.now());
+                setVisibleDiscoveryTileCount(DISCOVERY_TILE_BATCH_SIZE);
+                setSelectedDiscoveryTileIndex(null);
+              }}
+              refreshing={false}
+              tintColor={isDarkMode ? "#E5E5EA" : "#111111"}
+            />
+          }
           scrollEventThrottle={120}
           style={styles.screen}
           showsVerticalScrollIndicator={false}
@@ -3801,6 +4044,9 @@ function DiscoveryPostViewer({
   visible: boolean;
 }) {
   const [isCaptionScrollActive, setIsCaptionScrollActive] = useState(false);
+  const [scrollHintIndex, setScrollHintIndex] = useState<number | null>(null);
+  const wasVisibleRef = useRef(false);
+  const safeInitialIndex = Math.max(0, Math.min(initialIndex, tiles.length - 1));
   const horizontalCloseResponder = useMemo(
     () =>
       PanResponder.create({
@@ -3825,11 +4071,21 @@ function DiscoveryPostViewer({
     }
   }, [visible]);
 
+  useEffect(() => {
+    if (visible && !wasVisibleRef.current) {
+      setScrollHintIndex(safeInitialIndex < tiles.length - 1 ? safeInitialIndex : null);
+    }
+
+    if (!visible) {
+      setScrollHintIndex(null);
+    }
+
+    wasVisibleRef.current = visible;
+  }, [safeInitialIndex, tiles.length, visible]);
+
   if (!visible || !tiles.length) {
     return null;
   }
-
-  const safeInitialIndex = Math.max(0, Math.min(initialIndex, tiles.length - 1));
 
   return (
     <View
@@ -3851,8 +4107,11 @@ function DiscoveryPostViewer({
         keyExtractor={(tile) => tile.key}
         onEndReached={onEndReached}
         onEndReachedThreshold={0.65}
+        onScrollBeginDrag={() => {
+          setScrollHintIndex(null);
+        }}
         pagingEnabled
-        renderItem={({ item }) => (
+        renderItem={({ index, item }) => (
           <DiscoveryViewerPost
             isDarkMode={isDarkMode}
             labels={labels}
@@ -3865,6 +4124,7 @@ function DiscoveryPostViewer({
                 item: item.item,
               });
             }}
+            showScrollHint={index === scrollHintIndex}
             tile={item}
           />
         )}
@@ -3883,6 +4143,7 @@ function DiscoveryViewerPost({
   onCaptionScrollActiveChange,
   onClose,
   onShare,
+  showScrollHint,
   tile,
 }: {
   isDarkMode: boolean;
@@ -3891,11 +4152,13 @@ function DiscoveryViewerPost({
   onCaptionScrollActiveChange: (isActive: boolean) => void;
   onClose: () => void;
   onShare: () => void;
+  showScrollHint: boolean;
   tile: DiscoveryTile;
 }) {
   const [hasLogoError, setHasLogoError] = useState(false);
   const [isCaptionExpanded, setIsCaptionExpanded] = useState(false);
   const [descriptionLineCount, setDescriptionLineCount] = useState(0);
+  const scrollHintAnimation = useRef(new Animated.Value(0)).current;
   const logoUrl = getRenderableImageUrl(
     tile.business.logoUrl,
     imageOptimizationPresets.logo,
@@ -3939,6 +4202,38 @@ function DiscoveryViewerPost({
     Boolean(tile.item.linkUrl && contentLinkUrl) &&
     (isCaptionOpen || visibleMetaItems.length < 2 || !canExpandCaption);
 
+  useEffect(() => {
+    if (!showScrollHint || isCaptionOpen) {
+      scrollHintAnimation.stopAnimation();
+      scrollHintAnimation.setValue(0);
+      return;
+    }
+
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scrollHintAnimation, {
+          duration: 620,
+          easing: Easing.inOut(Easing.cubic),
+          toValue: 1,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scrollHintAnimation, {
+          duration: 620,
+          easing: Easing.inOut(Easing.cubic),
+          toValue: 0,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+      scrollHintAnimation.setValue(0);
+    };
+  }, [isCaptionOpen, scrollHintAnimation, showScrollHint]);
+
   function toggleCaption() {
     if (!canExpandCaption) {
       return;
@@ -3961,7 +4256,7 @@ function DiscoveryViewerPost({
     }
   }
 
-  function renderCaptionDetails() {
+  function renderCaptionDetails(isCompact = false) {
     return (
       <>
         {description ? (
@@ -3983,7 +4278,35 @@ function DiscoveryViewerPost({
             {description}
           </Text>
         ) : null}
-        {metaItems.length ? (
+        {showScrollHint && isCompact ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.discoveryViewerScrollHint,
+              {
+                opacity: scrollHintAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.62, 1],
+                }),
+                transform: [
+                  {
+                    translateY: scrollHintAnimation.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, 7],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <ChevronDown
+              color={isDarkMode ? "#F5F5F7" : "#111111"}
+              size={20}
+              strokeWidth={3}
+            />
+          </Animated.View>
+        ) : null}
+        {!isCompact && metaItems.length ? (
           <View style={styles.discoveryViewerMetaRow}>
             {visibleMetaItems.map((meta, index) => {
               const isLocation = meta === tile.item.location && locationUrl;
@@ -4044,7 +4367,7 @@ function DiscoveryViewerPost({
             ) : null}
           </View>
         ) : null}
-        {shouldShowLink && contentLinkUrl ? (
+        {!isCompact && shouldShowLink && contentLinkUrl ? (
           <Pressable
             accessibilityRole="link"
             onPress={(event) => {
@@ -4154,6 +4477,9 @@ function DiscoveryViewerPost({
       <View
         style={[
           styles.discoveryViewerCaption,
+          showScrollHint && !isCaptionOpen
+            ? styles.discoveryViewerCaptionWithHint
+            : null,
           isCaptionOpen ? styles.discoveryViewerCaptionExpanded : null,
           isCaptionOpen && isDarkMode
             ? styles.darkDiscoveryViewerCaptionExpanded
@@ -4213,7 +4539,7 @@ function DiscoveryViewerPost({
             showsVerticalScrollIndicator
             style={styles.discoveryViewerCaptionScroll}
           >
-            {renderCaptionDetails()}
+            {renderCaptionDetails(false)}
           </ScrollView>
         ) : (
           <Pressable
@@ -4221,7 +4547,7 @@ function DiscoveryViewerPost({
             onPress={canExpandCaption ? toggleCaption : undefined}
             style={styles.discoveryViewerCaptionScrollContent}
           >
-            {renderCaptionDetails()}
+            {renderCaptionDetails(true)}
           </Pressable>
         )}
       </View>
@@ -4717,6 +5043,7 @@ function EventsScreen({
 function HomeScreen({
   businesses,
   feedPosts,
+  initialScrollOffset,
   isDataReady,
   isDarkMode,
   labels,
@@ -4725,7 +5052,9 @@ function HomeScreen({
   onBusinessPress,
   onContentPress,
   onFeedPostPress,
+  onOpenSearch,
   onCategoryPress,
+  onScrollOffsetChange,
   onShareContent,
   profile,
   query,
@@ -4734,6 +5063,7 @@ function HomeScreen({
 }: {
   businesses: Business[];
   feedPosts: MobileFeedPost[];
+  initialScrollOffset: number;
   isDataReady: boolean;
   isDarkMode: boolean;
   labels: Record<string, string>;
@@ -4742,14 +5072,29 @@ function HomeScreen({
   onBusinessPress: (business: Business) => void;
   onContentPress: (entry: ContentDetailEntry) => void;
   onFeedPostPress: (post: MobileFeedPost) => void;
+  onOpenSearch: () => void;
   onCategoryPress: (categorySlug: string) => void;
+  onScrollOffsetChange: (offset: number) => void;
   onShareContent: (entry: ContentDetailEntry) => Promise<void>;
   profile: UserProfile | null;
   query: string;
   selectedCategory: string;
   session: Session | null;
 }) {
+  const scrollRef = useRef<ScrollView>(null);
   const homeCopy = getHomeCopy(locale);
+
+  useEffect(() => {
+    if (initialScrollOffset <= 0) {
+      return;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ animated: false, y: initialScrollOffset });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [initialScrollOffset]);
 
   if (!isDataReady) {
     return (
@@ -4856,11 +5201,16 @@ function HomeScreen({
     <ScrollView
       contentContainerStyle={[styles.screenContent, styles.homeScreenContent]}
       keyboardShouldPersistTaps="handled"
+      onScroll={(event) => {
+        onScrollOffsetChange(event.nativeEvent.contentOffset.y);
+      }}
+      ref={scrollRef}
+      scrollEventThrottle={120}
       style={styles.screen}
       showsVerticalScrollIndicator={false}
     >
       <Text style={[styles.homeBrand, isDarkMode ? styles.darkText : null]}>
-        Коло
+        Kolo
       </Text>
 
       {storyBusinesses.length ? (
@@ -4878,6 +5228,29 @@ function HomeScreen({
               onPress={() => onBusinessPress(business)}
             />
           ))}
+          <Pressable
+            accessibilityLabel={locale === "uk" ? "Ще" : "More"}
+            accessibilityRole="button"
+            onPress={onOpenSearch}
+            style={styles.homeStoryItem}
+          >
+            <View
+              style={[
+                styles.homeStoryLogoRing,
+                styles.homeStoryMoreRing,
+                isDarkMode ? styles.darkStoryLogoRing : null,
+              ]}
+            >
+              <MoreHorizontal
+                color={isDarkMode ? "#E5E5EA" : "#111111"}
+                size={24}
+                strokeWidth={2.8}
+              />
+            </View>
+            <Text style={[styles.homeStoryName, isDarkMode ? styles.darkMutedText : null]}>
+              {locale === "uk" ? "Ще" : "More"}
+            </Text>
+          </Pressable>
         </ScrollView>
       ) : null}
 
@@ -5569,6 +5942,7 @@ function RegisterScreen({
   const [description, setDescription] = useState("");
   const [categorySlug, setCategorySlug] = useState("travel-tours");
   const [instagram, setInstagram] = useState("");
+  const [keywords, setKeywords] = useState("");
   const [logo, setLogo] = useState<BusinessLogoInput | null>(null);
   const [phone, setPhone] = useState("");
   const [servesAllCanada, setServesAllCanada] = useState(false);
@@ -5589,7 +5963,6 @@ function RegisterScreen({
 
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: true,
-      base64: true,
       quality: 0.72,
     });
 
@@ -5603,12 +5976,13 @@ function RegisterScreen({
       return;
     }
 
-    setLogo({
-      base64: asset.base64,
-      fileName: asset.fileName,
-      mimeType: asset.mimeType,
-      uri: asset.uri,
+    const normalizedLogo = await normalizePickedUploadImage(asset, {
+      fileNamePrefix: "business-logo",
+      maxEdge: 900,
+      quality: 0.78,
     });
+
+    setLogo(normalizedLogo);
     setSubmitted(false);
   }
 
@@ -5634,6 +6008,7 @@ function RegisterScreen({
         city,
         description,
         instagram,
+        keywords,
         logo,
         name,
         phone,
@@ -5725,6 +6100,23 @@ function RegisterScreen({
               isDarkMode ? styles.darkInput : null,
             ]}
             value={description}
+          />
+        </Field>
+        <Field isDarkMode={isDarkMode} label={labels.keywords}>
+          <TextInput
+            multiline
+            onChangeText={(value) => {
+              setKeywords(value);
+              setSubmitError("");
+            }}
+            placeholder={labels.keywordsHint}
+            placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
+            style={[
+              styles.input,
+              styles.textAreaSmall,
+              isDarkMode ? styles.darkInput : null,
+            ]}
+            value={keywords}
           />
         </Field>
         <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
@@ -6048,6 +6440,23 @@ function DashboardScreen({
                 isDarkMode ? styles.darkInput : null,
               ]}
               value={draft.description}
+            />
+          </Field>
+          <Field isDarkMode={isDarkMode} label={labels.keywords}>
+            <TextInput
+              multiline
+              onChangeText={(value) => {
+                setDraft({ ...draft, keywords: value });
+                setSaved(false);
+              }}
+              placeholder={labels.keywordsHint}
+              placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
+              style={[
+                styles.input,
+                styles.textAreaSmall,
+                isDarkMode ? styles.darkInput : null,
+              ]}
+              value={draft.keywords ?? ""}
             />
           </Field>
           <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
@@ -6618,7 +7027,6 @@ function BusinessContentSection({
 
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsMultipleSelection: true,
-      base64: true,
       mediaTypes: ["images"],
       orderedSelection: true,
       quality: 0.72,
@@ -6629,14 +7037,17 @@ function BusinessContentSection({
       return;
     }
 
-    const selectedImages = result.assets
-      .filter((asset) => asset.uri)
-      .map((asset) => ({
-        base64: asset.base64,
-        fileName: asset.fileName,
-        mimeType: asset.mimeType,
-        uri: asset.uri,
-      }));
+    const selectedImages = await Promise.all(
+      result.assets
+        .filter((asset) => asset.uri)
+        .map((asset, index) =>
+          normalizePickedUploadImage(asset, {
+            fileNamePrefix: `content-${index + 1}`,
+            maxEdge: 1800,
+            quality: 0.76,
+          }),
+        ),
+    );
 
     setImages(selectedImages);
     setSuccessMessage("");
@@ -7262,13 +7673,16 @@ function FeedScreen({
   onCommentDraftChange,
   onCreateComment,
   onDeleteComment,
+  onDeletePost,
   onCreatePost,
   onOpenPost,
+  onOpenPostBusiness,
   onOpenMessages,
   onPostAsBusinessChange,
   onRequireSignIn,
   onToggleLike,
   onUpdateComment,
+  onUpdatePost,
   ownedBusiness,
   postAsBusiness,
   posts,
@@ -7286,8 +7700,10 @@ function FeedScreen({
   onCommentDraftChange: (postId: string, value: string) => void;
   onCreateComment: (post: MobileFeedPost) => Promise<void> | void;
   onDeleteComment: (comment: MobileFeedPost["comments"][number]) => void;
+  onDeletePost: (post: MobileFeedPost) => void;
   onCreatePost: () => Promise<boolean> | boolean;
   onOpenPost: (post: MobileFeedPost) => void;
+  onOpenPostBusiness: (post: MobileFeedPost) => void;
   onOpenMessages: () => void;
   onPostAsBusinessChange: (value: boolean) => void;
   onRequireSignIn: () => void;
@@ -7296,6 +7712,7 @@ function FeedScreen({
     comment: MobileFeedPost["comments"][number],
     body: string,
   ) => Promise<void> | void;
+  onUpdatePost: (post: MobileFeedPost, body: string) => Promise<void> | void;
   ownedBusiness: Business | null;
   postAsBusiness: boolean;
   posts: MobileFeedPost[];
@@ -7370,10 +7787,17 @@ function FeedScreen({
                 onCommentDraftChange={(value) => onCommentDraftChange(post.id, value)}
                 onCreateComment={() => onCreateComment(post)}
                 onDeleteComment={onDeleteComment}
+                onDeletePost={() => onDeletePost(post)}
+                onOpenBusiness={
+                  post.business_id || post.business
+                    ? () => onOpenPostBusiness(post)
+                    : undefined
+                }
                 onOpenComments={() => onOpenPost(post)}
                 onRequireSignIn={onRequireSignIn}
                 onToggleLike={() => onToggleLike(post)}
                 onUpdateComment={onUpdateComment}
+                onUpdatePost={(body) => onUpdatePost(post, body)}
                 post={post}
                 profile={profile}
                 session={session}
@@ -7538,10 +7962,13 @@ function FeedPostCard({
   onCommentDraftChange,
   onCreateComment,
   onDeleteComment,
+  onDeletePost,
+  onOpenBusiness,
   onOpenComments,
   onRequireSignIn,
   onToggleLike,
   onUpdateComment,
+  onUpdatePost,
   post,
   presentation = "compact",
   profile,
@@ -7553,6 +7980,8 @@ function FeedPostCard({
   onCommentDraftChange: (value: string) => void;
   onCreateComment: () => Promise<void> | void;
   onDeleteComment: (comment: MobileFeedPost["comments"][number]) => void;
+  onDeletePost: () => void;
+  onOpenBusiness?: () => void;
   onOpenComments?: () => void;
   onRequireSignIn: () => void;
   onToggleLike: () => Promise<void> | void;
@@ -7560,6 +7989,7 @@ function FeedPostCard({
     comment: MobileFeedPost["comments"][number],
     body: string,
   ) => Promise<void> | void;
+  onUpdatePost: (body: string) => Promise<void> | void;
   post: MobileFeedPost;
   presentation?: "compact" | "detail";
   profile: UserProfile | null;
@@ -7568,13 +7998,35 @@ function FeedPostCard({
   const authorName = getFeedPostAuthorName(post, labels, session, profile);
   const avatarUrl = getFeedPostAvatarUrl(post, session, profile);
   const showDetail = presentation === "detail";
+  const isOwnPost = session?.user.id === post.author_id;
+  const [isEditingPost, setIsEditingPost] = useState(false);
+  const [editingPostDraft, setEditingPostDraft] = useState(post.body);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentDraft, setEditingCommentDraft] = useState("");
 
   useEffect(() => {
+    setIsEditingPost(false);
+    setEditingPostDraft(post.body);
     setEditingCommentId(null);
     setEditingCommentDraft("");
   }, [post.id]);
+
+  useEffect(() => {
+    if (!isEditingPost) {
+      setEditingPostDraft(post.body);
+    }
+  }, [isEditingPost, post.body]);
+
+  async function savePostEdit() {
+    const body = editingPostDraft.trim();
+
+    if (!body) {
+      return;
+    }
+
+    await onUpdatePost(body);
+    setIsEditingPost(false);
+  }
 
   async function saveCommentEdit(comment: MobileFeedPost["comments"][number]) {
     const body = editingCommentDraft.trim();
@@ -7591,37 +8043,146 @@ function FeedPostCard({
   return (
     <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
       <View style={styles.feedAuthorRow}>
-        {avatarUrl ? (
-          <Image
-            resizeMode="contain"
-            source={{ uri: avatarUrl }}
-            style={[
-              styles.feedAvatar,
-              isDarkMode ? styles.darkContentImageSurface : null,
-            ]}
-          />
-        ) : (
-          <View style={[styles.feedAvatar, isDarkMode ? styles.darkIconBox : null]}>
-            {post.business_id ? (
-              <Store color={isDarkMode ? "#E5E5EA" : "#111111"} size={18} />
-            ) : (
-              <UserRound color={isDarkMode ? "#E5E5EA" : "#111111"} size={18} />
-            )}
+        <Pressable
+          accessibilityLabel={authorName}
+          accessibilityRole={onOpenBusiness ? "button" : undefined}
+          disabled={!onOpenBusiness}
+          onPress={onOpenBusiness}
+          style={styles.feedAuthorIdentity}
+        >
+          {avatarUrl ? (
+            <Image
+              resizeMode="contain"
+              source={{ uri: avatarUrl }}
+              style={[
+                styles.feedAvatar,
+                isDarkMode ? styles.darkContentImageSurface : null,
+              ]}
+            />
+          ) : (
+            <View style={[styles.feedAvatar, isDarkMode ? styles.darkIconBox : null]}>
+              {post.business_id ? (
+                <Store color={isDarkMode ? "#E5E5EA" : "#111111"} size={18} />
+              ) : (
+                <UserRound color={isDarkMode ? "#E5E5EA" : "#111111"} size={18} />
+              )}
+            </View>
+          )}
+          <View style={styles.flex}>
+            <Text
+              numberOfLines={1}
+              style={[styles.feedAuthorName, isDarkMode ? styles.darkText : null]}
+            >
+              {authorName}
+            </Text>
+            <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+              {formatMobileMessageDate(post.created_at)}
+            </Text>
           </View>
-        )}
-        <View style={styles.flex}>
-          <Text style={[styles.feedAuthorName, isDarkMode ? styles.darkText : null]}>
-            {authorName}
-          </Text>
-          <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
-            {formatMobileMessageDate(post.created_at)}
-          </Text>
-        </View>
+        </Pressable>
+        {isOwnPost ? (
+          <View style={styles.feedCommentActionRow}>
+            <Pressable
+              accessibilityLabel={labels.edit}
+              accessibilityRole="button"
+              onPress={() => {
+                setIsEditingPost(true);
+                setEditingPostDraft(post.body);
+              }}
+              style={[
+                styles.feedCommentIconButton,
+                isDarkMode ? styles.darkIconBox : null,
+              ]}
+            >
+              <Pencil
+                color={isDarkMode ? "#E5E5EA" : "#111111"}
+                size={14}
+                strokeWidth={2.7}
+              />
+            </Pressable>
+            <Pressable
+              accessibilityLabel={labels.delete}
+              accessibilityRole="button"
+              onPress={onDeletePost}
+              style={[
+                styles.feedCommentIconButton,
+                isDarkMode ? styles.darkIconBox : null,
+              ]}
+            >
+              <Trash2
+                color={isDarkMode ? "#E5E5EA" : "#111111"}
+                size={14}
+                strokeWidth={2.7}
+              />
+            </Pressable>
+          </View>
+        ) : null}
       </View>
 
-      <Text style={[styles.feedBody, isDarkMode ? styles.darkText : null]}>
-        {post.body}
-      </Text>
+      {isEditingPost ? (
+        <View style={styles.feedCommentEditBox}>
+          <TextInput
+            maxLength={2000}
+            multiline
+            onChangeText={setEditingPostDraft}
+            placeholder={labels.feedPostPlaceholder}
+            placeholderTextColor={isDarkMode ? "#8E8E93" : "#6E6E73"}
+            style={[
+              styles.input,
+              styles.textArea,
+              isDarkMode ? styles.darkInput : null,
+            ]}
+            value={editingPostDraft}
+          />
+          <View style={styles.feedCommentEditActions}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setIsEditingPost(false);
+                setEditingPostDraft(post.body);
+              }}
+              style={[
+                styles.feedCommentTextButton,
+                isDarkMode ? styles.darkSettingRow : null,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.feedCommentTextButtonLabel,
+                  isDarkMode ? styles.darkText : null,
+                ]}
+              >
+                {labels.cancel}
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={!editingPostDraft.trim()}
+              onPress={() => {
+                void savePostEdit();
+              }}
+              style={[
+                styles.feedCommentTextButton,
+                styles.feedCommentSaveButton,
+                !editingPostDraft.trim() ? styles.disabledButton : null,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.feedCommentTextButtonLabel,
+                  styles.feedCommentSaveButtonLabel,
+                ]}
+              >
+                {labels.save}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : (
+        <Text style={[styles.feedBody, isDarkMode ? styles.darkText : null]}>
+          {post.body}
+        </Text>
+      )}
 
       <View style={styles.feedActions}>
         <Pressable
@@ -7863,6 +8424,7 @@ function FeedPostModal({
   onCommentDraftChange,
   onCreateComment,
   onDeleteComment,
+  onOpenPostBusiness,
   onRequireSignIn,
   onUpdateComment,
   post,
@@ -7876,6 +8438,7 @@ function FeedPostModal({
   onCommentDraftChange: (value: string) => void;
   onCreateComment: () => Promise<void> | void;
   onDeleteComment: (comment: MobileFeedPost["comments"][number]) => void;
+  onOpenPostBusiness?: () => void;
   onRequireSignIn: () => void;
   onUpdateComment: (
     comment: MobileFeedPost["comments"][number],
@@ -7968,6 +8531,122 @@ function FeedPostModal({
                   showsVerticalScrollIndicator={false}
                   style={styles.modalScroll}
                 >
+                  <View
+                    style={[
+                      styles.commentsPostPreview,
+                      isDarkMode ? styles.darkSettingRow : null,
+                    ]}
+                  >
+                    <Pressable
+                      accessibilityLabel={getFeedPostAuthorName(
+                        post,
+                        labels,
+                        session,
+                        profile,
+                      )}
+                      accessibilityRole={onOpenPostBusiness ? "button" : undefined}
+                      disabled={!onOpenPostBusiness}
+                      onPress={onOpenPostBusiness}
+                      style={styles.feedAuthorIdentity}
+                    >
+                      {getFeedPostAvatarUrl(post, session, profile) ? (
+                        <Image
+                          resizeMode="contain"
+                          source={{
+                            uri: getFeedPostAvatarUrl(post, session, profile) as string,
+                          }}
+                          style={[
+                            styles.feedAvatar,
+                            isDarkMode ? styles.darkContentImageSurface : null,
+                          ]}
+                        />
+                      ) : (
+                        <View
+                          style={[
+                            styles.feedAvatar,
+                            isDarkMode ? styles.darkIconBox : null,
+                          ]}
+                        >
+                          {post.business_id ? (
+                            <Store
+                              color={isDarkMode ? "#E5E5EA" : "#111111"}
+                              size={18}
+                            />
+                          ) : (
+                            <UserRound
+                              color={isDarkMode ? "#E5E5EA" : "#111111"}
+                              size={18}
+                            />
+                          )}
+                        </View>
+                      )}
+                      <View style={styles.flex}>
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            styles.feedAuthorName,
+                            isDarkMode ? styles.darkText : null,
+                          ]}
+                        >
+                          {getFeedPostAuthorName(post, labels, session, profile)}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.mutedText,
+                            isDarkMode ? styles.darkMutedText : null,
+                          ]}
+                        >
+                          {formatMobileMessageDate(post.created_at)}
+                        </Text>
+                      </View>
+                    </Pressable>
+                    <Text style={[styles.feedBody, isDarkMode ? styles.darkText : null]}>
+                      {post.body}
+                    </Text>
+                    <View style={styles.feedActions}>
+                      <View
+                        style={[
+                          styles.feedActionButton,
+                          isDarkMode ? styles.darkSettingRow : null,
+                        ]}
+                      >
+                        <Heart
+                          color={isDarkMode ? "#E5E5EA" : "#111111"}
+                          fill="transparent"
+                          size={16}
+                          strokeWidth={2.6}
+                        />
+                        <Text
+                          style={[
+                            styles.feedActionText,
+                            isDarkMode ? styles.darkText : null,
+                          ]}
+                        >
+                          {post.likeCount}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.feedActionButton,
+                          isDarkMode ? styles.darkSettingRow : null,
+                        ]}
+                      >
+                        <MessageCircle
+                          color={isDarkMode ? "#E5E5EA" : "#111111"}
+                          size={16}
+                          strokeWidth={2.6}
+                        />
+                        <Text
+                          style={[
+                            styles.feedActionText,
+                            isDarkMode ? styles.darkText : null,
+                          ]}
+                        >
+                          {post.commentCount}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
                   {post.comments.length ? (
                     <View style={styles.feedComments}>
                       {post.comments.map((comment) => {
@@ -8787,7 +9466,6 @@ function ProfileScreen({
 
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: true,
-      base64: true,
       quality: 0.72,
     });
 
@@ -8801,12 +9479,13 @@ function ProfileScreen({
       return;
     }
 
-    setProfileDraftAvatar({
-      base64: asset.base64,
-      fileName: asset.fileName,
-      mimeType: asset.mimeType,
-      uri: asset.uri,
+    const normalizedAvatar = await normalizePickedUploadImage(asset, {
+      fileNamePrefix: "profile-avatar",
+      maxEdge: 900,
+      quality: 0.78,
     });
+
+    setProfileDraftAvatar(normalizedAvatar);
   }
 
   async function handleProfileSave() {
@@ -9923,6 +10602,14 @@ function getWalkthroughSteps(labels: Record<string, string>): AppTourStep[] {
       text: labels.walkthroughSearchText,
     },
     {
+      focus: "feedActions",
+      Icon: MessageCircle,
+      tab: "feed",
+      target: labels.walkthroughFeedTarget,
+      title: labels.walkthroughFeedTitle,
+      text: labels.walkthroughFeedText,
+    },
+    {
       focus: "eventsFeed",
       Icon: CalendarDays,
       tab: "events",
@@ -9963,49 +10650,57 @@ function getWalkthroughSteps(labels: Record<string, string>): AppTourStep[] {
 function getIntroductionFocusStyle(focus: AppTourFocus) {
   const screenHeight = Dimensions.get("window").height;
   const highTop = Platform.OS === "android" ? 82 : 92;
+  const bottomTabSafeZone = 156;
 
   switch (focus) {
     case "homeDiscovery":
       return {
-        height: 88,
-        left: 16,
-        right: 16,
-        top: Math.max(256, Math.round(screenHeight * 0.34)),
+        height: Math.min(260, Math.round(screenHeight * 0.32)),
+        left: 10,
+        right: 10,
+        top: Platform.OS === "android" ? 72 : 82,
       };
     case "searchFilters":
       return {
-        height: 252,
-        left: 14,
-        right: 14,
+        height: Math.min(330, Math.round(screenHeight * 0.42)),
+        left: 8,
+        right: 8,
+        top: Platform.OS === "android" ? 76 : 86,
+      };
+    case "feedActions":
+      return {
+        height: Math.max(260, screenHeight - highTop - bottomTabSafeZone),
+        left: 10,
+        right: 10,
         top: highTop,
       };
     case "eventsFeed":
       return {
-        height: 222,
-        left: 14,
-        right: 14,
+        height: Math.min(330, Math.round(screenHeight * 0.42)),
+        left: 10,
+        right: 10,
         top: highTop,
       };
     case "profileControls":
       return {
-        height: 178,
-        left: 14,
-        right: 14,
-        top: 134,
+        height: 210,
+        left: 10,
+        right: 10,
+        top: Platform.OS === "android" ? 82 : 92,
       };
     case "addBusinessForm":
       return {
-        height: 260,
-        left: 14,
-        right: 14,
-        top: 148,
+        height: Math.min(330, Math.round(screenHeight * 0.42)),
+        left: 10,
+        right: 10,
+        top: Platform.OS === "android" ? 82 : 92,
       };
     case "businessDashboard":
       return {
-        height: 190,
-        left: 14,
-        right: 14,
-        top: 150,
+        height: Math.min(340, Math.round(screenHeight * 0.44)),
+        left: 10,
+        right: 10,
+        top: Platform.OS === "android" ? 82 : 92,
       };
     default:
       return {
@@ -11639,6 +12334,26 @@ function getDiscoveryTiles(
     );
 }
 
+function shuffleDiscoveryTiles(tiles: DiscoveryTile[], seed: number) {
+  return [...tiles]
+    .map((tile, index) => ({
+      sortKey: getDeterministicShuffleScore(`${tile.key}:${index}`, seed),
+      tile,
+    }))
+    .sort((firstTile, secondTile) => firstTile.sortKey - secondTile.sortKey)
+    .map(({ tile }) => tile);
+}
+
+function getDeterministicShuffleScore(value: string, seed: number) {
+  let hash = seed % 2147483647;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) % 2147483647;
+  }
+
+  return hash;
+}
+
 function getDiscoveryTileTime(tile: DiscoveryTile) {
   const value = tile.item.updatedAt || tile.item.createdAt;
   const time = value ? new Date(value).getTime() : 0;
@@ -12054,7 +12769,7 @@ function isHomeBusinessPreferenceMatch(business: Business, query: string) {
     .map((item) => `${item.title} ${item.description} ${item.location ?? ""}`)
     .join(" ");
   const haystack = normalize(
-    `${business.name} ${business.description} ${business.city} ${category} ${business.categorySlug} ${contentText}`,
+    `${business.name} ${business.description} ${business.keywords ?? ""} ${business.city} ${category} ${business.categorySlug} ${contentText}`,
   );
 
   return haystack.includes(normalizedQuery);
@@ -12302,6 +13017,64 @@ type ImageOptimizationOptions = {
   width?: number;
 };
 
+type PickedUploadImage = {
+  base64?: string | null;
+  uri: string;
+  fileName?: string | null;
+  mimeType?: string | null;
+};
+
+async function normalizePickedUploadImage(
+  asset: ImagePicker.ImagePickerAsset,
+  {
+    fileNamePrefix,
+    maxEdge,
+    quality,
+  }: {
+    fileNamePrefix: string;
+    maxEdge: number;
+    quality: number;
+  },
+): Promise<PickedUploadImage> {
+  const width = asset.width ?? 0;
+  const height = asset.height ?? 0;
+  const longestSide = Math.max(width, height);
+  const resize =
+    longestSide > maxEdge && width > 0 && height > 0
+      ? width >= height
+        ? { width: maxEdge }
+        : { height: maxEdge }
+      : undefined;
+
+  try {
+    const result = await manipulateAsync(
+      asset.uri,
+      resize ? [{ resize }] : [],
+      {
+        base64: true,
+        compress: quality,
+        format: SaveFormat.JPEG,
+      },
+    );
+
+    return {
+      base64: result.base64,
+      fileName: `${fileNamePrefix}-${Date.now()}.jpg`,
+      mimeType: "image/jpeg",
+      uri: result.uri,
+    };
+  } catch (error) {
+    console.warn("[kolo:mobile-image-normalize]", error);
+
+    return {
+      base64: asset.base64,
+      fileName: asset.fileName,
+      mimeType: asset.mimeType,
+      uri: asset.uri,
+    };
+  }
+}
+
 const imageOptimizationPresets = {
   avatar: { height: 160, quality: 70, resize: "cover", width: 160 },
   detail: { quality: 72, resize: "contain", width: 1200 },
@@ -12313,6 +13086,8 @@ function getRenderableImageUrl(
   value?: string | null,
   options: ImageOptimizationOptions = imageOptimizationPresets.detail,
 ) {
+  void options;
+
   const trimmedValue = value?.trim() ?? "";
   const normalizedValue = trimmedValue.toLowerCase();
 
@@ -12325,16 +13100,13 @@ function getRenderableImageUrl(
   }
 
   if (/^(https?:|file:|content:|data:image\/)/i.test(trimmedValue)) {
-    return getOptimizedSupabaseImageUrl(trimmedValue, options);
+    return getOriginalSupabaseImageUrl(trimmedValue);
   }
 
   return "";
 }
 
-function getOptimizedSupabaseImageUrl(
-  value: string,
-  options: ImageOptimizationOptions,
-) {
+function getOriginalSupabaseImageUrl(value: string) {
   if (/^(file:|content:|data:image\/)/i.test(value)) {
     return value;
   }
@@ -12343,45 +13115,26 @@ function getOptimizedSupabaseImageUrl(
     const url = new URL(value) as unknown as {
       pathname: string;
       searchParams: {
-        set: (name: string, value: string) => void;
+        delete: (name: string) => void;
       };
       toString: () => string;
     };
-    const publicObjectPath = "/storage/v1/object/public/";
-    const renderImagePath = "/storage/v1/render/image/public/";
 
-    if (
-      !url.pathname.includes(publicObjectPath) &&
-      !url.pathname.includes(renderImagePath)
-    ) {
-      return value;
-    }
-
-    if (/\.(svg)(\?|$)/i.test(url.pathname)) {
-      return value;
-    }
-
-    url.pathname = url.pathname.replace(publicObjectPath, renderImagePath);
-
-    if (options.width) {
-      url.searchParams.set("width", String(options.width));
-    }
-
-    if (options.height) {
-      url.searchParams.set("height", String(options.height));
-    }
-
-    if (options.quality) {
-      url.searchParams.set("quality", String(options.quality));
-    }
-
-    if (options.resize) {
-      url.searchParams.set("resize", options.resize);
-    }
+    url.pathname = url.pathname.replace(
+      "/storage/v1/render/image/public/",
+      "/storage/v1/object/public/",
+    );
+    url.searchParams.delete("height");
+    url.searchParams.delete("quality");
+    url.searchParams.delete("resize");
+    url.searchParams.delete("width");
 
     return url.toString();
   } catch {
-    return value;
+    return value.replace(
+      "/storage/v1/render/image/public/",
+      "/storage/v1/object/public/",
+    );
   }
 }
 
@@ -12557,7 +13310,7 @@ function getSearchAliases(categorySlug: string) {
     "auto-repair":
       "auto car repair detailing mechanic авто автосервіс ремонт детайлінг механік",
     beauty:
-      "beauty hair nails makeup brows salon краса волосся нігті макіяж брови салон",
+      "beauty hair nails manicure pedicure makeup brows salon краса волосся нігті манікюр педикюр макіяж брови салон ногти маникюр педикюр",
     bookkeepers:
       "bookkeeper bookkeeping accountant accounting payroll invoices reporting tax finance бухгалтер бухгалтерія облік зарплата рахунки звітність фінанси",
     cleaning:
@@ -13084,6 +13837,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "900",
   },
+  feedAuthorIdentity: {
+    alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    gap: 12,
+    minWidth: 0,
+  },
   feedAuthorRow: {
     alignItems: "center",
     flexDirection: "row",
@@ -13218,6 +13978,14 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     paddingHorizontal: 16,
     paddingTop: 14,
+  },
+  commentsPostPreview: {
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 12,
+    padding: 14,
   },
   feedComment: {
     alignItems: "flex-start",
@@ -13499,8 +14267,13 @@ const styles = StyleSheet.create({
     gap: 8,
     maxHeight: 152,
     overflow: "hidden",
+    paddingBottom: 6,
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 18,
+  },
+  discoveryViewerCaptionWithHint: {
+    maxHeight: 176,
+    paddingBottom: 16,
   },
   discoveryViewerCaptionExpanded: {
     backgroundColor: "rgba(247, 243, 236, 0.96)",
@@ -13621,6 +14394,14 @@ const styles = StyleSheet.create({
   discoveryViewerPage: {
     height: DISCOVERY_VIEWER_HEIGHT,
     paddingBottom: 146,
+  },
+  discoveryViewerScrollHint: {
+    alignItems: "center",
+    alignSelf: "center",
+    height: 28,
+    justifyContent: "center",
+    marginTop: 16,
+    width: 42,
   },
   discoveryViewerShell: {
     ...StyleSheet.absoluteFillObject,
@@ -14943,6 +15724,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 14,
     width: 64,
+  },
+  homeStoryMoreRing: {
+    borderStyle: "dashed",
   },
   homeStoryName: {
     color: "#6E6E73",
@@ -16331,6 +17115,11 @@ const styles = StyleSheet.create({
   },
   textArea: {
     minHeight: 118,
+    paddingTop: 14,
+    textAlignVertical: "top",
+  },
+  textAreaSmall: {
+    minHeight: 82,
     paddingTop: 14,
     textAlignVertical: "top",
   },

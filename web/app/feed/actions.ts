@@ -40,6 +40,96 @@ export async function createFeedPost(formData: FormData) {
   redirect("/feed");
 }
 
+export async function updateFeedPost(formData: FormData) {
+  const postId = String(formData.get("postId") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+
+  if (!postId || !body || body.length > 2000) {
+    redirect("/feed?error=post");
+  }
+
+  if (!isSupabaseConfigured()) {
+    redirect("/feed");
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/dashboard?next=/feed");
+  }
+
+  const { error } = await supabase.rpc("update_feed_post", {
+    body,
+    target_post_id: postId,
+  });
+
+  if (error) {
+    if (!isMissingRpcError(error)) {
+      redirect("/feed?error=post");
+    }
+
+    const { data, error: updateError } = await supabase
+      .from("feed_posts")
+      .update({ body })
+      .eq("id", postId)
+      .eq("author_id", user.id)
+      .select("id")
+      .maybeSingle();
+
+    if (updateError || !data) {
+      redirect("/feed?error=post");
+    }
+  }
+
+  revalidatePath("/feed");
+  redirect("/feed");
+}
+
+export async function deleteFeedPost(formData: FormData) {
+  const postId = String(formData.get("postId") ?? "").trim();
+
+  if (!postId || !isSupabaseConfigured()) {
+    redirect("/feed");
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/dashboard?next=/feed");
+  }
+
+  const { error } = await supabase.rpc("delete_feed_post", {
+    target_post_id: postId,
+  });
+
+  if (error) {
+    if (!isMissingRpcError(error)) {
+      redirect("/feed?error=post");
+    }
+
+    const { data, error: deleteError } = await supabase
+      .from("feed_posts")
+      .delete()
+      .eq("id", postId)
+      .eq("author_id", user.id)
+      .select("id")
+      .maybeSingle();
+
+    if (deleteError || !data) {
+      redirect("/feed?error=post");
+    }
+  }
+
+  revalidatePath("/feed");
+  redirect("/feed");
+}
+
 export async function toggleFeedPostLike(formData: FormData) {
   const postId = String(formData.get("postId") ?? "").trim();
   const intent = String(formData.get("intent") ?? "like").trim();
@@ -158,4 +248,11 @@ export async function deleteFeedComment(formData: FormData) {
 
   revalidatePath("/feed");
   redirect("/feed");
+}
+
+function isMissingRpcError(error: { code?: string; message?: string }) {
+  return (
+    error.code === "PGRST202" ||
+    Boolean(error.message?.includes("Could not find the function"))
+  );
 }

@@ -60,6 +60,7 @@ export type Business = {
   neighborhood: string;
   servesAllCanada?: boolean;
   description: string;
+  keywords?: string;
   longDescription: string;
   phone: string;
   website: string;

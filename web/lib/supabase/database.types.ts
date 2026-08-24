@@ -115,6 +115,7 @@ export type Database = {
           logo_url: string | null;
           serves_all_canada: boolean;
           description: string;
+          keywords: string | null;
           status: BusinessRegistrationStatus;
           reviewer_id: string | null;
           review_note: string | null;
@@ -135,6 +136,7 @@ export type Database = {
           logo_url?: string | null;
           serves_all_canada?: boolean;
           description: string;
+          keywords?: string | null;
           status?: BusinessRegistrationStatus;
           reviewer_id?: string | null;
           review_note?: string | null;
@@ -155,6 +157,7 @@ export type Database = {
           logo_url?: string | null;
           serves_all_canada?: boolean;
           description?: string;
+          keywords?: string | null;
           status?: BusinessRegistrationStatus;
           reviewer_id?: string | null;
           review_note?: string | null;
@@ -180,6 +183,7 @@ export type Database = {
           logo_url: string | null;
           serves_all_canada: boolean;
           description: string;
+          keywords: string | null;
           status: BusinessStatus;
           verified_at: string | null;
           created_at: string;
@@ -200,6 +204,7 @@ export type Database = {
           logo_url?: string | null;
           serves_all_canada?: boolean;
           description: string;
+          keywords?: string | null;
           status?: BusinessStatus;
           verified_at?: string | null;
           created_at?: string;
@@ -220,6 +225,7 @@ export type Database = {
           logo_url?: string | null;
           serves_all_canada?: boolean;
           description?: string;
+          keywords?: string | null;
           status?: BusinessStatus;
           verified_at?: string | null;
           created_at?: string;
@@ -801,6 +807,19 @@ export type Database = {
           target_business_id?: string | null;
         };
         Returns: string;
+      };
+      update_feed_post: {
+        Args: {
+          target_post_id: string;
+          body: string;
+        };
+        Returns: boolean;
+      };
+      delete_feed_post: {
+        Args: {
+          target_post_id: string;
+        };
+        Returns: boolean;
       };
       toggle_feed_post_like: {
         Args: {

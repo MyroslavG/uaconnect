@@ -61,6 +61,7 @@ function getSearchScore(business: Business, query?: string) {
     { value: business.categorySlug, weight: 34 },
     { value: business.city, weight: 24 },
     { value: business.address, weight: 14 },
+    { value: business.keywords, weight: 56 },
     { value: business.description, weight: 22 },
     {
       value: (business.contentItems ?? [])

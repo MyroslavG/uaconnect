@@ -17,6 +17,7 @@ export type Business = {
   ownerName: string;
   ownerAvatarUrl?: string;
   description: string;
+  keywords?: string;
   phone: string;
   website: string;
   instagram?: string;

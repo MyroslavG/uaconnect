@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { prepareImageUpload } from "@/lib/supabase/image-upload";
 import type { Database } from "@/lib/supabase/database.types";
 
 const logoBucket = "business-logos";
@@ -20,24 +21,23 @@ export async function uploadBusinessLogo(
   ownerId: string,
   scopeId: string,
 ) {
-  if (!(value instanceof File) || value.size === 0) {
+  const upload = await prepareImageUpload(value, {
+    allowedTypes: allowedLogoTypes,
+    maxEdge: 900,
+    maxSize: maxLogoSize,
+    quality: 78,
+    sizeError: "Logo must be smaller than 2 MB.",
+    typeError: "Logo must be a PNG, JPG, WebP, GIF, or SVG image.",
+  });
+
+  if (!upload) {
     return null;
   }
 
-  const extension = allowedLogoTypes.get(value.type);
-
-  if (!extension) {
-    throw new Error("Logo must be a PNG, JPG, WebP, GIF, or SVG image.");
-  }
-
-  if (value.size > maxLogoSize) {
-    throw new Error("Logo must be smaller than 2 MB.");
-  }
-
-  const path = `${ownerId}/${scopeId}/${randomUUID()}.${extension}`;
-  const { error } = await supabase.storage.from(logoBucket).upload(path, value, {
+  const path = `${ownerId}/${scopeId}/${randomUUID()}.${upload.extension}`;
+  const { error } = await supabase.storage.from(logoBucket).upload(path, upload.body, {
     cacheControl: "31536000",
-    contentType: value.type,
+    contentType: upload.contentType,
     upsert: false,
   });
 

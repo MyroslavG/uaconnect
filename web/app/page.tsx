@@ -3,6 +3,7 @@ import {
   ArrowRight,
   Compass,
   MapPin,
+  MoreHorizontal,
   Search,
   Sparkles,
   Store,
@@ -75,7 +76,7 @@ export default async function HomePage() {
                 tone="hero"
               />
             </div>
-            <HomeStoryStrip businesses={featuredBusinesses} />
+            <HomeStoryStrip businesses={featuredBusinesses} locale={locale} />
             <div className="mt-5 flex flex-wrap gap-2">
               {localizedCities.map((city) => (
                 <Link
@@ -230,17 +231,24 @@ export default async function HomePage() {
   );
 }
 
-function HomeStoryStrip({ businesses }: { businesses: Business[] }) {
+function HomeStoryStrip({
+  businesses,
+  locale,
+}: {
+  businesses: Business[];
+  locale: "uk" | "en";
+}) {
   const businessesWithLogos = businesses
     .filter((business) => business.logoUrl)
     .slice(0, 12);
+  const moreLabel = locale === "uk" ? "Ще" : "More";
 
   if (businessesWithLogos.length === 0) {
     return null;
   }
 
   return (
-    <div className="mt-5 flex gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="mt-5 flex min-w-0 gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {businessesWithLogos.map((business) => (
         <Link
           className="group grid w-20 shrink-0 gap-2 text-center"
@@ -259,6 +267,18 @@ function HomeStoryStrip({ businesses }: { businesses: Business[] }) {
           </span>
         </Link>
       ))}
+      <Link
+        className="group grid w-20 shrink-0 gap-2 text-center"
+        aria-label={moreLabel}
+        href="/search?openSearch=1"
+      >
+        <span className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-dashed bg-card shadow-sm transition group-hover:-translate-y-0.5 group-hover:border-hover-blue-border group-hover:bg-hover-blue group-hover:shadow-soft">
+          <MoreHorizontal className="h-6 w-6 text-primary transition group-hover:text-hover-blue-foreground" />
+        </span>
+        <span className="text-xs font-black leading-4 text-muted-foreground group-hover:text-foreground">
+          {moreLabel}
+        </span>
+      </Link>
     </div>
   );
 }

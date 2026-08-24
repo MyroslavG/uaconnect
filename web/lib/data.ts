@@ -60,8 +60,10 @@ export function searchBusinesses(
     const haystack = [
       business.name,
       business.description,
+      business.keywords,
       business.longDescription,
       business.category,
+      getCategorySearchAliases(business.categorySlug),
       business.city,
       business.neighborhood,
       business.address,
@@ -75,6 +77,15 @@ export function searchBusinesses(
 
     return haystack.includes(normalizedQuery);
   });
+}
+
+function getCategorySearchAliases(categorySlug: string) {
+  const aliases: Record<string, string> = {
+    beauty:
+      "beauty hair nails manicure pedicure makeup brows salon краса волосся нігті манікюр педикюр макіяж брови салон ногти маникюр педикюр",
+  };
+
+  return aliases[categorySlug] ?? "";
 }
 
 export function getAllExploreParams() {
