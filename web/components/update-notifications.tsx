@@ -93,7 +93,7 @@ export function UpdateNotifications({
       </Button>
 
       {isOpen ? (
-        <div className="absolute right-0 top-[calc(100%+0.75rem)] z-50 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-lift">
+        <div className="fixed inset-x-4 top-[calc(4rem+0.75rem)] z-50 w-auto overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-lift sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+0.75rem)] sm:w-88">
           <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
             <div>
               <p className="text-sm font-black">{labels.title}</p>
