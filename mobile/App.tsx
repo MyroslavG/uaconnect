@@ -156,6 +156,15 @@ import {
   fetchVisibleAnnouncements,
   type AppAnnouncement,
 } from "./src/notifications";
+import {
+  addPushNotificationTapListener,
+  getInitialPushNotificationData,
+  registerForPushNotifications,
+  syncExistingPushNotificationPermission,
+  unregisterStoredPushNotificationToken,
+  type PushNotificationData,
+  type PushNotificationStatus,
+} from "./src/push-notifications";
 import { getPublicBusinessContentItems } from "./src/contentVisibility";
 import type {
   Business,
@@ -393,6 +402,19 @@ const copy = {
     locationUnavailable: "Не вдалося визначити локацію.",
     notifications: "Оновлення",
     notificationsEmpty: "Нових оновлень немає.",
+    pushNotifications: "Push-сповіщення",
+    pushNotificationsBusy: "Вмикаємо...",
+    pushNotificationsDenied:
+      "Сповіщення вимкнені в налаштуваннях пристрою.",
+    pushNotificationsDisabled:
+      "Отримуйте повідомлення про нові чати та важливі оновлення.",
+    pushNotificationsEnabled: "Сповіщення увімкнені.",
+    pushNotificationsOn: "Увімкнено",
+    pushNotificationsUnavailable:
+      "Сповіщення недоступні на цьому пристрої.",
+    pushNotificationsUnsupported:
+      "Для push-сповіщень потрібна встановлена збірка застосунку.",
+    pushNotificationsTurnOn: "Увімкнути",
     dismiss: "Приховати",
     dismissAll: "Приховати всі",
     liveNearby: "Події та сервіси поруч",
@@ -675,6 +697,19 @@ const copy = {
     locationUnavailable: "Could not detect your location.",
     notifications: "Updates",
     notificationsEmpty: "No new updates.",
+    pushNotifications: "Push notifications",
+    pushNotificationsBusy: "Turning on...",
+    pushNotificationsDenied:
+      "Notifications are turned off in your device settings.",
+    pushNotificationsDisabled:
+      "Get notified about new chats and important updates.",
+    pushNotificationsEnabled: "Notifications are on.",
+    pushNotificationsOn: "On",
+    pushNotificationsUnavailable:
+      "Notifications are not available on this device.",
+    pushNotificationsUnsupported:
+      "Push notifications require an installed app build.",
+    pushNotificationsTurnOn: "Turn on",
     dismiss: "Dismiss",
     dismissAll: "Dismiss all",
     liveNearby: "Live nearby",
@@ -953,6 +988,66 @@ function getBusinessSlugFromLink(url: string) {
   }
 }
 
+function getPushNotificationString(
+  data: PushNotificationData,
+  key: string,
+) {
+  const value = data[key];
+
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function getInternalPushNotificationPath(url: string) {
+  const trimmedUrl = url.trim();
+
+  if (trimmedUrl.startsWith(PUBLIC_WEB_URL)) {
+    return trimmedUrl.slice(PUBLIC_WEB_URL.length).split("#")[0] || "/";
+  }
+
+  if (trimmedUrl.startsWith("kolo://")) {
+    return `/${trimmedUrl.replace(/^kolo:\/\//, "").split("#")[0]}`;
+  }
+
+  return trimmedUrl.split("#")[0] || "/";
+}
+
+function getUrlQueryValue(url: string, key: string) {
+  const match = url.match(new RegExp(`[?&]${key}=([^&#]+)`));
+
+  if (!match?.[1]) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
+function getPushNotificationStatusText(
+  status: PushNotificationStatus,
+  labels: Record<string, string>,
+) {
+  if (status === "enabled") {
+    return labels.pushNotificationsEnabled;
+  }
+
+  if (status === "denied") {
+    return labels.pushNotificationsDenied;
+  }
+
+  if (status === "unsupported") {
+    return labels.pushNotificationsUnsupported;
+  }
+
+  if (status === "unavailable") {
+    return labels.pushNotificationsUnavailable;
+  }
+
+  return labels.pushNotificationsDisabled;
+}
+
 const defaultOwnedBusiness =
   initialBusinesses.find((business) => business.ownedByCurrentUser) ??
   initialBusinesses[0];
@@ -991,6 +1086,7 @@ export default function App() {
   const lastPageTransitionKey = useRef("");
   const hasTrackedAppOpen = useRef(false);
   const lastTrackedSearchKey = useRef("");
+  const businessesRef = useRef<Business[]>([]);
   const [pendingBusinessSlug, setPendingBusinessSlug] = useState<string | null>(
     null,
   );
@@ -1014,6 +1110,9 @@ export default function App() {
   const [visibleAnnouncements, setVisibleAnnouncements] = useState<
     AppAnnouncement[]
   >([]);
+  const [pushNotificationStatus, setPushNotificationStatus] =
+    useState<PushNotificationStatus>("idle");
+  const [isPushNotificationBusy, setIsPushNotificationBusy] = useState(false);
   const [isWalkthroughVisible, setIsWalkthroughVisible] = useState(false);
   const [walkthroughPhase, setWalkthroughPhase] =
     useState<AppTourPhase>("text");
@@ -1258,6 +1357,31 @@ export default function App() {
       isMounted = false;
     };
   }, [session?.user.id]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!session?.user.id) {
+      setPushNotificationStatus("idle");
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    syncExistingPushNotificationPermission(locale)
+      .then((result) => {
+        if (isMounted && result.status === "enabled") {
+          setPushNotificationStatus("enabled");
+        }
+      })
+      .catch((error) => {
+        console.error("[kolo:mobile-push-sync]", error);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [locale, session?.user.id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1561,6 +1685,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const initialData = getInitialPushNotificationData();
+
+    if (initialData) {
+      handlePushNotificationData(initialData);
+    }
+
+    return addPushNotificationTapListener(handlePushNotificationData);
+  }, []);
+
+  useEffect(() => {
     if (!isSupabaseConfigured) {
       setDirectoryBusinesses(initialBusinesses);
       setIsDirectoryLoading(false);
@@ -1718,6 +1852,11 @@ export default function App() {
       ),
     [directoryBusinesses, ownedBusiness, ownedContentItems],
   );
+
+  useEffect(() => {
+    businessesRef.current = businesses;
+  }, [businesses]);
+
   const totalBusinessesCount = useMemo(
     () => businesses.length,
     [businesses],
@@ -2048,6 +2187,36 @@ export default function App() {
     }
   }
 
+  async function handleEnablePushNotifications() {
+    if (!session?.user.id) {
+      setAuthMessage(labels.signInRequired);
+      setActiveProfilePanel("account");
+      setActiveTab("profile");
+      return;
+    }
+
+    try {
+      setAuthMessage("");
+      setIsPushNotificationBusy(true);
+      const result = await registerForPushNotifications({
+        locale,
+        requestPermission: true,
+      });
+
+      setPushNotificationStatus(result.status);
+
+      if (result.status !== "enabled") {
+        setAuthMessage(getPushNotificationStatusText(result.status, labels));
+      }
+    } catch (error) {
+      console.error("[kolo:mobile-push-enable]", error);
+      setPushNotificationStatus("unavailable");
+      setAuthMessage(getErrorMessage(error));
+    } finally {
+      setIsPushNotificationBusy(false);
+    }
+  }
+
   async function handleDeleteAccount() {
     if (!isSupabaseConfigured || !session?.user.id) {
       setAuthMessage(labels.signInRequired);
@@ -2057,6 +2226,7 @@ export default function App() {
     try {
       setAuthMessage("");
       setIsAuthBusy(true);
+      await unregisterStoredPushNotificationToken();
       await deleteCurrentAccount();
       setSession(null);
       setOwnedBusiness(null);
@@ -2077,6 +2247,7 @@ export default function App() {
     try {
       setAuthMessage("");
       setIsAuthBusy(true);
+      await unregisterStoredPushNotificationToken();
       await signOut();
       setSession(null);
       setOwnedBusiness(null);
@@ -2965,6 +3136,108 @@ export default function App() {
     });
   }
 
+  function handlePushNotificationData(data: PushNotificationData) {
+    const notificationType = getPushNotificationString(data, "type");
+    const conversationId =
+      getPushNotificationString(data, "conversationId") ??
+      getPushNotificationString(data, "conversation_id");
+    const businessId =
+      getPushNotificationString(data, "businessId") ??
+      getPushNotificationString(data, "business_id");
+    const businessSlug =
+      getPushNotificationString(data, "businessSlug") ??
+      getPushNotificationString(data, "business_slug");
+    const url = getPushNotificationString(data, "url");
+
+    if (notificationType === "message" || conversationId) {
+      setMessagesReturnTab("feed");
+      setSelectedBusiness(null);
+      setSelectedConversationId(conversationId ?? null);
+      setIsMessageThreadOpen(Boolean(conversationId));
+      setActiveTab("messages");
+      setMessageRefreshKey((value) => value + 1);
+      return;
+    }
+
+    if (notificationType === "business" || businessId || businessSlug) {
+      openBusinessFromPushNotification(businessId, businessSlug);
+      return;
+    }
+
+    if (url) {
+      openPushNotificationUrl(url);
+    }
+  }
+
+  function openPushNotificationUrl(url: string) {
+    const businessSlug = getBusinessSlugFromLink(url);
+
+    if (businessSlug) {
+      openBusinessFromPushNotification(null, businessSlug);
+      return;
+    }
+
+    const path = getInternalPushNotificationPath(url);
+    const conversationId = getUrlQueryValue(url, "conversation");
+
+    if (path.startsWith("/messages")) {
+      setMessagesReturnTab("feed");
+      setSelectedBusiness(null);
+      setSelectedConversationId(conversationId);
+      setIsMessageThreadOpen(Boolean(conversationId));
+      setActiveTab("messages");
+      setMessageRefreshKey((value) => value + 1);
+      return;
+    }
+
+    if (path.startsWith("/search")) {
+      openMainTab("search");
+      return;
+    }
+
+    if (path.startsWith("/events")) {
+      openMainTab("events");
+      return;
+    }
+
+    if (path.startsWith("/profile") || path.startsWith("/dashboard")) {
+      setActiveProfilePanel("account");
+      openMainTab("profile");
+      return;
+    }
+
+    if (path.startsWith("/feed")) {
+      openMainTab("feed");
+    }
+  }
+
+  function openBusinessFromPushNotification(
+    businessId: string | null | undefined,
+    businessSlug: string | null | undefined,
+  ) {
+    const nextBusiness =
+      businessesRef.current.find(
+        (business) =>
+          business.id === businessId ||
+          Boolean(businessSlug && business.slug === businessSlug),
+      ) ?? null;
+
+    if (nextBusiness) {
+      setBusinessReturnFeedPostId(null);
+      setBusinessReturnTab("home");
+      setSelectedContentEntry(null);
+      setSelectedFeedPostId(null);
+      setSelectedBusiness(nextBusiness);
+      setIsMessageThreadOpen(false);
+      setActiveTab("business");
+      return;
+    }
+
+    if (businessSlug) {
+      setPendingBusinessSlug(businessSlug);
+    }
+  }
+
   function getActiveMainTab() {
     if (activeTab === "business") {
       return businessReturnTab;
@@ -3276,6 +3549,7 @@ export default function App() {
               isDarkMode={isDarkMode}
               isAppleSignInAvailable={isAppleSignInAvailable}
               isAuthBusy={isAuthBusy}
+              isPushNotificationBusy={isPushNotificationBusy}
               isSupabaseConfigured={isSupabaseConfigured}
               labels={labels}
               locale={locale}
@@ -3290,11 +3564,13 @@ export default function App() {
               onBusinessSubmit={handleBusinessRegistration}
               onProfileSave={handleProfileSave}
               onShareBusiness={handleShareBusiness}
+              onEnablePushNotifications={handleEnablePushNotifications}
               onShowWalkthrough={showWalkthrough}
               onProfilePanelChange={setActiveProfilePanel}
               onToggleSavedBusiness={handleToggleSavedBusiness}
               onUpdateContent={handleBusinessContentUpdate}
               profile={currentProfile}
+              pushNotificationStatus={pushNotificationStatus}
               savedBusinesses={savedBusinesses}
               savedBusyBusinessId={savedBusyBusinessId}
               onSignIn={handleGoogleSignIn}
@@ -9359,6 +9635,7 @@ function ProfileScreen({
   isDarkMode,
   isAppleSignInAvailable,
   isAuthBusy,
+  isPushNotificationBusy,
   isSupabaseConfigured,
   labels,
   locale,
@@ -9374,12 +9651,14 @@ function ProfileScreen({
   onProfileSave,
   onProfilePanelChange,
   onShareBusiness,
+  onEnablePushNotifications,
   onShowWalkthrough,
   onSignIn,
   onSignOut,
   onToggleSavedBusiness,
   onUpdateContent,
   profile,
+  pushNotificationStatus,
   savedBusinesses,
   savedBusyBusinessId,
   session,
@@ -9392,6 +9671,7 @@ function ProfileScreen({
   isDarkMode: boolean;
   isAppleSignInAvailable: boolean;
   isAuthBusy: boolean;
+  isPushNotificationBusy: boolean;
   isSupabaseConfigured: boolean;
   labels: Record<string, string>;
   locale: Locale;
@@ -9407,12 +9687,14 @@ function ProfileScreen({
   onProfileSave: (input: ProfileUpdateInput) => Promise<UserProfile>;
   onProfilePanelChange: (panel: ProfilePanel) => void;
   onShareBusiness: (business: Business) => Promise<void>;
+  onEnablePushNotifications: () => Promise<void>;
   onShowWalkthrough: () => void;
   onSignIn: () => Promise<void>;
   onSignOut: () => Promise<void>;
   onToggleSavedBusiness: (business: Business) => void;
   onUpdateContent: (input: BusinessContentUpdateInput) => Promise<void> | void;
   profile: UserProfile | null;
+  pushNotificationStatus: PushNotificationStatus;
   savedBusinesses: Business[];
   savedBusyBusinessId: string | null;
   session: Session | null;
@@ -9936,6 +10218,64 @@ function ProfileScreen({
           />
         </View>
 
+        {session ? (
+          <View style={[styles.settingsRow, isDarkMode ? styles.darkSettingRow : null]}>
+            <View style={[styles.settingLabelRow, styles.flex]}>
+              <Bell
+                color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+                size={20}
+                strokeWidth={2.4}
+              />
+              <View style={styles.flex}>
+                <Text
+                  style={[
+                    styles.switchLabel,
+                    isDarkMode ? styles.darkText : null,
+                  ]}
+                >
+                  {labels.pushNotifications}
+                </Text>
+                <Text
+                  style={[
+                    styles.settingMeta,
+                    isDarkMode ? styles.darkMutedText : null,
+                  ]}
+                >
+                  {getPushNotificationStatusText(pushNotificationStatus, labels)}
+                </Text>
+              </View>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              disabled={
+                isPushNotificationBusy ||
+                !isSupabaseConfigured ||
+                pushNotificationStatus === "enabled"
+              }
+              onPress={() => {
+                void onEnablePushNotifications();
+              }}
+              style={[
+                styles.settingsActionButton,
+                pushNotificationStatus === "enabled"
+                  ? styles.settingsActionButtonEnabled
+                  : null,
+                isPushNotificationBusy || !isSupabaseConfigured
+                  ? styles.settingsActionButtonDisabled
+                  : null,
+              ]}
+            >
+              <Text style={styles.settingsActionButtonText}>
+                {isPushNotificationBusy
+                  ? labels.pushNotificationsBusy
+                  : pushNotificationStatus === "enabled"
+                    ? labels.pushNotificationsOn
+                    : labels.pushNotificationsTurnOn}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         <SecondaryButton
           isDarkMode={isDarkMode}
           label={labels.walkthroughAgain}
@@ -10444,31 +10784,33 @@ function AnnouncementCenter({
 
   return (
     <>
-      <Pressable
-        accessibilityLabel={labels.notifications}
-        accessibilityRole="button"
-        onPress={() => setIsOpen(true)}
-        style={[styles.announcementBanner, isDarkMode ? styles.darkCard : null]}
-      >
-        <View style={[styles.announcementIconBox, isDarkMode ? styles.darkIconBox : null]}>
-          <Bell
-            color={isDarkMode ? "#E5E5EA" : "#111111"}
-            size={17}
-            strokeWidth={2.7}
-          />
-        </View>
-        <View style={styles.flex}>
-          <Text style={[styles.announcementBadge, isDarkMode ? styles.darkMutedText : null]}>
-            {latestAnnouncement.badge[locale]}
+      <View style={styles.announcementBannerSlot}>
+        <Pressable
+          accessibilityLabel={labels.notifications}
+          accessibilityRole="button"
+          onPress={() => setIsOpen(true)}
+          style={[styles.announcementBanner, isDarkMode ? styles.darkCard : null]}
+        >
+          <View style={[styles.announcementIconBox, isDarkMode ? styles.darkIconBox : null]}>
+            <Bell
+              color={isDarkMode ? "#E5E5EA" : "#111111"}
+              size={17}
+              strokeWidth={2.7}
+            />
+          </View>
+          <View style={styles.flex}>
+            <Text style={[styles.announcementBadge, isDarkMode ? styles.darkMutedText : null]}>
+              {latestAnnouncement.badge[locale]}
+            </Text>
+            <Text style={[styles.announcementTitle, isDarkMode ? styles.darkText : null]}>
+              {latestAnnouncement.title[locale]}
+            </Text>
+          </View>
+          <Text style={[styles.announcementCount, isDarkMode ? styles.darkBadge : null]}>
+            {announcements.length}
           </Text>
-          <Text style={[styles.announcementTitle, isDarkMode ? styles.darkText : null]}>
-            {latestAnnouncement.title[locale]}
-          </Text>
-        </View>
-        <Text style={[styles.announcementCount, isDarkMode ? styles.darkBadge : null]}>
-          {announcements.length}
-        </Text>
-      </Pressable>
+        </Pressable>
+      </View>
 
       <Modal
         animationType="slide"
@@ -13411,12 +13753,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     gap: 12,
-    marginBottom: 10,
     padding: 12,
     shadowColor: "#111111",
     shadowOffset: { height: 8, width: 0 },
     shadowOpacity: 0.05,
     shadowRadius: 14,
+  },
+  announcementBannerSlot: {
+    paddingBottom: 4,
+    paddingHorizontal: 12,
+    paddingTop: Platform.OS === "android" ? 54 : 64,
   },
   announcementCard: {
     backgroundColor: "#FFFFFF",
@@ -16886,6 +17232,27 @@ const styles = StyleSheet.create({
     minHeight: 64,
     paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+  settingsActionButton: {
+    alignItems: "center",
+    backgroundColor: "#111111",
+    borderRadius: 999,
+    justifyContent: "center",
+    minHeight: 34,
+    minWidth: 82,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  settingsActionButtonDisabled: {
+    opacity: 0.58,
+  },
+  settingsActionButtonEnabled: {
+    backgroundColor: "#357D77",
+  },
+  settingsActionButtonText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
   },
   successText: {
     backgroundColor: "#FFFFFF",

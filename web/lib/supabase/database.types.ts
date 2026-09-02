@@ -12,6 +12,7 @@ export type BusinessStatus = "published" | "hidden";
 export type BusinessContentType = "service" | "event" | "product";
 export type BusinessContentStatus = "draft" | "published";
 export type AppNotificationStatus = "draft" | "published";
+export type PushNotificationPlatform = "ios" | "android" | "web" | "unknown";
 export type AnalyticsContactType =
   | "address"
   | "instagram"
@@ -521,6 +522,7 @@ export type Database = {
           status: AppNotificationStatus;
           created_by: string | null;
           published_at: string;
+          push_sent_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -538,6 +540,7 @@ export type Database = {
           status?: AppNotificationStatus;
           created_by?: string | null;
           published_at?: string;
+          push_sent_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -555,6 +558,7 @@ export type Database = {
           status?: AppNotificationStatus;
           created_by?: string | null;
           published_at?: string;
+          push_sent_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -575,6 +579,54 @@ export type Database = {
           notification_id?: string;
           user_id?: string;
           dismissed_at?: string;
+        };
+        Relationships: [];
+      };
+      push_notification_tokens: {
+        Row: {
+          id: string;
+          user_id: string;
+          provider: "expo";
+          token: string;
+          platform: PushNotificationPlatform;
+          device_id: string | null;
+          locale: "uk" | "en";
+          app_version: string | null;
+          enabled: boolean;
+          last_registered_at: string;
+          revoked_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          provider?: "expo";
+          token: string;
+          platform?: PushNotificationPlatform;
+          device_id?: string | null;
+          locale?: "uk" | "en";
+          app_version?: string | null;
+          enabled?: boolean;
+          last_registered_at?: string;
+          revoked_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          provider?: "expo";
+          token?: string;
+          platform?: PushNotificationPlatform;
+          device_id?: string | null;
+          locale?: "uk" | "en";
+          app_version?: string | null;
+          enabled?: boolean;
+          last_registered_at?: string;
+          revoked_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -893,6 +945,39 @@ export type Database = {
           target_conversation_id: string;
         };
         Returns: string;
+      };
+      register_push_notification_token: {
+        Args: {
+          push_token: string;
+          device_platform?: PushNotificationPlatform | string;
+          device_identifier?: string | null;
+          device_locale?: "uk" | "en" | string;
+          app_version?: string | null;
+        };
+        Returns: string;
+      };
+      unregister_push_notification_token: {
+        Args: {
+          push_token: string;
+        };
+        Returns: undefined;
+      };
+      send_expo_push_to_user: {
+        Args: {
+          target_user_id: string;
+          notification_title: string;
+          notification_body: string;
+          notification_data?: Json;
+          notification_source?: "admin_notification" | "business_message" | string;
+          notification_source_id?: string | null;
+        };
+        Returns: number;
+      };
+      broadcast_app_notification: {
+        Args: {
+          target_notification_id: string;
+        };
+        Returns: number;
       };
       get_public_business_owners: {
         Args: {

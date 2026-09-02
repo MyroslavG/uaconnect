@@ -15,7 +15,7 @@ export type Announcement = {
 };
 
 const notificationSelect =
-  "id, badge_uk, badge_en, title_uk, title_en, body_uk, body_en, href, cta_uk, cta_en, status, created_by, published_at, created_at, updated_at";
+  "id, badge_uk, badge_en, title_uk, title_en, body_uk, body_en, href, cta_uk, cta_en, status, created_by, published_at, push_sent_at, created_at, updated_at";
 
 export async function getVisibleAnnouncements(
   userId: string | null | undefined,

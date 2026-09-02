@@ -44,6 +44,8 @@ const text = {
     published: "Опубліковано",
     draft: "Чернетка",
     publish: "Опублікувати",
+    pushPending: "Push ще не надсилали",
+    pushSent: "Push надіслано",
     moveToDraft: "У чернетку",
     delete: "Видалити",
     registrations: "Перевірка бізнесів",
@@ -65,6 +67,8 @@ const text = {
     published: "Published",
     draft: "Draft",
     publish: "Publish",
+    pushPending: "Push not sent yet",
+    pushSent: "Push sent",
     moveToDraft: "Move to draft",
     delete: "Delete",
     registrations: "Business review",
@@ -199,6 +203,13 @@ export default async function AdminNotificationsPage() {
                           {locale === "uk"
                             ? notification.body_uk
                             : notification.body_en}
+                        </p>
+                        <p className="mt-3 text-xs font-bold text-muted-foreground">
+                          {notification.push_sent_at
+                            ? `${labels.pushSent}: ${new Date(
+                                notification.push_sent_at,
+                              ).toLocaleString()}`
+                            : labels.pushPending}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2 sm:justify-end">

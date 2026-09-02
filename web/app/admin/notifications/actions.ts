@@ -58,9 +58,11 @@ export async function createNotification(
     published_at: new Date().toISOString(),
   };
 
-  const { error } = await adminCheck.supabase
+  const { data: createdNotification, error } = await adminCheck.supabase
     .from("app_notifications")
-    .insert(insert);
+    .insert(insert)
+    .select("id, status")
+    .single();
 
   if (error) {
     return {
@@ -69,11 +71,22 @@ export async function createNotification(
     };
   }
 
+  const pushCount =
+    createdNotification.status === "published"
+      ? await broadcastNotificationPush(
+          adminCheck.supabase,
+          createdNotification.id,
+        )
+      : null;
+
   revalidateNotifications();
 
   return {
     ok: true,
-    message: "Notification created.",
+    message:
+      pushCount === null
+        ? "Notification created."
+        : `Notification created. Push queued for ${pushCount} device${pushCount === 1 ? "" : "s"}.`,
   };
 }
 
@@ -108,6 +121,8 @@ export async function updateNotificationStatus(formData: FormData) {
       message: error.message,
       details: error.details,
     });
+  } else if (status === "published") {
+    await broadcastNotificationPush(adminCheck.supabase, notificationId);
   }
 
   revalidateNotifications();
@@ -180,6 +195,27 @@ async function requireAdmin() {
 function revalidateNotifications() {
   revalidatePath("/");
   revalidatePath("/admin/notifications");
+}
+
+async function broadcastNotificationPush(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  notificationId: string,
+) {
+  const { data, error } = await supabase.rpc("broadcast_app_notification", {
+    target_notification_id: notificationId,
+  });
+
+  if (error) {
+    console.error("[kolo:admin-notifications] Push broadcast failed", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+    });
+
+    return null;
+  }
+
+  return typeof data === "number" ? data : 0;
 }
 
 function normalizeStatus(
