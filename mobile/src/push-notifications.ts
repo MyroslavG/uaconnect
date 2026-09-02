@@ -24,14 +24,7 @@ const PUSH_TOKEN_STORAGE_KEY = "kolo-expo-push-token";
 const PUSH_DEVICE_ID_STORAGE_KEY = "kolo-push-device-id";
 const DEFAULT_CHANNEL_ID = "default";
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+let hasConfiguredNotificationHandler = false;
 
 export async function registerForPushNotifications({
   locale,
@@ -48,21 +41,22 @@ export async function registerForPushNotifications({
     return { status: "unsupported" };
   }
 
-  await ensureAndroidNotificationChannel();
-
-  const permissionStatus = await getPushPermissionStatus(requestPermission);
-
-  if (permissionStatus !== "granted") {
-    return { status: requestPermission ? "denied" : "unavailable" };
-  }
-
-  const projectId = getExpoProjectId();
-
-  if (!projectId) {
-    return { status: "unavailable" };
-  }
-
   try {
+    configureNotificationHandler();
+    await ensureAndroidNotificationChannel();
+
+    const permissionStatus = await getPushPermissionStatus(requestPermission);
+
+    if (permissionStatus !== "granted") {
+      return { status: requestPermission ? "denied" : "unavailable" };
+    }
+
+    const projectId = getExpoProjectId();
+
+    if (!projectId) {
+      return { status: "unavailable" };
+    }
+
     const token = (
       await Notifications.getExpoPushTokenAsync({
         projectId,
@@ -95,7 +89,20 @@ export async function registerForPushNotifications({
 }
 
 export async function syncExistingPushNotificationPermission(locale: Locale) {
-  const permissions = await Notifications.getPermissionsAsync().catch(() => null);
+  if (!isSupabaseConfigured || Platform.OS === "web") {
+    return { status: "idle" as const };
+  }
+
+  if (Platform.OS === "android" && Constants.appOwnership === "expo") {
+    return { status: "idle" as const };
+  }
+
+  configureNotificationHandler();
+
+  const permissions = await Notifications.getPermissionsAsync().catch((error) => {
+    console.error("[kolo:mobile-push-permission-sync]", error);
+    return null;
+  });
 
   if (!isPushPermissionGranted(permissions)) {
     return { status: "idle" as const };
@@ -128,7 +135,12 @@ export async function unregisterStoredPushNotificationToken() {
 }
 
 export function getInitialPushNotificationData() {
+  if (Platform.OS === "web") {
+    return null;
+  }
+
   try {
+    configureNotificationHandler();
     const response = Notifications.getLastNotificationResponse();
     return getPushNotificationData(response);
   } catch {
@@ -139,19 +151,29 @@ export function getInitialPushNotificationData() {
 export function addPushNotificationTapListener(
   listener: (data: PushNotificationData) => void,
 ) {
-  const subscription = Notifications.addNotificationResponseReceivedListener(
-    (response) => {
-      const data = getPushNotificationData(response);
+  if (Platform.OS === "web") {
+    return () => {};
+  }
 
-      if (data) {
-        listener(data);
-      }
-    },
-  );
+  try {
+    configureNotificationHandler();
+    const subscription = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        const data = getPushNotificationData(response);
 
-  return () => {
-    subscription.remove();
-  };
+        if (data) {
+          listener(data);
+        }
+      },
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  } catch (error) {
+    console.error("[kolo:mobile-push-listener]", error);
+    return () => {};
+  }
 }
 
 function getPushNotificationData(
@@ -175,6 +197,26 @@ async function ensureAndroidNotificationChannel() {
     name: "Kolo",
     vibrationPattern: [0, 250, 250, 250],
   });
+}
+
+function configureNotificationHandler() {
+  if (hasConfiguredNotificationHandler || Platform.OS === "web") {
+    return;
+  }
+
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+    hasConfiguredNotificationHandler = true;
+  } catch (error) {
+    console.error("[kolo:mobile-push-handler]", error);
+  }
 }
 
 async function getPushPermissionStatus(requestPermission: boolean) {

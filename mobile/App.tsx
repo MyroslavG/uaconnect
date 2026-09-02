@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Component,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ErrorInfo,
+  type ReactNode,
+} from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker, {
   type DateTimePickerEvent,
@@ -1052,7 +1060,60 @@ const defaultOwnedBusiness =
   initialBusinesses.find((business) => business.ownedByCurrentUser) ??
   initialBusinesses[0];
 
+type MobileErrorBoundaryState = {
+  error: Error | null;
+};
+
+class MobileErrorBoundary extends Component<
+  { children: ReactNode },
+  MobileErrorBoundaryState
+> {
+  state: MobileErrorBoundaryState = {
+    error: null,
+  };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("[kolo:mobile-render-crash]", error, errorInfo.componentStack);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <View style={styles.crashScreen}>
+          <Text style={styles.crashTitle}>Kolo could not open</Text>
+          <Text style={styles.crashText}>
+            Please send this screen to support so we can fix it quickly.
+          </Text>
+          <Text style={styles.crashDetails} numberOfLines={5}>
+            {this.state.error.message}
+          </Text>
+          <Pressable
+            style={styles.crashButton}
+            onPress={() => this.setState({ error: null })}
+          >
+            <Text style={styles.crashButtonText}>Try again</Text>
+          </Pressable>
+        </View>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 export default function App() {
+  return (
+    <MobileErrorBoundary>
+      <KoloApp />
+    </MobileErrorBoundary>
+  );
+}
+
+function KoloApp() {
   const [locale, setLocale] = useState<Locale>("uk");
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [businessReturnTab, setBusinessReturnTab] = useState<MainTab>("home");
@@ -13737,6 +13798,47 @@ const styles = StyleSheet.create({
   activeSaveIconButton: {
     backgroundColor: "#111111",
     borderColor: "#111111",
+  },
+  crashButton: {
+    alignItems: "center",
+    alignSelf: "stretch",
+    backgroundColor: "#111111",
+    borderRadius: 999,
+    justifyContent: "center",
+    minHeight: 48,
+    paddingHorizontal: 18,
+  },
+  crashButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  crashDetails: {
+    alignSelf: "stretch",
+    color: "#6E6E73",
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  crashScreen: {
+    alignItems: "center",
+    backgroundColor: "#F7F7F8",
+    flex: 1,
+    gap: 14,
+    justifyContent: "center",
+    padding: 28,
+  },
+  crashText: {
+    color: "#3A3A3C",
+    fontSize: 15,
+    lineHeight: 21,
+    textAlign: "center",
+  },
+  crashTitle: {
+    color: "#111111",
+    fontSize: 22,
+    fontWeight: "900",
+    textAlign: "center",
   },
   announcementBadge: {
     color: "#6E6E73",
