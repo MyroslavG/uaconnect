@@ -448,8 +448,8 @@ const copy = {
       "Щоб отримувати повідомлення та важливі оновлення від Kolo, дозвольте сповіщення в налаштуваннях телефону.",
     notificationOptInOpenSettings: "Відкрити налаштування",
     notificationOptInClose: "Закрити",
-    dismiss: "Приховати",
-    dismissAll: "Приховати всі",
+    dismiss: "Позначити як прочитано",
+    dismissAll: "Позначити всі як прочитані",
     liveNearby: "Події та сервіси поруч",
     planToday: "Що хочете знайти сьогодні?",
     planFood: "Смачна зупинка",
@@ -743,25 +743,25 @@ const copy = {
     pushNotificationsUnsupported:
       "Push notifications require an installed app build.",
     pushNotificationsTurnOn: "Turn on",
-    notificationOptInMainTitle: "Отримуйте сповіщення про відповіді бізнесів",
+    notificationOptInMainTitle: "Get notified when businesses reply",
     notificationOptInMainBody:
-      "Увімкніть сповіщення, щоб не пропустити нові повідомлення, події та важливі оновлення в Kolo.",
-    notificationOptInEnable: "Увімкнути сповіщення",
-    notificationOptInLater: "Не зараз",
-    notificationOptInBannerTitle: "Не пропустіть відповіді від бізнесів",
+      "Turn on notifications so you do not miss new messages, events, and important Kolo updates.",
+    notificationOptInEnable: "Turn on notifications",
+    notificationOptInLater: "Not now",
+    notificationOptInBannerTitle: "Do not miss replies from businesses",
     notificationOptInBannerBody:
-      "Увімкніть сповіщення, щоб отримувати повідомлення та важливі оновлення від Kolo.",
-    notificationOptInBannerButton: "Увімкнути",
-    notificationOptInMessagingTitle: "Дізнайтесь, коли бізнес відповість",
+      "Turn on notifications to receive messages and important Kolo updates.",
+    notificationOptInBannerButton: "Turn on",
+    notificationOptInMessagingTitle: "Know when a business replies",
     notificationOptInMessagingBody:
-      "Увімкніть сповіщення, щоб не пропустити відповідь від бізнесу.",
-    notificationOptInDeniedTitle: "Сповіщення вимкнено",
+      "Turn on notifications so you do not miss a reply from a business.",
+    notificationOptInDeniedTitle: "Notifications are off",
     notificationOptInDeniedBody:
-      "Щоб отримувати повідомлення та важливі оновлення від Kolo, дозвольте сповіщення в налаштуваннях телефону.",
-    notificationOptInOpenSettings: "Відкрити налаштування",
-    notificationOptInClose: "Закрити",
-    dismiss: "Dismiss",
-    dismissAll: "Dismiss all",
+      "To receive messages and important Kolo updates, allow notifications in your phone settings.",
+    notificationOptInOpenSettings: "Open settings",
+    notificationOptInClose: "Close",
+    dismiss: "Mark as read",
+    dismissAll: "Mark all as read",
     liveNearby: "Live nearby",
     planToday: "What do you want to find today?",
     planFood: "Something tasty",
@@ -3780,6 +3780,7 @@ function KoloApp() {
             <HomeScreen
               businesses={businesses}
               feedPosts={feedPosts}
+              hasTopAnnouncement={visibleAnnouncements.length > 0}
               isDataReady={!isDirectoryLoading && hasResolvedInitialLocation}
               isDarkMode={isDarkMode}
               labels={labels}
@@ -3811,6 +3812,7 @@ function KoloApp() {
               businesses={businesses}
               canViewContacts={canViewContacts}
               dataMessage={dataMessage}
+              hasTopAnnouncement={visibleAnnouncements.length > 0}
               isDataReady={!isDirectoryLoading && hasResolvedInitialLocation}
               isDarkMode={isDarkMode}
               isResolvingCurrentLocation={isResolvingCurrentLocation}
@@ -4296,6 +4298,7 @@ function SearchScreen({
   businesses,
   canViewContacts,
   dataMessage,
+  hasTopAnnouncement,
   isDataReady,
   isDarkMode,
   isResolvingCurrentLocation,
@@ -4325,6 +4328,7 @@ function SearchScreen({
   businesses: Business[];
   canViewContacts: boolean;
   dataMessage: string;
+  hasTopAnnouncement: boolean;
   isDataReady: boolean;
   isDarkMode: boolean;
   isResolvingCurrentLocation: boolean;
@@ -4472,6 +4476,9 @@ function SearchScreen({
         <View
           style={[
             styles.discoveryStickyHeader,
+            hasTopAnnouncement
+              ? styles.discoveryStickyHeaderWithAnnouncement
+              : null,
             isDarkMode ? styles.darkSafeArea : null,
           ]}
         >
@@ -4583,6 +4590,7 @@ function SearchScreen({
       contentContainerStyle={[
         styles.screenContent,
         styles.searchScreenContent,
+        hasTopAnnouncement ? styles.searchScreenContentWithAnnouncement : null,
       ]}
       keyboardDismissMode="interactive"
       keyboardShouldPersistTaps="handled"
@@ -5854,6 +5862,7 @@ function EventsScreen({
 function HomeScreen({
   businesses,
   feedPosts,
+  hasTopAnnouncement,
   initialScrollOffset,
   isDataReady,
   isDarkMode,
@@ -5874,6 +5883,7 @@ function HomeScreen({
 }: {
   businesses: Business[];
   feedPosts: MobileFeedPost[];
+  hasTopAnnouncement: boolean;
   initialScrollOffset: number;
   isDataReady: boolean;
   isDarkMode: boolean;
@@ -5910,6 +5920,7 @@ function HomeScreen({
   if (!isDataReady) {
     return (
       <HomeLoadingScreen
+        hasTopAnnouncement={hasTopAnnouncement}
         isDarkMode={isDarkMode}
         labels={labels}
         locale={locale}
@@ -6010,7 +6021,11 @@ function HomeScreen({
 
   return (
     <ScrollView
-      contentContainerStyle={[styles.screenContent, styles.homeScreenContent]}
+      contentContainerStyle={[
+        styles.screenContent,
+        styles.homeScreenContent,
+        hasTopAnnouncement ? styles.homeScreenContentWithAnnouncement : null,
+      ]}
       keyboardShouldPersistTaps="handled"
       onScroll={(event) => {
         onScrollOffsetChange(event.nativeEvent.contentOffset.y);
@@ -6184,10 +6199,12 @@ function HomeScreen({
 }
 
 function HomeLoadingScreen({
+  hasTopAnnouncement,
   isDarkMode,
   labels,
   locale,
 }: {
+  hasTopAnnouncement: boolean;
   isDarkMode: boolean;
   labels: Record<string, string>;
   locale: Locale;
@@ -6197,7 +6214,11 @@ function HomeLoadingScreen({
 
   return (
     <ScrollView
-      contentContainerStyle={[styles.screenContent, styles.homeScreenContent]}
+      contentContainerStyle={[
+        styles.screenContent,
+        styles.homeScreenContent,
+        hasTopAnnouncement ? styles.homeScreenContentWithAnnouncement : null,
+      ]}
       keyboardShouldPersistTaps="handled"
       style={styles.screen}
       showsVerticalScrollIndicator={false}
@@ -8814,12 +8835,18 @@ function FeedPostCard({
   const [editingPostDraft, setEditingPostDraft] = useState(post.body);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentDraft, setEditingCommentDraft] = useState("");
+  const [isPostBodyExpanded, setIsPostBodyExpanded] = useState(false);
+  const isPostBodyExpandable =
+    !showDetail && (post.body.length > 260 || post.body.split(/\r?\n/).length > 5);
+  const postBodyLineCount =
+    showDetail || isPostBodyExpanded ? undefined : 5;
 
   useEffect(() => {
     setIsEditingPost(false);
     setEditingPostDraft(post.body);
     setEditingCommentId(null);
     setEditingCommentDraft("");
+    setIsPostBodyExpanded(false);
   }, [post.id]);
 
   useEffect(() => {
@@ -8990,9 +9017,29 @@ function FeedPostCard({
           </View>
         </View>
       ) : (
-        <Text style={[styles.feedBody, isDarkMode ? styles.darkText : null]}>
-          {post.body}
-        </Text>
+        <Pressable
+          accessibilityRole={isPostBodyExpandable ? "button" : undefined}
+          disabled={!isPostBodyExpandable}
+          onPress={() => setIsPostBodyExpanded((value) => !value)}
+        >
+          <Text
+            ellipsizeMode="tail"
+            numberOfLines={postBodyLineCount}
+            style={[styles.feedBody, isDarkMode ? styles.darkText : null]}
+          >
+            {post.body}
+          </Text>
+          {isPostBodyExpandable && !isPostBodyExpanded ? (
+            <Text
+              style={[
+                styles.feedBodyTruncationHint,
+                isDarkMode ? styles.darkMutedText : null,
+              ]}
+            >
+              ...
+            </Text>
+          ) : null}
+        </Pressable>
       )}
 
       <View style={styles.feedActions}>
@@ -11413,21 +11460,6 @@ function AnnouncementCenter({
                     >
                       {announcement.badge[locale]}
                     </Text>
-                    <Pressable
-                      accessibilityLabel={labels.dismiss}
-                      accessibilityRole="button"
-                      onPress={() => onDismiss(announcement.id)}
-                      style={[
-                        styles.contentItemActionButton,
-                        isDarkMode ? styles.darkIconBox : null,
-                      ]}
-                    >
-                      <X
-                        color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
-                        size={16}
-                        strokeWidth={2.6}
-                      />
-                    </Pressable>
                   </View>
                   <Text
                     style={[
@@ -11440,6 +11472,24 @@ function AnnouncementCenter({
                   <Text style={[styles.modalBody, isDarkMode ? styles.darkMutedText : null]}>
                     {announcement.body[locale]}
                   </Text>
+                  <Pressable
+                    accessibilityLabel={labels.dismiss}
+                    accessibilityRole="button"
+                    onPress={() => onDismiss(announcement.id)}
+                    style={[
+                      styles.announcementReadButton,
+                      isDarkMode ? styles.darkIconBox : null,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.announcementReadButtonText,
+                        isDarkMode ? styles.darkText : null,
+                      ]}
+                    >
+                      {labels.dismiss}
+                    </Text>
+                  </Pressable>
                 </View>
               ))}
             </ScrollView>
@@ -14336,9 +14386,9 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
   },
   announcementBannerSlot: {
-    paddingBottom: 4,
+    paddingBottom: 0,
     paddingHorizontal: 12,
-    paddingTop: Platform.OS === "android" ? 54 : 64,
+    paddingTop: Platform.OS === "android" ? 46 : 54,
   },
   announcementCard: {
     backgroundColor: "#FFFFFF",
@@ -14379,6 +14429,22 @@ const styles = StyleSheet.create({
   announcementList: {
     gap: 10,
     paddingBottom: 14,
+  },
+  announcementReadButton: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 999,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 38,
+    paddingHorizontal: 14,
+  },
+  announcementReadButtonText: {
+    color: "#111111",
+    fontSize: 13,
+    fontWeight: "900",
   },
   announcementSheet: {
     backgroundColor: "#FFFFFF",
@@ -14884,6 +14950,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 24,
   },
+  feedBodyTruncationHint: {
+    color: "#6E6E73",
+    fontSize: 17,
+    fontWeight: "900",
+    lineHeight: 18,
+    marginTop: 2,
+  },
   feedFloatingButton: {
     alignItems: "center",
     alignSelf: "center",
@@ -15198,6 +15271,9 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     paddingTop: 62,
     zIndex: 10,
+  },
+  discoveryStickyHeaderWithAnnouncement: {
+    paddingTop: 34,
   },
   discoverySearchHint: {
     color: "#6E6E73",
@@ -17028,6 +17104,9 @@ const styles = StyleSheet.create({
   homeScreenContent: {
     paddingTop: 44,
   },
+  homeScreenContentWithAnnouncement: {
+    paddingTop: 16,
+  },
   input: {
     backgroundColor: "#FFFEFB",
     borderColor: "#DED5C8",
@@ -17734,6 +17813,9 @@ const styles = StyleSheet.create({
   },
   searchScreenContent: {
     paddingTop: 56,
+  },
+  searchScreenContentWithAnnouncement: {
+    paddingTop: 28,
   },
   searchCompactPanel: {
     gap: 10,

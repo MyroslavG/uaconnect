@@ -22,6 +22,7 @@ import {
   updateFeedPost,
 } from "@/app/feed/actions";
 import { BusinessLogo } from "@/components/business-logo";
+import { FeedPostBody } from "@/components/feed-post-body";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -283,7 +284,7 @@ function FeedPostCard({
           </div>
         </div>
 
-        <p className="whitespace-pre-wrap text-base leading-7">{post.body}</p>
+        <FeedPostBody body={post.body} />
 
         {isOwnPost ? (
           <div className="flex flex-wrap items-start gap-2">

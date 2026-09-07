@@ -34,15 +34,15 @@ export function UpdateNotifications({
     locale === "uk"
       ? {
           close: "Закрити",
-          dismiss: "Приховати",
-          dismissAll: "Приховати всі",
+          dismiss: "Позначити як прочитано",
+          dismissAll: "Позначити всі як прочитані",
           empty: "Нових оновлень немає.",
           title: "Оновлення",
         }
       : {
           close: "Close",
-          dismiss: "Dismiss",
-          dismissAll: "Dismiss all",
+          dismiss: "Mark as read",
+          dismissAll: "Mark all as read",
           empty: "No new updates.",
           title: "Updates",
         };
@@ -118,7 +118,7 @@ export function UpdateNotifications({
                   className="grid gap-3 rounded-md border bg-card p-3 shadow-sm"
                   key={announcement.id}
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="grid gap-3">
                     <div>
                       <span className="rounded-md border bg-background px-2 py-1 text-[11px] font-black uppercase tracking-widest text-muted-foreground">
                         {announcement.badge[locale]}
@@ -127,15 +127,6 @@ export function UpdateNotifications({
                         {announcement.title[locale]}
                       </h2>
                     </div>
-                    <button
-                      aria-label={labels.dismiss}
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                      disabled={isPending}
-                      onClick={() => dismissAnnouncement(announcement.id)}
-                      type="button"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
                   </div>
                   <p className="text-sm leading-6 text-muted-foreground">
                     {announcement.body[locale]}
@@ -149,6 +140,16 @@ export function UpdateNotifications({
                       {announcement.cta[locale]}
                     </Link>
                   ) : null}
+                  <Button
+                    className="justify-self-start"
+                    disabled={isPending}
+                    onClick={() => dismissAnnouncement(announcement.id)}
+                    size="sm"
+                    type="button"
+                    variant="secondary"
+                  >
+                    {labels.dismiss}
+                  </Button>
                 </article>
               ))
             ) : (
