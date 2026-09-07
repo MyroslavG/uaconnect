@@ -166,6 +166,7 @@ import {
   syncExistingPushNotificationPermission,
   unregisterStoredPushNotificationToken,
   type PushNotificationData,
+  type PushPermissionState,
   type PushNotificationStatus,
 } from "./src/push-notifications";
 import { getPublicBusinessContentItems } from "./src/contentVisibility";
@@ -199,7 +200,7 @@ type DiscoveryTile =
     title: string;
   };
 type AppTourPhase = "focus" | "text";
-type NotificationPromptSource = "banner" | "main" | "messaging";
+type NotificationPromptSource = "home_banner" | "messaging" | "onboarding";
 type NotificationPromptVariant = "denied" | "main" | "messaging";
 type AppTourFocus =
   | "addBusinessForm"
@@ -422,6 +423,23 @@ const copy = {
     pushNotificationsUnsupported:
       "Для push-сповіщень потрібна встановлена збірка застосунку.",
     pushNotificationsTurnOn: "Увімкнути",
+    notificationOptInMainTitle: "Отримуйте сповіщення про відповіді бізнесів",
+    notificationOptInMainBody:
+      "Увімкніть сповіщення, щоб не пропустити нові повідомлення, події та важливі оновлення в Kolo.",
+    notificationOptInEnable: "Увімкнути сповіщення",
+    notificationOptInLater: "Не зараз",
+    notificationOptInBannerTitle: "Не пропустіть відповіді від бізнесів",
+    notificationOptInBannerBody:
+      "Увімкніть сповіщення, щоб отримувати повідомлення та важливі оновлення від Kolo.",
+    notificationOptInBannerButton: "Увімкнути",
+    notificationOptInMessagingTitle: "Дізнайтесь, коли бізнес відповість",
+    notificationOptInMessagingBody:
+      "Увімкніть сповіщення, щоб не пропустити відповідь від бізнесу.",
+    notificationOptInDeniedTitle: "Сповіщення вимкнено",
+    notificationOptInDeniedBody:
+      "Щоб отримувати повідомлення та важливі оновлення від Kolo, дозвольте сповіщення в налаштуваннях телефону.",
+    notificationOptInOpenSettings: "Відкрити налаштування",
+    notificationOptInClose: "Закрити",
     dismiss: "Приховати",
     dismissAll: "Приховати всі",
     liveNearby: "Події та сервіси поруч",
@@ -717,6 +735,23 @@ const copy = {
     pushNotificationsUnsupported:
       "Push notifications require an installed app build.",
     pushNotificationsTurnOn: "Turn on",
+    notificationOptInMainTitle: "Отримуйте сповіщення про відповіді бізнесів",
+    notificationOptInMainBody:
+      "Увімкніть сповіщення, щоб не пропустити нові повідомлення, події та важливі оновлення в Kolo.",
+    notificationOptInEnable: "Увімкнути сповіщення",
+    notificationOptInLater: "Не зараз",
+    notificationOptInBannerTitle: "Не пропустіть відповіді від бізнесів",
+    notificationOptInBannerBody:
+      "Увімкніть сповіщення, щоб отримувати повідомлення та важливі оновлення від Kolo.",
+    notificationOptInBannerButton: "Увімкнути",
+    notificationOptInMessagingTitle: "Дізнайтесь, коли бізнес відповість",
+    notificationOptInMessagingBody:
+      "Увімкніть сповіщення, щоб не пропустити відповідь від бізнесу.",
+    notificationOptInDeniedTitle: "Сповіщення вимкнено",
+    notificationOptInDeniedBody:
+      "Щоб отримувати повідомлення та важливі оновлення від Kolo, дозвольте сповіщення в налаштуваннях телефону.",
+    notificationOptInOpenSettings: "Відкрити налаштування",
+    notificationOptInClose: "Закрити",
     dismiss: "Dismiss",
     dismissAll: "Dismiss all",
     liveNearby: "Live nearby",
@@ -1130,7 +1165,9 @@ export default function App() {
   const [notificationPrompt, setNotificationPrompt] =
     useState<NotificationPromptVariant | null>(null);
   const [notificationPromptSource, setNotificationPromptSource] =
-    useState<NotificationPromptSource>("main");
+    useState<NotificationPromptSource>("onboarding");
+  const [notificationPermissionState, setNotificationPermissionState] =
+    useState<PushPermissionState>("askable");
   const hasShownMessagingPushPrompt = useRef(false);
   const isShowingPushPrompt = useRef(false);
   const isAwaitingPushSettingsReturn = useRef(false);
@@ -1229,7 +1266,7 @@ export default function App() {
 
     const timeout = setTimeout(() => {
       if (activeTab === "home" || activeTab === "feed") {
-        void showNotificationPrompt("main");
+        void showNotificationPrompt("onboarding");
       }
     }, PUSH_PROMPT_DELAY_MS);
 
@@ -1257,7 +1294,7 @@ export default function App() {
       return;
     }
 
-    void showNotificationPrompt("main");
+    void showNotificationPrompt("onboarding");
   }, [
     businessProfileOpenCount,
     hasLoadedPushPromptPreference,
@@ -1469,6 +1506,7 @@ export default function App() {
       .then((result) => {
         if (isMounted && result.status === "enabled") {
           setPushNotificationStatus("enabled");
+          setNotificationPermissionState("enabled");
         }
       })
       .catch((error) => {
@@ -1497,12 +1535,17 @@ export default function App() {
           }
 
           setPushNotificationStatus("enabled");
+          setNotificationPermissionState("enabled");
           setNotificationPrompt(null);
           setIsPushBannerDismissed(true);
           if (isAwaitingPushSettingsReturn.current) {
             void trackMobileAnalyticsEvent({
               eventType: "notification_permission_granted",
-              metadata: { source: "settings" },
+              metadata: {
+                permission_state: "enabled",
+                platform: Platform.OS,
+                source: notificationPromptSource,
+              },
               userId: session.user.id,
             });
           }
@@ -1516,7 +1559,7 @@ export default function App() {
     });
 
     return () => subscription.remove();
-  }, [locale, session?.user.id]);
+  }, [locale, notificationPromptSource, session?.user.id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -2344,6 +2387,7 @@ export default function App() {
     isShowingPushPrompt.current = true;
     const permissionState = await getPushNotificationPermissionState();
     isShowingPushPrompt.current = false;
+    setNotificationPermissionState(permissionState);
 
     if (permissionState === "enabled") {
       setPushNotificationStatus("enabled");
@@ -2367,6 +2411,8 @@ export default function App() {
     void trackMobileAnalyticsEvent({
       eventType: "notification_prompt_view",
       metadata: {
+        permission_state: permissionState,
+        platform: Platform.OS,
         prompt_variant:
           permissionState === "denied"
             ? "denied"
@@ -2380,7 +2426,7 @@ export default function App() {
   }
 
   async function handleEnablePushNotifications(
-    source: NotificationPromptSource = "main",
+    source: NotificationPromptSource = "onboarding",
   ) {
     if (!session?.user.id) {
       setAuthMessage(labels.signInRequired);
@@ -2392,13 +2438,17 @@ export default function App() {
     try {
       setAuthMessage("");
       setIsPushNotificationBusy(true);
+      const permissionState = await getPushNotificationPermissionState();
+      setNotificationPermissionState(permissionState);
       void trackMobileAnalyticsEvent({
         eventType: "notification_prompt_enable_click",
-        metadata: { source },
+        metadata: {
+          permission_state: permissionState,
+          platform: Platform.OS,
+          source,
+        },
         userId: session.user.id,
       });
-
-      const permissionState = await getPushNotificationPermissionState();
 
       if (permissionState === "denied") {
         setPushNotificationStatus("denied");
@@ -2406,7 +2456,12 @@ export default function App() {
         setNotificationPrompt("denied");
         void trackMobileAnalyticsEvent({
           eventType: "notification_permission_denied",
-          metadata: { source, system_prompt_shown: false },
+          metadata: {
+            permission_state: "denied",
+            platform: Platform.OS,
+            source,
+            system_prompt_shown: false,
+          },
           userId: session.user.id,
         });
         return;
@@ -2420,19 +2475,26 @@ export default function App() {
       setPushNotificationStatus(result.status);
 
       if (result.status === "enabled") {
+        setNotificationPermissionState("enabled");
         setNotificationPrompt(null);
         setIsPushBannerDismissed(true);
         void trackMobileAnalyticsEvent({
           eventType: "notification_permission_granted",
-          metadata: { source },
+          metadata: { permission_state: "enabled", platform: Platform.OS, source },
           userId: session.user.id,
         });
       } else if (result.status === "denied") {
+        setNotificationPermissionState("denied");
         setNotificationPromptSource(source);
         setNotificationPrompt("denied");
         void trackMobileAnalyticsEvent({
           eventType: "notification_permission_denied",
-          metadata: { source, system_prompt_shown: true },
+          metadata: {
+            permission_state: "denied",
+            platform: Platform.OS,
+            source,
+            system_prompt_shown: true,
+          },
           userId: session.user.id,
         });
       } else {
@@ -2455,7 +2517,12 @@ export default function App() {
     void rememberPushPromptSeen();
     void trackMobileAnalyticsEvent({
       eventType: "notification_prompt_dismiss",
-      metadata: { prompt_variant: variant, source: notificationPromptSource },
+      metadata: {
+        permission_state: notificationPermissionState,
+        platform: Platform.OS,
+        prompt_variant: variant,
+        source: notificationPromptSource,
+      },
       userId: session?.user.id,
     });
   }
@@ -2463,7 +2530,11 @@ export default function App() {
   async function handleOpenNotificationSettings() {
     void trackMobileAnalyticsEvent({
       eventType: "notification_settings_opened",
-      metadata: { source: notificationPromptSource },
+      metadata: {
+        permission_state: "denied",
+        platform: Platform.OS,
+        source: notificationPromptSource,
+      },
       userId: session?.user.id,
     });
     isAwaitingPushSettingsReturn.current = true;
@@ -3636,9 +3707,10 @@ export default function App() {
         (activeTab === "home" || activeTab === "feed") ? (
           <NotificationOptInBanner
             isDarkMode={isDarkMode}
+            labels={labels}
             onDismiss={() => setIsPushBannerDismissed(true)}
             onEnable={() => {
-              void showNotificationPrompt("banner");
+              void showNotificationPrompt("home_banner");
             }}
           />
         ) : null}
@@ -3843,7 +3915,7 @@ export default function App() {
               onBusinessSubmit={handleBusinessRegistration}
               onProfileSave={handleProfileSave}
               onShareBusiness={handleShareBusiness}
-              onEnablePushNotifications={() => showNotificationPrompt("main")}
+              onEnablePushNotifications={() => showNotificationPrompt("onboarding")}
               onShowWalkthrough={showWalkthrough}
               onProfilePanelChange={setActiveProfilePanel}
               onToggleSavedBusiness={handleToggleSavedBusiness}
@@ -4003,6 +4075,7 @@ export default function App() {
       <NotificationOptInModal
         isBusy={isPushNotificationBusy}
         isDarkMode={isDarkMode}
+        labels={labels}
         onDismiss={handleDismissNotificationPrompt}
         onEnable={() => {
           void handleEnablePushNotifications(notificationPromptSource);
@@ -4018,10 +4091,12 @@ export default function App() {
 
 function NotificationOptInBanner({
   isDarkMode,
+  labels,
   onDismiss,
   onEnable,
 }: {
   isDarkMode: boolean;
+  labels: Record<string, string>;
   onDismiss: () => void;
   onEnable: () => void;
 }) {
@@ -4033,17 +4108,19 @@ function NotificationOptInBanner({
         </View>
         <View style={styles.flex}>
           <Text style={[styles.pushBannerTitle, isDarkMode ? styles.darkText : null]}>
-            Не пропустіть відповіді від бізнесів
+            {labels.notificationOptInBannerTitle}
           </Text>
           <Text style={[styles.pushBannerBody, isDarkMode ? styles.darkMutedText : null]}>
-            Увімкніть сповіщення, щоб отримувати повідомлення та важливі оновлення від Kolo.
+            {labels.notificationOptInBannerBody}
           </Text>
           <Pressable accessibilityRole="button" onPress={onEnable} style={styles.pushBannerButton}>
-            <Text style={styles.pushBannerButtonText}>Увімкнути</Text>
+            <Text style={styles.pushBannerButtonText}>
+              {labels.notificationOptInBannerButton}
+            </Text>
           </Pressable>
         </View>
         <Pressable
-          accessibilityLabel="Закрити"
+          accessibilityLabel={labels.notificationOptInClose}
           accessibilityRole="button"
           onPress={onDismiss}
           style={[styles.pushBannerClose, isDarkMode ? styles.darkSettingRow : null]}
@@ -4058,6 +4135,7 @@ function NotificationOptInBanner({
 function NotificationOptInModal({
   isBusy,
   isDarkMode,
+  labels,
   onDismiss,
   onEnable,
   onOpenSettings,
@@ -4065,6 +4143,7 @@ function NotificationOptInModal({
 }: {
   isBusy: boolean;
   isDarkMode: boolean;
+  labels: Record<string, string>;
   onDismiss: () => void;
   onEnable: () => void;
   onOpenSettings: () => void;
@@ -4073,41 +4152,47 @@ function NotificationOptInModal({
   const isDenied = variant === "denied";
   const isMessaging = variant === "messaging";
   const title = isDenied
-    ? "Сповіщення вимкнено"
+    ? labels.notificationOptInDeniedTitle
     : isMessaging
-      ? "Дізнайтесь, коли бізнес відповість"
-      : "Отримуйте сповіщення про відповіді бізнесів";
+      ? labels.notificationOptInMessagingTitle
+      : labels.notificationOptInMainTitle;
   const body = isDenied
-    ? "Щоб отримувати повідомлення та важливі оновлення від Kolo, дозвольте сповіщення в налаштуваннях телефону."
+    ? labels.notificationOptInDeniedBody
     : isMessaging
-      ? "Увімкніть сповіщення, щоб не пропустити відповідь від бізнесу."
-      : "Увімкніть сповіщення, щоб не пропустити нові повідомлення, події та важливі оновлення в Kolo.";
+      ? labels.notificationOptInMessagingBody
+      : labels.notificationOptInMainBody;
 
   return (
     <Modal animationType="fade" onRequestClose={onDismiss} transparent visible={Boolean(variant)}>
       <View style={styles.pushPromptBackdrop}>
-        <Pressable accessibilityLabel="Не зараз" onPress={onDismiss} style={styles.modalDismissLayer} />
+        <Pressable
+          accessibilityLabel={labels.notificationOptInLater}
+          onPress={onDismiss}
+          style={styles.modalDismissLayer}
+        />
         <View style={[styles.pushPromptCard, isDarkMode ? styles.darkModalSheet : null]}>
           <View style={[styles.pushPromptIcon, isDarkMode ? styles.darkIconBox : null]}>
             <Bell color={isDarkMode ? "#FFFFFF" : "#111111"} size={30} strokeWidth={2.6} />
           </View>
-          <Text style={[styles.pushPromptTitle, isDarkMode ? styles.darkText : null]}>{title}</Text>
-          <Text style={[styles.pushPromptBody, isDarkMode ? styles.darkMutedText : null]}>{body}</Text>
-          <Pressable
-            accessibilityRole="button"
-            disabled={isBusy}
-            onPress={isDenied ? onOpenSettings : onEnable}
-            style={[styles.pushPromptPrimaryButton, isBusy ? styles.disabledButton : null]}
-          >
-            <Text style={styles.pushPromptPrimaryButtonText}>
-              {isDenied ? "Відкрити налаштування" : "Увімкнути сповіщення"}
-            </Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" disabled={isBusy} onPress={onDismiss} style={styles.pushPromptSecondaryButton}>
-            <Text style={[styles.pushPromptSecondaryButtonText, isDarkMode ? styles.darkText : null]}>
-              Не зараз
-            </Text>
-          </Pressable>
+          <Text style={[styles.modalTitle, styles.pushPromptText, isDarkMode ? styles.darkText : null]}>
+            {title}
+          </Text>
+          <Text style={[styles.modalBody, styles.pushPromptText, isDarkMode ? styles.darkMutedText : null]}>
+            {body}
+          </Text>
+          <View style={styles.pushPromptActions}>
+            <PrimaryButton
+              disabled={isBusy}
+              label={isDenied ? labels.notificationOptInOpenSettings : labels.notificationOptInEnable}
+              onPress={isDenied ? onOpenSettings : onEnable}
+            />
+            <SecondaryButton
+              disabled={isBusy}
+              isDarkMode={isDarkMode}
+              label={labels.notificationOptInLater}
+              onPress={onDismiss}
+            />
+          </View>
         </View>
       </View>
     </Modal>
@@ -14297,44 +14382,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     width: 64,
   },
-  pushPromptTitle: {
-    color: "#111111",
-    fontSize: 24,
-    fontWeight: "900",
-    lineHeight: 29,
-    textAlign: "center",
-  },
-  pushPromptBody: {
-    color: "#6E6E73",
-    fontSize: 16,
-    lineHeight: 23,
-    marginBottom: 6,
-    textAlign: "center",
-  },
-  pushPromptPrimaryButton: {
-    alignItems: "center",
+  pushPromptActions: {
     alignSelf: "stretch",
-    backgroundColor: "#111111",
-    borderRadius: 16,
-    minHeight: 50,
-    justifyContent: "center",
-    paddingHorizontal: 18,
+    gap: 10,
+    marginTop: 6,
   },
-  pushPromptPrimaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "900",
-  },
-  pushPromptSecondaryButton: {
-    alignItems: "center",
-    alignSelf: "stretch",
-    minHeight: 42,
-    justifyContent: "center",
-  },
-  pushPromptSecondaryButtonText: {
-    color: "#111111",
-    fontSize: 15,
-    fontWeight: "800",
+  pushPromptText: {
+    textAlign: "center",
   },
   announcementTitle: {
     color: "#111111",
