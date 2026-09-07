@@ -11,6 +11,7 @@ import * as ExpoLocation from "expo-location";
 import {
   Alert,
   Animated,
+  AppState,
   Dimensions,
   Easing,
   FlatList,
@@ -159,6 +160,8 @@ import {
 import {
   addPushNotificationTapListener,
   getInitialPushNotificationData,
+  getPushNotificationPermissionState,
+  openPushNotificationSettings,
   registerForPushNotifications,
   syncExistingPushNotificationPermission,
   unregisterStoredPushNotificationToken,
@@ -196,6 +199,8 @@ type DiscoveryTile =
     title: string;
   };
 type AppTourPhase = "focus" | "text";
+type NotificationPromptSource = "banner" | "main" | "messaging";
+type NotificationPromptVariant = "denied" | "main" | "messaging";
 type AppTourFocus =
   | "addBusinessForm"
   | "businessDashboard"
@@ -215,6 +220,8 @@ type AppTourStep = {
 };
 
 const BUSINESS_SHEET_HEIGHT = Math.round(Dimensions.get("window").height * 0.76);
+const PUSH_PROMPT_SEEN_STORAGE_KEY = "kolo-push-prompt-seen-v1";
+const PUSH_PROMPT_DELAY_MS = 30_000;
 const DISCOVERY_GRID_GAP = 4;
 const DISCOVERY_TILE_WIDTH = Math.floor(
   (Dimensions.get("window").width - DISCOVERY_GRID_GAP * 2) / 3,
@@ -1113,6 +1120,20 @@ export default function App() {
   const [pushNotificationStatus, setPushNotificationStatus] =
     useState<PushNotificationStatus>("idle");
   const [isPushNotificationBusy, setIsPushNotificationBusy] = useState(false);
+  const [hasLoadedPushPromptPreference, setHasLoadedPushPromptPreference] =
+    useState(false);
+  const [hasSeenPushPrompt, setHasSeenPushPrompt] = useState(false);
+  const [hasDismissedPushPromptThisSession, setHasDismissedPushPromptThisSession] =
+    useState(false);
+  const [isPushBannerDismissed, setIsPushBannerDismissed] = useState(false);
+  const [businessProfileOpenCount, setBusinessProfileOpenCount] = useState(0);
+  const [notificationPrompt, setNotificationPrompt] =
+    useState<NotificationPromptVariant | null>(null);
+  const [notificationPromptSource, setNotificationPromptSource] =
+    useState<NotificationPromptSource>("main");
+  const hasShownMessagingPushPrompt = useRef(false);
+  const isShowingPushPrompt = useRef(false);
+  const isAwaitingPushSettingsReturn = useRef(false);
   const [isWalkthroughVisible, setIsWalkthroughVisible] = useState(false);
   const [walkthroughPhase, setWalkthroughPhase] =
     useState<AppTourPhase>("text");
@@ -1151,6 +1172,29 @@ export default function App() {
   useEffect(() => {
     let isMounted = true;
 
+    AsyncStorage.getItem(PUSH_PROMPT_SEEN_STORAGE_KEY)
+      .then((value) => {
+        if (isMounted) {
+          setHasSeenPushPrompt(value === "seen");
+        }
+      })
+      .catch((error) => {
+        console.error("[kolo:mobile-push-prompt-load]", error);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setHasLoadedPushPromptPreference(true);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
     AsyncStorage.getItem(THEME_STORAGE_KEY)
       .then((savedTheme) => {
         if (isMounted && savedTheme) {
@@ -1170,6 +1214,59 @@ export default function App() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (
+      !hasLoadedPushPromptPreference ||
+      hasSeenPushPrompt ||
+      !session?.user.id ||
+      isWalkthroughVisible ||
+      pushNotificationStatus === "enabled" ||
+      notificationPrompt
+    ) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      if (activeTab === "home" || activeTab === "feed") {
+        void showNotificationPrompt("main");
+      }
+    }, PUSH_PROMPT_DELAY_MS);
+
+    return () => clearTimeout(timeout);
+  }, [
+    activeTab,
+    hasLoadedPushPromptPreference,
+    hasSeenPushPrompt,
+    isWalkthroughVisible,
+    notificationPrompt,
+    pushNotificationStatus,
+    session?.user.id,
+  ]);
+
+  useEffect(() => {
+    if (
+      businessProfileOpenCount < 2 ||
+      !hasLoadedPushPromptPreference ||
+      hasSeenPushPrompt ||
+      !session?.user.id ||
+      isWalkthroughVisible ||
+      pushNotificationStatus === "enabled" ||
+      notificationPrompt
+    ) {
+      return;
+    }
+
+    void showNotificationPrompt("main");
+  }, [
+    businessProfileOpenCount,
+    hasLoadedPushPromptPreference,
+    hasSeenPushPrompt,
+    isWalkthroughVisible,
+    notificationPrompt,
+    pushNotificationStatus,
+    session?.user.id,
+  ]);
 
   useEffect(() => {
     if (!hasLoadedTheme) {
@@ -1381,6 +1478,44 @@ export default function App() {
     return () => {
       isMounted = false;
     };
+  }, [locale, session?.user.id]);
+
+  useEffect(() => {
+    if (!session?.user.id) {
+      return;
+    }
+
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active") {
+        return;
+      }
+
+      void syncExistingPushNotificationPermission(locale)
+        .then((result) => {
+          if (result.status !== "enabled") {
+            return;
+          }
+
+          setPushNotificationStatus("enabled");
+          setNotificationPrompt(null);
+          setIsPushBannerDismissed(true);
+          if (isAwaitingPushSettingsReturn.current) {
+            void trackMobileAnalyticsEvent({
+              eventType: "notification_permission_granted",
+              metadata: { source: "settings" },
+              userId: session.user.id,
+            });
+          }
+        })
+        .catch((error) => {
+          console.error("[kolo:mobile-push-settings-sync]", error);
+        })
+        .finally(() => {
+          isAwaitingPushSettingsReturn.current = false;
+        });
+    });
+
+    return () => subscription.remove();
   }, [locale, session?.user.id]);
 
   useEffect(() => {
@@ -2187,7 +2322,66 @@ export default function App() {
     }
   }
 
-  async function handleEnablePushNotifications() {
+  async function rememberPushPromptSeen() {
+    setHasSeenPushPrompt(true);
+    await AsyncStorage.setItem(PUSH_PROMPT_SEEN_STORAGE_KEY, "seen").catch(
+      (error) => {
+        console.error("[kolo:mobile-push-prompt-save]", error);
+      },
+    );
+  }
+
+  async function showNotificationPrompt(source: NotificationPromptSource) {
+    if (
+      isShowingPushPrompt.current ||
+      notificationPrompt ||
+      !session?.user.id ||
+      pushNotificationStatus === "enabled"
+    ) {
+      return;
+    }
+
+    isShowingPushPrompt.current = true;
+    const permissionState = await getPushNotificationPermissionState();
+    isShowingPushPrompt.current = false;
+
+    if (permissionState === "enabled") {
+      setPushNotificationStatus("enabled");
+      return;
+    }
+
+    if (permissionState === "unsupported") {
+      setPushNotificationStatus("unsupported");
+      return;
+    }
+
+    setNotificationPromptSource(source);
+    setNotificationPrompt(
+      permissionState === "denied"
+        ? "denied"
+        : source === "messaging"
+          ? "messaging"
+          : "main",
+    );
+    await rememberPushPromptSeen();
+    void trackMobileAnalyticsEvent({
+      eventType: "notification_prompt_view",
+      metadata: {
+        prompt_variant:
+          permissionState === "denied"
+            ? "denied"
+            : source === "messaging"
+              ? "messaging"
+              : "main",
+        source,
+      },
+      userId: session.user.id,
+    });
+  }
+
+  async function handleEnablePushNotifications(
+    source: NotificationPromptSource = "main",
+  ) {
     if (!session?.user.id) {
       setAuthMessage(labels.signInRequired);
       setActiveProfilePanel("account");
@@ -2198,6 +2392,26 @@ export default function App() {
     try {
       setAuthMessage("");
       setIsPushNotificationBusy(true);
+      void trackMobileAnalyticsEvent({
+        eventType: "notification_prompt_enable_click",
+        metadata: { source },
+        userId: session.user.id,
+      });
+
+      const permissionState = await getPushNotificationPermissionState();
+
+      if (permissionState === "denied") {
+        setPushNotificationStatus("denied");
+        setNotificationPromptSource(source);
+        setNotificationPrompt("denied");
+        void trackMobileAnalyticsEvent({
+          eventType: "notification_permission_denied",
+          metadata: { source, system_prompt_shown: false },
+          userId: session.user.id,
+        });
+        return;
+      }
+
       const result = await registerForPushNotifications({
         locale,
         requestPermission: true,
@@ -2205,7 +2419,23 @@ export default function App() {
 
       setPushNotificationStatus(result.status);
 
-      if (result.status !== "enabled") {
+      if (result.status === "enabled") {
+        setNotificationPrompt(null);
+        setIsPushBannerDismissed(true);
+        void trackMobileAnalyticsEvent({
+          eventType: "notification_permission_granted",
+          metadata: { source },
+          userId: session.user.id,
+        });
+      } else if (result.status === "denied") {
+        setNotificationPromptSource(source);
+        setNotificationPrompt("denied");
+        void trackMobileAnalyticsEvent({
+          eventType: "notification_permission_denied",
+          metadata: { source, system_prompt_shown: true },
+          userId: session.user.id,
+        });
+      } else {
         setAuthMessage(getPushNotificationStatusText(result.status, labels));
       }
     } catch (error) {
@@ -2215,6 +2445,30 @@ export default function App() {
     } finally {
       setIsPushNotificationBusy(false);
     }
+  }
+
+  function handleDismissNotificationPrompt() {
+    const variant = notificationPrompt;
+
+    setNotificationPrompt(null);
+    setHasDismissedPushPromptThisSession(true);
+    void rememberPushPromptSeen();
+    void trackMobileAnalyticsEvent({
+      eventType: "notification_prompt_dismiss",
+      metadata: { prompt_variant: variant, source: notificationPromptSource },
+      userId: session?.user.id,
+    });
+  }
+
+  async function handleOpenNotificationSettings() {
+    void trackMobileAnalyticsEvent({
+      eventType: "notification_settings_opened",
+      metadata: { source: notificationPromptSource },
+      userId: session?.user.id,
+    });
+    isAwaitingPushSettingsReturn.current = true;
+    await openPushNotificationSettings();
+    setNotificationPrompt(null);
   }
 
   async function handleDeleteAccount() {
@@ -2392,6 +2646,10 @@ export default function App() {
             : activeTab,
       );
       setActiveTab("messages");
+      if (!hasShownMessagingPushPrompt.current) {
+        hasShownMessagingPushPrompt.current = true;
+        void showNotificationPrompt("messaging");
+      }
     } catch (error) {
       console.error("[kolo:mobile-message-start]", error);
       Alert.alert(labels.messages, getErrorMessage(error));
@@ -3256,6 +3514,7 @@ export default function App() {
     }
 
     setBusinessReturnTab(returnTab);
+    setBusinessProfileOpenCount((count) => count + 1);
     setSelectedBusiness(business);
     setActiveTab("business");
   }
@@ -3316,6 +3575,10 @@ export default function App() {
   function openMessageThread(conversationId: string) {
     setSelectedConversationId(conversationId);
     setIsMessageThreadOpen(true);
+    if (!hasShownMessagingPushPrompt.current) {
+      hasShownMessagingPushPrompt.current = true;
+      void showNotificationPrompt("messaging");
+    }
   }
 
   function handleMessagesBack() {
@@ -3363,6 +3626,22 @@ export default function App() {
           onDismiss={handleDismissAnnouncement}
           onDismissAll={handleDismissAllAnnouncements}
         />
+        {hasSeenPushPrompt &&
+        !hasDismissedPushPromptThisSession &&
+        !isPushBannerDismissed &&
+        !notificationPrompt &&
+        Boolean(session?.user.id) &&
+        pushNotificationStatus !== "enabled" &&
+        pushNotificationStatus !== "unsupported" &&
+        (activeTab === "home" || activeTab === "feed") ? (
+          <NotificationOptInBanner
+            isDarkMode={isDarkMode}
+            onDismiss={() => setIsPushBannerDismissed(true)}
+            onEnable={() => {
+              void showNotificationPrompt("banner");
+            }}
+          />
+        ) : null}
         <Animated.View style={[styles.contentArea, pageTransitionStyle]}>
           {activeTab === "home" ? (
             <HomeScreen
@@ -3564,7 +3843,7 @@ export default function App() {
               onBusinessSubmit={handleBusinessRegistration}
               onProfileSave={handleProfileSave}
               onShareBusiness={handleShareBusiness}
-              onEnablePushNotifications={handleEnablePushNotifications}
+              onEnablePushNotifications={() => showNotificationPrompt("main")}
               onShowWalkthrough={showWalkthrough}
               onProfilePanelChange={setActiveProfilePanel}
               onToggleSavedBusiness={handleToggleSavedBusiness}
@@ -3721,7 +4000,117 @@ export default function App() {
           setActiveTab("profile");
         }}
       />
+      <NotificationOptInModal
+        isBusy={isPushNotificationBusy}
+        isDarkMode={isDarkMode}
+        onDismiss={handleDismissNotificationPrompt}
+        onEnable={() => {
+          void handleEnablePushNotifications(notificationPromptSource);
+        }}
+        onOpenSettings={() => {
+          void handleOpenNotificationSettings();
+        }}
+        variant={notificationPrompt}
+      />
     </View>
+  );
+}
+
+function NotificationOptInBanner({
+  isDarkMode,
+  onDismiss,
+  onEnable,
+}: {
+  isDarkMode: boolean;
+  onDismiss: () => void;
+  onEnable: () => void;
+}) {
+  return (
+    <View style={styles.pushBannerSlot}>
+      <View style={[styles.pushBanner, isDarkMode ? styles.darkCard : null]}>
+        <View style={[styles.pushBannerIcon, isDarkMode ? styles.darkIconBox : null]}>
+          <Bell color={isDarkMode ? "#FFFFFF" : "#111111"} size={21} strokeWidth={2.7} />
+        </View>
+        <View style={styles.flex}>
+          <Text style={[styles.pushBannerTitle, isDarkMode ? styles.darkText : null]}>
+            Не пропустіть відповіді від бізнесів
+          </Text>
+          <Text style={[styles.pushBannerBody, isDarkMode ? styles.darkMutedText : null]}>
+            Увімкніть сповіщення, щоб отримувати повідомлення та важливі оновлення від Kolo.
+          </Text>
+          <Pressable accessibilityRole="button" onPress={onEnable} style={styles.pushBannerButton}>
+            <Text style={styles.pushBannerButtonText}>Увімкнути</Text>
+          </Pressable>
+        </View>
+        <Pressable
+          accessibilityLabel="Закрити"
+          accessibilityRole="button"
+          onPress={onDismiss}
+          style={[styles.pushBannerClose, isDarkMode ? styles.darkSettingRow : null]}
+        >
+          <X color={isDarkMode ? "#FFFFFF" : "#6E6E73"} size={17} strokeWidth={2.7} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function NotificationOptInModal({
+  isBusy,
+  isDarkMode,
+  onDismiss,
+  onEnable,
+  onOpenSettings,
+  variant,
+}: {
+  isBusy: boolean;
+  isDarkMode: boolean;
+  onDismiss: () => void;
+  onEnable: () => void;
+  onOpenSettings: () => void;
+  variant: NotificationPromptVariant | null;
+}) {
+  const isDenied = variant === "denied";
+  const isMessaging = variant === "messaging";
+  const title = isDenied
+    ? "Сповіщення вимкнено"
+    : isMessaging
+      ? "Дізнайтесь, коли бізнес відповість"
+      : "Отримуйте сповіщення про відповіді бізнесів";
+  const body = isDenied
+    ? "Щоб отримувати повідомлення та важливі оновлення від Kolo, дозвольте сповіщення в налаштуваннях телефону."
+    : isMessaging
+      ? "Увімкніть сповіщення, щоб не пропустити відповідь від бізнесу."
+      : "Увімкніть сповіщення, щоб не пропустити нові повідомлення, події та важливі оновлення в Kolo.";
+
+  return (
+    <Modal animationType="fade" onRequestClose={onDismiss} transparent visible={Boolean(variant)}>
+      <View style={styles.pushPromptBackdrop}>
+        <Pressable accessibilityLabel="Не зараз" onPress={onDismiss} style={styles.modalDismissLayer} />
+        <View style={[styles.pushPromptCard, isDarkMode ? styles.darkModalSheet : null]}>
+          <View style={[styles.pushPromptIcon, isDarkMode ? styles.darkIconBox : null]}>
+            <Bell color={isDarkMode ? "#FFFFFF" : "#111111"} size={30} strokeWidth={2.6} />
+          </View>
+          <Text style={[styles.pushPromptTitle, isDarkMode ? styles.darkText : null]}>{title}</Text>
+          <Text style={[styles.pushPromptBody, isDarkMode ? styles.darkMutedText : null]}>{body}</Text>
+          <Pressable
+            accessibilityRole="button"
+            disabled={isBusy}
+            onPress={isDenied ? onOpenSettings : onEnable}
+            style={[styles.pushPromptPrimaryButton, isBusy ? styles.disabledButton : null]}
+          >
+            <Text style={styles.pushPromptPrimaryButtonText}>
+              {isDenied ? "Відкрити налаштування" : "Увімкнути сповіщення"}
+            </Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" disabled={isBusy} onPress={onDismiss} style={styles.pushPromptSecondaryButton}>
+            <Text style={[styles.pushPromptSecondaryButtonText, isDarkMode ? styles.darkText : null]}>
+              Не зараз
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -13818,6 +14207,134 @@ const styles = StyleSheet.create({
     shadowOffset: { height: -8, width: 0 },
     shadowOpacity: 0.18,
     shadowRadius: 28,
+  },
+  pushBannerSlot: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
+  pushBanner: {
+    alignItems: "flex-start",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 11,
+    padding: 13,
+    shadowColor: "#111111",
+    shadowOffset: { height: 5, width: 0 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+  },
+  pushBannerIcon: {
+    alignItems: "center",
+    backgroundColor: "#F5F5F7",
+    borderRadius: 13,
+    height: 40,
+    justifyContent: "center",
+    width: 40,
+  },
+  pushBannerTitle: {
+    color: "#111111",
+    fontSize: 15,
+    fontWeight: "900",
+    lineHeight: 19,
+  },
+  pushBannerBody: {
+    color: "#6E6E73",
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 3,
+  },
+  pushBannerButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "#111111",
+    borderRadius: 999,
+    marginTop: 9,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  pushBannerButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  pushBannerClose: {
+    alignItems: "center",
+    borderRadius: 999,
+    height: 30,
+    justifyContent: "center",
+    width: 30,
+  },
+  pushPromptBackdrop: {
+    alignItems: "center",
+    backgroundColor: "rgba(16, 24, 23, 0.48)",
+    flex: 1,
+    justifyContent: "center",
+    padding: 22,
+  },
+  pushPromptCard: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 28,
+    borderWidth: 1,
+    gap: 12,
+    maxWidth: 420,
+    padding: 24,
+    shadowColor: "#111111",
+    shadowOffset: { height: 12, width: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 28,
+    width: "100%",
+  },
+  pushPromptIcon: {
+    alignItems: "center",
+    backgroundColor: "#F5F5F7",
+    borderRadius: 22,
+    height: 64,
+    justifyContent: "center",
+    marginBottom: 4,
+    width: 64,
+  },
+  pushPromptTitle: {
+    color: "#111111",
+    fontSize: 24,
+    fontWeight: "900",
+    lineHeight: 29,
+    textAlign: "center",
+  },
+  pushPromptBody: {
+    color: "#6E6E73",
+    fontSize: 16,
+    lineHeight: 23,
+    marginBottom: 6,
+    textAlign: "center",
+  },
+  pushPromptPrimaryButton: {
+    alignItems: "center",
+    alignSelf: "stretch",
+    backgroundColor: "#111111",
+    borderRadius: 16,
+    minHeight: 50,
+    justifyContent: "center",
+    paddingHorizontal: 18,
+  },
+  pushPromptPrimaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  pushPromptSecondaryButton: {
+    alignItems: "center",
+    alignSelf: "stretch",
+    minHeight: 42,
+    justifyContent: "center",
+  },
+  pushPromptSecondaryButtonText: {
+    color: "#111111",
+    fontSize: 15,
+    fontWeight: "800",
   },
   announcementTitle: {
     color: "#111111",

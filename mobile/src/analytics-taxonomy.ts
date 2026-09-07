@@ -18,6 +18,12 @@ export const analyticsEventTypes = [
   "content_delete",
   "notification_view",
   "notification_dismiss",
+  "notification_prompt_view",
+  "notification_prompt_enable_click",
+  "notification_prompt_dismiss",
+  "notification_permission_granted",
+  "notification_permission_denied",
+  "notification_settings_opened",
 ] as const;
 
 export const analyticsContactTypes = [
