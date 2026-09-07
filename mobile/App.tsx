@@ -11,6 +11,7 @@ import * as ExpoLocation from "expo-location";
 import {
   Alert,
   Animated,
+  AppState,
   Dimensions,
   Easing,
   FlatList,
@@ -159,10 +160,13 @@ import {
 import {
   addPushNotificationTapListener,
   getInitialPushNotificationData,
+  getPushNotificationPermissionState,
+  openPushNotificationSettings,
   registerForPushNotifications,
   syncExistingPushNotificationPermission,
   unregisterStoredPushNotificationToken,
   type PushNotificationData,
+  type PushPermissionState,
   type PushNotificationStatus,
 } from "./src/push-notifications";
 import { getPublicBusinessContentItems } from "./src/contentVisibility";
@@ -196,6 +200,8 @@ type DiscoveryTile =
     title: string;
   };
 type AppTourPhase = "focus" | "text";
+type NotificationPromptSource = "home_banner" | "messaging" | "onboarding";
+type NotificationPromptVariant = "denied" | "main" | "messaging";
 type AppTourFocus =
   | "addBusinessForm"
   | "businessDashboard"
@@ -215,6 +221,8 @@ type AppTourStep = {
 };
 
 const BUSINESS_SHEET_HEIGHT = Math.round(Dimensions.get("window").height * 0.76);
+const PUSH_PROMPT_SEEN_STORAGE_KEY = "kolo-push-prompt-seen-v1";
+const PUSH_PROMPT_DELAY_MS = 30_000;
 const DISCOVERY_GRID_GAP = 4;
 const DISCOVERY_TILE_WIDTH = Math.floor(
   (Dimensions.get("window").width - DISCOVERY_GRID_GAP * 2) / 3,
@@ -415,6 +423,23 @@ const copy = {
     pushNotificationsUnsupported:
       "Для push-сповіщень потрібна встановлена збірка застосунку.",
     pushNotificationsTurnOn: "Увімкнути",
+    notificationOptInMainTitle: "Отримуйте сповіщення про відповіді бізнесів",
+    notificationOptInMainBody:
+      "Увімкніть сповіщення, щоб не пропустити нові повідомлення, події та важливі оновлення в Kolo.",
+    notificationOptInEnable: "Увімкнути сповіщення",
+    notificationOptInLater: "Не зараз",
+    notificationOptInBannerTitle: "Не пропустіть відповіді від бізнесів",
+    notificationOptInBannerBody:
+      "Увімкніть сповіщення, щоб отримувати повідомлення та важливі оновлення від Kolo.",
+    notificationOptInBannerButton: "Увімкнути",
+    notificationOptInMessagingTitle: "Дізнайтесь, коли бізнес відповість",
+    notificationOptInMessagingBody:
+      "Увімкніть сповіщення, щоб не пропустити відповідь від бізнесу.",
+    notificationOptInDeniedTitle: "Сповіщення вимкнено",
+    notificationOptInDeniedBody:
+      "Щоб отримувати повідомлення та важливі оновлення від Kolo, дозвольте сповіщення в налаштуваннях телефону.",
+    notificationOptInOpenSettings: "Відкрити налаштування",
+    notificationOptInClose: "Закрити",
     dismiss: "Приховати",
     dismissAll: "Приховати всі",
     liveNearby: "Події та сервіси поруч",
@@ -710,6 +735,23 @@ const copy = {
     pushNotificationsUnsupported:
       "Push notifications require an installed app build.",
     pushNotificationsTurnOn: "Turn on",
+    notificationOptInMainTitle: "Отримуйте сповіщення про відповіді бізнесів",
+    notificationOptInMainBody:
+      "Увімкніть сповіщення, щоб не пропустити нові повідомлення, події та важливі оновлення в Kolo.",
+    notificationOptInEnable: "Увімкнути сповіщення",
+    notificationOptInLater: "Не зараз",
+    notificationOptInBannerTitle: "Не пропустіть відповіді від бізнесів",
+    notificationOptInBannerBody:
+      "Увімкніть сповіщення, щоб отримувати повідомлення та важливі оновлення від Kolo.",
+    notificationOptInBannerButton: "Увімкнути",
+    notificationOptInMessagingTitle: "Дізнайтесь, коли бізнес відповість",
+    notificationOptInMessagingBody:
+      "Увімкніть сповіщення, щоб не пропустити відповідь від бізнесу.",
+    notificationOptInDeniedTitle: "Сповіщення вимкнено",
+    notificationOptInDeniedBody:
+      "Щоб отримувати повідомлення та важливі оновлення від Kolo, дозвольте сповіщення в налаштуваннях телефону.",
+    notificationOptInOpenSettings: "Відкрити налаштування",
+    notificationOptInClose: "Закрити",
     dismiss: "Dismiss",
     dismissAll: "Dismiss all",
     liveNearby: "Live nearby",
@@ -1113,6 +1155,22 @@ export default function App() {
   const [pushNotificationStatus, setPushNotificationStatus] =
     useState<PushNotificationStatus>("idle");
   const [isPushNotificationBusy, setIsPushNotificationBusy] = useState(false);
+  const [hasLoadedPushPromptPreference, setHasLoadedPushPromptPreference] =
+    useState(false);
+  const [hasSeenPushPrompt, setHasSeenPushPrompt] = useState(false);
+  const [hasDismissedPushPromptThisSession, setHasDismissedPushPromptThisSession] =
+    useState(false);
+  const [isPushBannerDismissed, setIsPushBannerDismissed] = useState(false);
+  const [businessProfileOpenCount, setBusinessProfileOpenCount] = useState(0);
+  const [notificationPrompt, setNotificationPrompt] =
+    useState<NotificationPromptVariant | null>(null);
+  const [notificationPromptSource, setNotificationPromptSource] =
+    useState<NotificationPromptSource>("onboarding");
+  const [notificationPermissionState, setNotificationPermissionState] =
+    useState<PushPermissionState>("askable");
+  const hasShownMessagingPushPrompt = useRef(false);
+  const isShowingPushPrompt = useRef(false);
+  const isAwaitingPushSettingsReturn = useRef(false);
   const [isWalkthroughVisible, setIsWalkthroughVisible] = useState(false);
   const [walkthroughPhase, setWalkthroughPhase] =
     useState<AppTourPhase>("text");
@@ -1151,6 +1209,29 @@ export default function App() {
   useEffect(() => {
     let isMounted = true;
 
+    AsyncStorage.getItem(PUSH_PROMPT_SEEN_STORAGE_KEY)
+      .then((value) => {
+        if (isMounted) {
+          setHasSeenPushPrompt(value === "seen");
+        }
+      })
+      .catch((error) => {
+        console.error("[kolo:mobile-push-prompt-load]", error);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setHasLoadedPushPromptPreference(true);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
     AsyncStorage.getItem(THEME_STORAGE_KEY)
       .then((savedTheme) => {
         if (isMounted && savedTheme) {
@@ -1170,6 +1251,59 @@ export default function App() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (
+      !hasLoadedPushPromptPreference ||
+      hasSeenPushPrompt ||
+      !session?.user.id ||
+      isWalkthroughVisible ||
+      pushNotificationStatus === "enabled" ||
+      notificationPrompt
+    ) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      if (activeTab === "home" || activeTab === "feed") {
+        void showNotificationPrompt("onboarding");
+      }
+    }, PUSH_PROMPT_DELAY_MS);
+
+    return () => clearTimeout(timeout);
+  }, [
+    activeTab,
+    hasLoadedPushPromptPreference,
+    hasSeenPushPrompt,
+    isWalkthroughVisible,
+    notificationPrompt,
+    pushNotificationStatus,
+    session?.user.id,
+  ]);
+
+  useEffect(() => {
+    if (
+      businessProfileOpenCount < 2 ||
+      !hasLoadedPushPromptPreference ||
+      hasSeenPushPrompt ||
+      !session?.user.id ||
+      isWalkthroughVisible ||
+      pushNotificationStatus === "enabled" ||
+      notificationPrompt
+    ) {
+      return;
+    }
+
+    void showNotificationPrompt("onboarding");
+  }, [
+    businessProfileOpenCount,
+    hasLoadedPushPromptPreference,
+    hasSeenPushPrompt,
+    isWalkthroughVisible,
+    notificationPrompt,
+    pushNotificationStatus,
+    session?.user.id,
+  ]);
 
   useEffect(() => {
     if (!hasLoadedTheme) {
@@ -1372,6 +1506,7 @@ export default function App() {
       .then((result) => {
         if (isMounted && result.status === "enabled") {
           setPushNotificationStatus("enabled");
+          setNotificationPermissionState("enabled");
         }
       })
       .catch((error) => {
@@ -1382,6 +1517,49 @@ export default function App() {
       isMounted = false;
     };
   }, [locale, session?.user.id]);
+
+  useEffect(() => {
+    if (!session?.user.id) {
+      return;
+    }
+
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active") {
+        return;
+      }
+
+      void syncExistingPushNotificationPermission(locale)
+        .then((result) => {
+          if (result.status !== "enabled") {
+            return;
+          }
+
+          setPushNotificationStatus("enabled");
+          setNotificationPermissionState("enabled");
+          setNotificationPrompt(null);
+          setIsPushBannerDismissed(true);
+          if (isAwaitingPushSettingsReturn.current) {
+            void trackMobileAnalyticsEvent({
+              eventType: "notification_permission_granted",
+              metadata: {
+                permission_state: "enabled",
+                platform: Platform.OS,
+                source: notificationPromptSource,
+              },
+              userId: session.user.id,
+            });
+          }
+        })
+        .catch((error) => {
+          console.error("[kolo:mobile-push-settings-sync]", error);
+        })
+        .finally(() => {
+          isAwaitingPushSettingsReturn.current = false;
+        });
+    });
+
+    return () => subscription.remove();
+  }, [locale, notificationPromptSource, session?.user.id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -2187,7 +2365,69 @@ export default function App() {
     }
   }
 
-  async function handleEnablePushNotifications() {
+  async function rememberPushPromptSeen() {
+    setHasSeenPushPrompt(true);
+    await AsyncStorage.setItem(PUSH_PROMPT_SEEN_STORAGE_KEY, "seen").catch(
+      (error) => {
+        console.error("[kolo:mobile-push-prompt-save]", error);
+      },
+    );
+  }
+
+  async function showNotificationPrompt(source: NotificationPromptSource) {
+    if (
+      isShowingPushPrompt.current ||
+      notificationPrompt ||
+      !session?.user.id ||
+      pushNotificationStatus === "enabled"
+    ) {
+      return;
+    }
+
+    isShowingPushPrompt.current = true;
+    const permissionState = await getPushNotificationPermissionState();
+    isShowingPushPrompt.current = false;
+    setNotificationPermissionState(permissionState);
+
+    if (permissionState === "enabled") {
+      setPushNotificationStatus("enabled");
+      return;
+    }
+
+    if (permissionState === "unsupported") {
+      setPushNotificationStatus("unsupported");
+      return;
+    }
+
+    setNotificationPromptSource(source);
+    setNotificationPrompt(
+      permissionState === "denied"
+        ? "denied"
+        : source === "messaging"
+          ? "messaging"
+          : "main",
+    );
+    await rememberPushPromptSeen();
+    void trackMobileAnalyticsEvent({
+      eventType: "notification_prompt_view",
+      metadata: {
+        permission_state: permissionState,
+        platform: Platform.OS,
+        prompt_variant:
+          permissionState === "denied"
+            ? "denied"
+            : source === "messaging"
+              ? "messaging"
+              : "main",
+        source,
+      },
+      userId: session.user.id,
+    });
+  }
+
+  async function handleEnablePushNotifications(
+    source: NotificationPromptSource = "onboarding",
+  ) {
     if (!session?.user.id) {
       setAuthMessage(labels.signInRequired);
       setActiveProfilePanel("account");
@@ -2198,6 +2438,35 @@ export default function App() {
     try {
       setAuthMessage("");
       setIsPushNotificationBusy(true);
+      const permissionState = await getPushNotificationPermissionState();
+      setNotificationPermissionState(permissionState);
+      void trackMobileAnalyticsEvent({
+        eventType: "notification_prompt_enable_click",
+        metadata: {
+          permission_state: permissionState,
+          platform: Platform.OS,
+          source,
+        },
+        userId: session.user.id,
+      });
+
+      if (permissionState === "denied") {
+        setPushNotificationStatus("denied");
+        setNotificationPromptSource(source);
+        setNotificationPrompt("denied");
+        void trackMobileAnalyticsEvent({
+          eventType: "notification_permission_denied",
+          metadata: {
+            permission_state: "denied",
+            platform: Platform.OS,
+            source,
+            system_prompt_shown: false,
+          },
+          userId: session.user.id,
+        });
+        return;
+      }
+
       const result = await registerForPushNotifications({
         locale,
         requestPermission: true,
@@ -2205,7 +2474,30 @@ export default function App() {
 
       setPushNotificationStatus(result.status);
 
-      if (result.status !== "enabled") {
+      if (result.status === "enabled") {
+        setNotificationPermissionState("enabled");
+        setNotificationPrompt(null);
+        setIsPushBannerDismissed(true);
+        void trackMobileAnalyticsEvent({
+          eventType: "notification_permission_granted",
+          metadata: { permission_state: "enabled", platform: Platform.OS, source },
+          userId: session.user.id,
+        });
+      } else if (result.status === "denied") {
+        setNotificationPermissionState("denied");
+        setNotificationPromptSource(source);
+        setNotificationPrompt("denied");
+        void trackMobileAnalyticsEvent({
+          eventType: "notification_permission_denied",
+          metadata: {
+            permission_state: "denied",
+            platform: Platform.OS,
+            source,
+            system_prompt_shown: true,
+          },
+          userId: session.user.id,
+        });
+      } else {
         setAuthMessage(getPushNotificationStatusText(result.status, labels));
       }
     } catch (error) {
@@ -2215,6 +2507,39 @@ export default function App() {
     } finally {
       setIsPushNotificationBusy(false);
     }
+  }
+
+  function handleDismissNotificationPrompt() {
+    const variant = notificationPrompt;
+
+    setNotificationPrompt(null);
+    setHasDismissedPushPromptThisSession(true);
+    void rememberPushPromptSeen();
+    void trackMobileAnalyticsEvent({
+      eventType: "notification_prompt_dismiss",
+      metadata: {
+        permission_state: notificationPermissionState,
+        platform: Platform.OS,
+        prompt_variant: variant,
+        source: notificationPromptSource,
+      },
+      userId: session?.user.id,
+    });
+  }
+
+  async function handleOpenNotificationSettings() {
+    void trackMobileAnalyticsEvent({
+      eventType: "notification_settings_opened",
+      metadata: {
+        permission_state: "denied",
+        platform: Platform.OS,
+        source: notificationPromptSource,
+      },
+      userId: session?.user.id,
+    });
+    isAwaitingPushSettingsReturn.current = true;
+    await openPushNotificationSettings();
+    setNotificationPrompt(null);
   }
 
   async function handleDeleteAccount() {
@@ -2392,6 +2717,10 @@ export default function App() {
             : activeTab,
       );
       setActiveTab("messages");
+      if (!hasShownMessagingPushPrompt.current) {
+        hasShownMessagingPushPrompt.current = true;
+        void showNotificationPrompt("messaging");
+      }
     } catch (error) {
       console.error("[kolo:mobile-message-start]", error);
       Alert.alert(labels.messages, getErrorMessage(error));
@@ -3256,6 +3585,7 @@ export default function App() {
     }
 
     setBusinessReturnTab(returnTab);
+    setBusinessProfileOpenCount((count) => count + 1);
     setSelectedBusiness(business);
     setActiveTab("business");
   }
@@ -3316,6 +3646,10 @@ export default function App() {
   function openMessageThread(conversationId: string) {
     setSelectedConversationId(conversationId);
     setIsMessageThreadOpen(true);
+    if (!hasShownMessagingPushPrompt.current) {
+      hasShownMessagingPushPrompt.current = true;
+      void showNotificationPrompt("messaging");
+    }
   }
 
   function handleMessagesBack() {
@@ -3363,6 +3697,23 @@ export default function App() {
           onDismiss={handleDismissAnnouncement}
           onDismissAll={handleDismissAllAnnouncements}
         />
+        {hasSeenPushPrompt &&
+        !hasDismissedPushPromptThisSession &&
+        !isPushBannerDismissed &&
+        !notificationPrompt &&
+        Boolean(session?.user.id) &&
+        pushNotificationStatus !== "enabled" &&
+        pushNotificationStatus !== "unsupported" &&
+        (activeTab === "home" || activeTab === "feed") ? (
+          <NotificationOptInBanner
+            isDarkMode={isDarkMode}
+            labels={labels}
+            onDismiss={() => setIsPushBannerDismissed(true)}
+            onEnable={() => {
+              void showNotificationPrompt("home_banner");
+            }}
+          />
+        ) : null}
         <Animated.View style={[styles.contentArea, pageTransitionStyle]}>
           {activeTab === "home" ? (
             <HomeScreen
@@ -3564,7 +3915,7 @@ export default function App() {
               onBusinessSubmit={handleBusinessRegistration}
               onProfileSave={handleProfileSave}
               onShareBusiness={handleShareBusiness}
-              onEnablePushNotifications={handleEnablePushNotifications}
+              onEnablePushNotifications={() => showNotificationPrompt("onboarding")}
               onShowWalkthrough={showWalkthrough}
               onProfilePanelChange={setActiveProfilePanel}
               onToggleSavedBusiness={handleToggleSavedBusiness}
@@ -3721,7 +4072,130 @@ export default function App() {
           setActiveTab("profile");
         }}
       />
+      <NotificationOptInModal
+        isBusy={isPushNotificationBusy}
+        isDarkMode={isDarkMode}
+        labels={labels}
+        onDismiss={handleDismissNotificationPrompt}
+        onEnable={() => {
+          void handleEnablePushNotifications(notificationPromptSource);
+        }}
+        onOpenSettings={() => {
+          void handleOpenNotificationSettings();
+        }}
+        variant={notificationPrompt}
+      />
     </View>
+  );
+}
+
+function NotificationOptInBanner({
+  isDarkMode,
+  labels,
+  onDismiss,
+  onEnable,
+}: {
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  onDismiss: () => void;
+  onEnable: () => void;
+}) {
+  return (
+    <View style={styles.pushBannerSlot}>
+      <View style={[styles.pushBanner, isDarkMode ? styles.darkCard : null]}>
+        <View style={[styles.pushBannerIcon, isDarkMode ? styles.darkIconBox : null]}>
+          <Bell color={isDarkMode ? "#FFFFFF" : "#111111"} size={21} strokeWidth={2.7} />
+        </View>
+        <View style={styles.flex}>
+          <Text style={[styles.pushBannerTitle, isDarkMode ? styles.darkText : null]}>
+            {labels.notificationOptInBannerTitle}
+          </Text>
+          <Text style={[styles.pushBannerBody, isDarkMode ? styles.darkMutedText : null]}>
+            {labels.notificationOptInBannerBody}
+          </Text>
+          <Pressable accessibilityRole="button" onPress={onEnable} style={styles.pushBannerButton}>
+            <Text style={styles.pushBannerButtonText}>
+              {labels.notificationOptInBannerButton}
+            </Text>
+          </Pressable>
+        </View>
+        <Pressable
+          accessibilityLabel={labels.notificationOptInClose}
+          accessibilityRole="button"
+          onPress={onDismiss}
+          style={[styles.pushBannerClose, isDarkMode ? styles.darkSettingRow : null]}
+        >
+          <X color={isDarkMode ? "#FFFFFF" : "#6E6E73"} size={17} strokeWidth={2.7} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function NotificationOptInModal({
+  isBusy,
+  isDarkMode,
+  labels,
+  onDismiss,
+  onEnable,
+  onOpenSettings,
+  variant,
+}: {
+  isBusy: boolean;
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  onDismiss: () => void;
+  onEnable: () => void;
+  onOpenSettings: () => void;
+  variant: NotificationPromptVariant | null;
+}) {
+  const isDenied = variant === "denied";
+  const isMessaging = variant === "messaging";
+  const title = isDenied
+    ? labels.notificationOptInDeniedTitle
+    : isMessaging
+      ? labels.notificationOptInMessagingTitle
+      : labels.notificationOptInMainTitle;
+  const body = isDenied
+    ? labels.notificationOptInDeniedBody
+    : isMessaging
+      ? labels.notificationOptInMessagingBody
+      : labels.notificationOptInMainBody;
+
+  return (
+    <Modal animationType="fade" onRequestClose={onDismiss} transparent visible={Boolean(variant)}>
+      <View style={styles.pushPromptBackdrop}>
+        <Pressable
+          accessibilityLabel={labels.notificationOptInLater}
+          onPress={onDismiss}
+          style={styles.modalDismissLayer}
+        />
+        <View style={[styles.pushPromptCard, isDarkMode ? styles.darkModalSheet : null]}>
+          <View style={[styles.pushPromptIcon, isDarkMode ? styles.darkIconBox : null]}>
+            <Bell color={isDarkMode ? "#FFFFFF" : "#111111"} size={30} strokeWidth={2.6} />
+          </View>
+          <Text style={[styles.modalTitle, styles.pushPromptText, isDarkMode ? styles.darkText : null]}>
+            {title}
+          </Text>
+          <Text style={[styles.modalBody, styles.pushPromptText, isDarkMode ? styles.darkMutedText : null]}>
+            {body}
+          </Text>
+          <View style={styles.pushPromptActions}>
+            <PrimaryButton
+              disabled={isBusy}
+              label={isDenied ? labels.notificationOptInOpenSettings : labels.notificationOptInEnable}
+              onPress={isDenied ? onOpenSettings : onEnable}
+            />
+            <SecondaryButton
+              disabled={isBusy}
+              isDarkMode={isDarkMode}
+              label={labels.notificationOptInLater}
+              onPress={onDismiss}
+            />
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -13818,6 +14292,103 @@ const styles = StyleSheet.create({
     shadowOffset: { height: -8, width: 0 },
     shadowOpacity: 0.18,
     shadowRadius: 28,
+  },
+  pushBannerSlot: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
+  pushBanner: {
+    alignItems: "flex-start",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 11,
+    padding: 13,
+    shadowColor: "#111111",
+    shadowOffset: { height: 5, width: 0 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+  },
+  pushBannerIcon: {
+    alignItems: "center",
+    backgroundColor: "#F5F5F7",
+    borderRadius: 13,
+    height: 40,
+    justifyContent: "center",
+    width: 40,
+  },
+  pushBannerTitle: {
+    color: "#111111",
+    fontSize: 15,
+    fontWeight: "900",
+    lineHeight: 19,
+  },
+  pushBannerBody: {
+    color: "#6E6E73",
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 3,
+  },
+  pushBannerButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "#111111",
+    borderRadius: 999,
+    marginTop: 9,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  pushBannerButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  pushBannerClose: {
+    alignItems: "center",
+    borderRadius: 999,
+    height: 30,
+    justifyContent: "center",
+    width: 30,
+  },
+  pushPromptBackdrop: {
+    alignItems: "center",
+    backgroundColor: "rgba(16, 24, 23, 0.48)",
+    flex: 1,
+    justifyContent: "center",
+    padding: 22,
+  },
+  pushPromptCard: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 28,
+    borderWidth: 1,
+    gap: 12,
+    maxWidth: 420,
+    padding: 24,
+    shadowColor: "#111111",
+    shadowOffset: { height: 12, width: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 28,
+    width: "100%",
+  },
+  pushPromptIcon: {
+    alignItems: "center",
+    backgroundColor: "#F5F5F7",
+    borderRadius: 22,
+    height: 64,
+    justifyContent: "center",
+    marginBottom: 4,
+    width: 64,
+  },
+  pushPromptActions: {
+    alignSelf: "stretch",
+    gap: 10,
+    marginTop: 6,
+  },
+  pushPromptText: {
+    textAlign: "center",
   },
   announcementTitle: {
     color: "#111111",
