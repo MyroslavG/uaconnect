@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
-import { Platform } from "react-native";
+import { Linking, Platform } from "react-native";
 
 import { isSupabaseConfigured, supabase } from "./supabase";
 import type { Locale } from "./types";
@@ -19,6 +19,8 @@ export type PushNotificationRegistrationResult = {
 };
 
 export type PushNotificationData = Record<string, unknown>;
+
+export type PushPermissionState = "askable" | "denied" | "enabled" | "unsupported";
 
 const PUSH_TOKEN_STORAGE_KEY = "kolo-expo-push-token";
 const PUSH_DEVICE_ID_STORAGE_KEY = "kolo-push-device-id";
@@ -112,6 +114,28 @@ export async function syncExistingPushNotificationPermission(locale: Locale) {
     locale,
     requestPermission: false,
   });
+}
+
+export async function getPushNotificationPermissionState(): Promise<PushPermissionState> {
+  if (!isSupabaseConfigured || Platform.OS === "web") {
+    return "unsupported";
+  }
+
+  if (Platform.OS === "android" && Constants.appOwnership === "expo") {
+    return "unsupported";
+  }
+
+  const permissions = await Notifications.getPermissionsAsync().catch(() => null);
+
+  if (isPushPermissionGranted(permissions)) {
+    return "enabled";
+  }
+
+  return canAskForPushPermission(permissions) ? "askable" : "denied";
+}
+
+export async function openPushNotificationSettings() {
+  await Linking.openSettings();
 }
 
 export async function unregisterStoredPushNotificationToken() {
@@ -223,7 +247,7 @@ async function getPushPermissionStatus(requestPermission: boolean) {
   const existingPermission = await Notifications.getPermissionsAsync();
   let isGranted = isPushPermissionGranted(existingPermission);
 
-  if (!isGranted && requestPermission) {
+  if (!isGranted && requestPermission && canAskForPushPermission(existingPermission)) {
     const requestedPermission = await Notifications.requestPermissionsAsync();
     isGranted = isPushPermissionGranted(requestedPermission);
   }
@@ -243,6 +267,27 @@ function isPushPermissionGranted(
       permissionState?.ios?.status ===
         Notifications.IosAuthorizationStatus.PROVISIONAL,
   );
+}
+
+function canAskForPushPermission(
+  permissions: Notifications.NotificationPermissionsStatus | null,
+) {
+  const permissionState = permissions as
+    | (Notifications.NotificationPermissionsStatus & { canAskAgain?: boolean })
+    | null;
+
+  if (permissionState?.canAskAgain === false) {
+    return false;
+  }
+
+  if (
+    Platform.OS === "ios" &&
+    permissionState?.ios?.status === Notifications.IosAuthorizationStatus.DENIED
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 async function getOrCreatePushDeviceId() {
