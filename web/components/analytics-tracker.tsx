@@ -39,14 +39,14 @@ export function AnalyticsTracker() {
 
     if (pathname === "/search") {
       const query = searchParams.get("q")?.trim() ?? "";
-      const city = searchParams.get("city") ?? searchParams.get("near") ?? "";
-      const category = searchParams.get("category") ?? "";
+      const city = searchParams.get("city") ?? searchParams.get("near") ?? null;
+      const category = searchParams.get("category") ?? null;
       const localOnly = searchParams.get("localOnly") === "1";
       const radius = searchParams.get("radius") ?? "";
 
       void trackAnalyticsEvent({
-        category_slug: category || null,
-        city: city || null,
+        category_slug: category,
+        city,
         event_type: "search",
         metadata: {
           ...acquisitionMetadata,

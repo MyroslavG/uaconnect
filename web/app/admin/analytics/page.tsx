@@ -1072,6 +1072,10 @@ function getEventTime(event: AnalyticsEventRow | undefined) {
 }
 
 function getCategoryLabel(value: string, locale: Locale) {
+  if (value === "all") {
+    return locale === "uk" ? "Усі категорії" : "All categories";
+  }
+
   const category = getCategory(value);
 
   if (category) {
@@ -1082,6 +1086,10 @@ function getCategoryLabel(value: string, locale: Locale) {
 }
 
 function getCityLabel(value: string, locale: Locale) {
+  if (value === "all-canada") {
+    return locale === "uk" ? "Усі міста / Канада" : "All cities / Canada";
+  }
+
   const city = getCity(value);
 
   if (city) {

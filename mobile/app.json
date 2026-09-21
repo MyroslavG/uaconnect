@@ -41,11 +41,6 @@
         }
       ]
     },
-    "splash": {
-      "image": "./assets/kolo-logo.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#E1D4C2"
-    },
     "web": {
       "favicon": "./assets/kolo-logo.png",
       "bundler": "metro"
@@ -53,6 +48,15 @@
     "plugins": [
       "expo-apple-authentication",
       "expo-web-browser",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/kolo-logo.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#E1D4C2",
+          "imageWidth": 200
+        }
+      ],
       [
         "expo-image-picker",
         {

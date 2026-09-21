@@ -4,6 +4,12 @@ import type {
   AnalyticsContactType,
   AnalyticsEventType,
 } from "./analytics-taxonomy";
+import {
+  ANALYTICS_ALL_CATEGORY,
+  ANALYTICS_ALL_LOCATION,
+  normalizeAnalyticsCategorySlug,
+  normalizeAnalyticsCity,
+} from "./analytics-normalization";
 import { isSupabaseConfigured, supabase } from "./supabase";
 import type { Business, BusinessContentItem } from "./types";
 
@@ -44,13 +50,24 @@ export async function trackMobileAnalyticsEvent({
   }
 
   try {
+    const rawCategorySlug = categorySlug ?? business?.categorySlug ?? null;
+    const rawCity = city ?? business?.city ?? null;
+    const normalizedCategorySlug = normalizeAnalyticsCategorySlug(
+      rawCategorySlug,
+      eventType === "search" ? ANALYTICS_ALL_CATEGORY : null,
+    );
+    const normalizedCity = normalizeAnalyticsCity(
+      rawCity,
+      eventType === "search" ? ANALYTICS_ALL_LOCATION : null,
+    );
+
     await supabase.from("analytics_events").insert({
       anonymous_id: await getOrCreateStoredId(anonymousIdKey, "anon"),
       business_id: businessId ?? business?.id ?? null,
       business_name: businessName ?? business?.name ?? null,
       business_slug: businessSlug ?? business?.slug ?? null,
-      category_slug: categorySlug ?? business?.categorySlug ?? null,
-      city: city ?? business?.city ?? null,
+      category_slug: normalizedCategorySlug,
+      city: normalizedCity,
       contact_type: contactType ?? null,
       content_item_id: contentItem?.id ?? null,
       content_type: contentItem?.type ?? null,

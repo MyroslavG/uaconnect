@@ -2,6 +2,12 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import {
+  ANALYTICS_ALL_CATEGORY,
+  ANALYTICS_ALL_LOCATION,
+  normalizeAnalyticsCategorySlug,
+  normalizeAnalyticsCity,
+} from "@/lib/analytics-normalization";
 import { isKoloAnalyticsEventType } from "@/lib/analytics-taxonomy";
 import type {
   AnalyticsContactType,
@@ -43,10 +49,20 @@ export async function trackAnalyticsEvent(input: TrackAnalyticsEventInput) {
       data: { user },
     } = await supabase.auth.getUser();
     const metadata = removeUndefinedValues(input.metadata ?? {});
+    const categorySlug = normalizeAnalyticsCategorySlug(
+      input.category_slug,
+      input.event_type === "search" ? ANALYTICS_ALL_CATEGORY : null,
+    );
+    const city = normalizeAnalyticsCity(
+      input.city,
+      input.event_type === "search" ? ANALYTICS_ALL_LOCATION : null,
+    );
 
     await supabase.from("analytics_events").insert({
       ...input,
       anonymous_id: getOrCreateStoredId(anonymousIdKey, "anon"),
+      category_slug: categorySlug,
+      city,
       metadata,
       platform: "web",
       session_id: getOrCreateStoredId(sessionIdKey, "session"),

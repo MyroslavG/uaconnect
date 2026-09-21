@@ -106,6 +106,11 @@ type FollowerCountRow = {
   follower_count: number;
 };
 
+type WeeklyTrendingBusinessScoreRow = {
+  business_id: string;
+  score: number | string | null;
+};
+
 export async function fetchPublishedBusinesses(currentUserId?: string) {
   if (!isSupabaseConfigured) {
     return [];
@@ -183,6 +188,39 @@ export async function fetchBusinessFollowerCounts(businessIds: string[]) {
   }
 
   return followerCounts;
+}
+
+export async function fetchWeeklyTrendingBusinessScores(resultLimit = 18) {
+  const scores = new Map<string, number>();
+
+  if (!isSupabaseConfigured) {
+    return scores;
+  }
+
+  const { data, error } = await supabase.rpc(
+    "get_weekly_business_trending_scores",
+    {
+      result_limit: resultLimit,
+    },
+  );
+
+  if (error) {
+    if (!isMissingRpcError(error)) {
+      console.error("[kolo:mobile-weekly-trending]", error);
+    }
+
+    return scores;
+  }
+
+  for (const row of (data ?? []) as WeeklyTrendingBusinessScoreRow[]) {
+    const score = Number(row.score ?? 0);
+
+    if (row.business_id && score > 0) {
+      scores.set(row.business_id, score);
+    }
+  }
+
+  return scores;
 }
 
 export async function saveBusiness(businessId: string, userId: string) {
@@ -980,5 +1018,12 @@ function isMissingSavedBusinessesTableError(error: { code?: string; message?: st
     error.code === "PGRST204" ||
     error.code === "PGRST205" ||
     message.includes("saved_businesses")
+  );
+}
+
+function isMissingRpcError(error: { code?: string; message?: string }) {
+  return (
+    error.code === "PGRST202" ||
+    Boolean(error.message?.includes("Could not find the function"))
   );
 }

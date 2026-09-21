@@ -142,6 +142,7 @@ import {
   fetchOwnedBusinessContent,
   fetchOwnedBusiness,
   fetchPublishedBusinesses,
+  fetchWeeklyTrendingBusinessScores,
   saveBusiness,
   unsaveBusiness,
   updateBusinessContentItem,
@@ -196,6 +197,36 @@ type ProfilePanel = "account" | "addBusiness" | "businessInfo";
 type ContentDetailEntry = {
   business: Business;
   item: BusinessContentItem;
+};
+type HomeRecommendationReason =
+  | "category"
+  | "discovery"
+  | "event"
+  | "nearby"
+  | "new"
+  | "post"
+  | "related"
+  | "trending";
+type HomeInteractionMetadata = {
+  homeSection: string;
+  position: number;
+  recommendationClicked: true;
+  recommendationReason: HomeRecommendationReason;
+  rotationBucket?: string;
+  source: "home";
+};
+type HomeSectionAnalyticsPayload = {
+  itemIds: string[];
+  recommendationReason: HomeRecommendationReason;
+  rotationBucket: string;
+  section: string;
+};
+type HomeDiscoveryState = {
+  bucket: string;
+  currentDiscoveryBusinessIds: string[];
+  recentBusinessIds: string[];
+  seed: number;
+  viewedBusinessIds: string[];
 };
 type DiscoveryTile =
   {
@@ -259,6 +290,8 @@ const KOLO_SUMMER_PARTY_MAP_URL = `https://www.google.com/maps/search/?api=1&que
 )}`;
 const KOLO_SUMMER_PARTY_END_AT = "2026-08-30T23:00:00.000Z";
 const KOLO_SUMMER_PARTY_IMAGE = require("./assets/ukraine-week.jpg") as number;
+const HOME_DISCOVERY_STORAGE_KEY = "kolo-home-discovery-v1";
+const HOME_RECENT_BUSINESS_LIMIT = 64;
 const THEME_STORAGE_KEY = "kolo-theme";
 const WALKTHROUGH_STORAGE_KEY = "kolo-walkthrough-seen";
 
@@ -1164,6 +1197,10 @@ function KoloApp() {
     useState<ProfilePanel>("account");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [hasLoadedTheme, setHasLoadedTheme] = useState(false);
+  const [homeDiscoveryState, setHomeDiscoveryState] =
+    useState<HomeDiscoveryState>(() => createHomeDiscoveryState());
+  const [hasLoadedHomeDiscoveryState, setHasLoadedHomeDiscoveryState] =
+    useState(false);
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState("");
   const hasAppliedInitialLocation = useRef(false);
@@ -1175,8 +1212,12 @@ function KoloApp() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [localOnly, setLocalOnly] = useState(false);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
+  const [selectedBusinessAnalyticsMetadata, setSelectedBusinessAnalyticsMetadata] =
+    useState<Record<string, unknown> | null>(null);
   const [selectedContentEntry, setSelectedContentEntry] =
     useState<ContentDetailEntry | null>(null);
+  const [selectedContentAnalyticsMetadata, setSelectedContentAnalyticsMetadata] =
+    useState<Record<string, unknown> | null>(null);
   const [discoveryReturnPostKey, setDiscoveryReturnPostKey] = useState<
     string | null
   >(null);
@@ -1188,6 +1229,7 @@ function KoloApp() {
   const pageTransition = useRef(new Animated.Value(1)).current;
   const lastPageTransitionKey = useRef("");
   const hasTrackedAppOpen = useRef(false);
+  const lastTrackedHomeViewKey = useRef("");
   const lastTrackedSearchKey = useRef("");
   const businessesRef = useRef<Business[]>([]);
   const [pendingBusinessSlug, setPendingBusinessSlug] = useState<string | null>(
@@ -1196,6 +1238,8 @@ function KoloApp() {
   const [directoryBusinesses, setDirectoryBusinesses] = useState<Business[]>(
     isSupabaseConfigured ? [] : initialBusinesses,
   );
+  const [weeklyTrendingBusinessScores, setWeeklyTrendingBusinessScores] =
+    useState<Map<string, number>>(() => new Map());
   const [isDirectoryLoading, setIsDirectoryLoading] =
     useState(isSupabaseConfigured);
   const [ownedBusiness, setOwnedBusiness] = useState<Business | null>(
@@ -1216,6 +1260,7 @@ function KoloApp() {
   const [pushNotificationStatus, setPushNotificationStatus] =
     useState<PushNotificationStatus>("idle");
   const [isPushNotificationBusy, setIsPushNotificationBusy] = useState(false);
+  const [pushBannerHeight, setPushBannerHeight] = useState(0);
   const [hasLoadedPushPromptPreference, setHasLoadedPushPromptPreference] =
     useState(false);
   const [hasSeenPushPrompt, setHasSeenPushPrompt] = useState(false);
@@ -1288,6 +1333,62 @@ function KoloApp() {
     return () => {
       isMounted = false;
     };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    AsyncStorage.getItem(HOME_DISCOVERY_STORAGE_KEY)
+      .then((value) => {
+        const savedState = parseHomeDiscoveryState(value);
+
+        if (isMounted) {
+          setHomeDiscoveryState(createHomeDiscoveryState(savedState));
+        }
+      })
+      .catch((error) => {
+        console.error("[kolo:mobile-home-discovery-load]", error);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setHasLoadedHomeDiscoveryState(true);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedHomeDiscoveryState) {
+      return;
+    }
+
+    AsyncStorage.setItem(
+      HOME_DISCOVERY_STORAGE_KEY,
+      JSON.stringify(homeDiscoveryState),
+    ).catch((error) => {
+      console.error("[kolo:mobile-home-discovery-save]", error);
+    });
+  }, [hasLoadedHomeDiscoveryState, homeDiscoveryState]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active") {
+        return;
+      }
+
+      setHomeDiscoveryState((currentState) => {
+        const refreshedState = createHomeDiscoveryState(currentState);
+
+        return refreshedState.bucket === currentState.bucket
+          ? currentState
+          : refreshedState;
+      });
+    });
+
+    return () => subscription.remove();
   }, []);
 
   useEffect(() => {
@@ -1936,6 +2037,7 @@ function KoloApp() {
   useEffect(() => {
     if (!isSupabaseConfigured) {
       setDirectoryBusinesses(initialBusinesses);
+      setWeeklyTrendingBusinessScores(new Map());
       setIsDirectoryLoading(false);
       return;
     }
@@ -1946,18 +2048,21 @@ function KoloApp() {
       try {
         setIsDirectoryLoading(true);
         setDataMessage("");
-        const publishedBusinesses = await fetchPublishedBusinesses(
-          session?.user.id,
-        );
+        const [publishedBusinesses, trendingScores] = await Promise.all([
+          fetchPublishedBusinesses(session?.user.id),
+          fetchWeeklyTrendingBusinessScores(),
+        ]);
 
         if (isMounted) {
           if (__DEV__) {
             console.log("[kolo:mobile-directory]", {
               publicRows: publishedBusinesses.length,
+              trendingRows: trendingScores.size,
             });
           }
 
           setDirectoryBusinesses(publishedBusinesses);
+          setWeeklyTrendingBusinessScores(trendingScores);
         }
       } catch (error) {
         console.error("[kolo:mobile-directory]", error);
@@ -1965,6 +2070,7 @@ function KoloApp() {
         if (isMounted) {
           setDataMessage(getErrorMessage(error));
           setDirectoryBusinesses([]);
+          setWeeklyTrendingBusinessScores(new Map());
         }
       } finally {
         if (isMounted) {
@@ -2211,6 +2317,48 @@ function KoloApp() {
 
   useEffect(() => {
     if (
+      activeTab !== "home" ||
+      !hasLoadedHomeDiscoveryState ||
+      isDirectoryLoading ||
+      !hasResolvedInitialLocation
+    ) {
+      return;
+    }
+
+    const homeViewKey = [
+      homeDiscoveryState.bucket,
+      businesses.length,
+      feedPosts.length,
+      session?.user.id ?? "anonymous",
+    ].join(":");
+
+    if (lastTrackedHomeViewKey.current === homeViewKey) {
+      return;
+    }
+
+    lastTrackedHomeViewKey.current = homeViewKey;
+    void trackMobileAnalyticsEvent({
+      eventType: "page_view",
+      metadata: {
+        page: "home",
+        rotationBucket: homeDiscoveryState.bucket,
+        source: "home",
+      },
+      userId: session?.user.id,
+    });
+  }, [
+    activeTab,
+    businesses.length,
+    feedPosts.length,
+    hasLoadedHomeDiscoveryState,
+    hasResolvedInitialLocation,
+    homeDiscoveryState.bucket,
+    isDirectoryLoading,
+    session?.user.id,
+  ]);
+
+  useEffect(() => {
+    if (
       activeTab !== "search" ||
       isDirectoryLoading ||
       !hasResolvedInitialLocation
@@ -2268,9 +2416,14 @@ function KoloApp() {
     void trackMobileAnalyticsEvent({
       business: selectedBusiness,
       eventType: "business_profile_view",
+      metadata: selectedBusinessAnalyticsMetadata ?? undefined,
       userId: session?.user.id,
     });
-  }, [selectedBusiness?.id, session?.user.id]);
+  }, [
+    selectedBusiness?.id,
+    selectedBusinessAnalyticsMetadata,
+    session?.user.id,
+  ]);
 
   useEffect(() => {
     if (!selectedContentEntry) {
@@ -2282,11 +2435,16 @@ function KoloApp() {
       contentItem: selectedContentEntry.item,
       eventType: "content_view",
       metadata: {
+        ...(selectedContentAnalyticsMetadata ?? {}),
         title: selectedContentEntry.item.title,
       },
       userId: session?.user.id,
     });
-  }, [selectedContentEntry?.item.id, session?.user.id]);
+  }, [
+    selectedContentAnalyticsMetadata,
+    selectedContentEntry?.item.id,
+    session?.user.id,
+  ]);
 
   useEffect(() => {
     if (!pendingBusinessSlug || isDirectoryLoading) {
@@ -2298,6 +2456,7 @@ function KoloApp() {
     );
 
     if (linkedBusiness) {
+      setSelectedBusinessAnalyticsMetadata(null);
       setSelectedBusiness(linkedBusiness);
       setBusinessReturnTab("home");
       setActiveTab("business");
@@ -2692,6 +2851,15 @@ function KoloApp() {
       } else {
         await unsaveBusiness(business.id, session.user.id);
       }
+
+      void trackMobileAnalyticsEvent({
+        business,
+        eventType: nextIsSaved ? "save_business" : "unsave_business",
+        metadata: {
+          source: getActiveMainTab(),
+        },
+        userId: session.user.id,
+      });
     } catch (error) {
       console.error("[kolo:mobile-saved-business]", error);
       setAuthMessage(getErrorMessage(error));
@@ -3438,15 +3606,21 @@ function KoloApp() {
     }
   }
 
-  function handleStandaloneContentPress(entry: ContentDetailEntry) {
+  function handleStandaloneContentPress(
+    entry: ContentDetailEntry,
+    metadata?: Record<string, unknown>,
+  ) {
+    setSelectedContentAnalyticsMetadata(metadata ?? null);
     setSelectedContentEntry(entry);
   }
 
   function handleBusinessModalContentPress(entry: ContentDetailEntry) {
+    setSelectedContentAnalyticsMetadata(null);
     setSelectedContentEntry(entry);
   }
 
   function handleContentModalClose() {
+    setSelectedContentAnalyticsMetadata(null);
     setSelectedContentEntry(null);
   }
 
@@ -3615,6 +3789,8 @@ function KoloApp() {
     if (nextBusiness) {
       setBusinessReturnFeedPostId(null);
       setBusinessReturnTab("home");
+      setSelectedBusinessAnalyticsMetadata(null);
+      setSelectedContentAnalyticsMetadata(null);
       setSelectedContentEntry(null);
       setSelectedFeedPostId(null);
       setSelectedBusiness(nextBusiness);
@@ -3640,15 +3816,104 @@ function KoloApp() {
     return activeTab;
   }
 
-  function openBusinessScreen(business: Business, returnTab = getActiveMainTab()) {
+  function rememberHomeBusinessView(businessId: string) {
+    setHomeDiscoveryState((currentState) => {
+      const viewedBusinessIds = getUniqueStringList([
+        businessId,
+        ...currentState.viewedBusinessIds,
+      ]).slice(0, HOME_RECENT_BUSINESS_LIMIT);
+
+      if (areStringListsEqual(viewedBusinessIds, currentState.viewedBusinessIds)) {
+        return currentState;
+      }
+
+      return {
+        ...currentState,
+        viewedBusinessIds,
+      };
+    });
+  }
+
+  function openBusinessScreen(
+    business: Business,
+    returnTab = getActiveMainTab(),
+    metadata?: Record<string, unknown>,
+  ) {
     if (returnTab !== "feed") {
       setBusinessReturnFeedPostId(null);
     }
 
+    setSelectedBusinessAnalyticsMetadata(metadata ?? null);
     setBusinessReturnTab(returnTab);
     setBusinessProfileOpenCount((count) => count + 1);
     setSelectedBusiness(business);
     setActiveTab("business");
+  }
+
+  function handleHomeBusinessPress(
+    business: Business,
+    metadata?: HomeInteractionMetadata,
+  ) {
+    rememberHomeBusinessView(business.id);
+    openBusinessScreen(business, "home", metadata);
+  }
+
+  function handleHomeFeedPostPress(
+    post: MobileFeedPost,
+    metadata?: HomeInteractionMetadata,
+  ) {
+    setSelectedFeedPostId(post.id);
+    void trackMobileAnalyticsEvent({
+      businessId: post.business_id ?? undefined,
+      businessName: post.business?.name,
+      businessSlug: post.business?.slug ?? undefined,
+      eventType: "content_view",
+      metadata: {
+        ...(metadata ?? {}),
+        contentType: "feed_post",
+        feedPostId: post.id,
+        title: post.body.slice(0, 80),
+      },
+      userId: session?.user.id,
+    });
+  }
+
+  function handleHomeSectionView(payload: HomeSectionAnalyticsPayload) {
+    if (payload.section === "discovery") {
+      setHomeDiscoveryState((currentState) => {
+        const currentDiscoveryBusinessIds = getUniqueStringList(
+          payload.itemIds,
+        ).slice(0, HOME_RECENT_BUSINESS_LIMIT);
+
+        if (
+          areStringListsEqual(
+            currentDiscoveryBusinessIds,
+            currentState.currentDiscoveryBusinessIds,
+          )
+        ) {
+          return currentState;
+        }
+
+        return {
+          ...currentState,
+          currentDiscoveryBusinessIds,
+        };
+      });
+    }
+
+    void trackMobileAnalyticsEvent({
+      eventType: "page_view",
+      metadata: {
+        eventScope: "home_section_view",
+        itemIds: payload.itemIds,
+        page: "home",
+        recommendationReason: payload.recommendationReason,
+        rotationBucket: payload.rotationBucket,
+        section: payload.section,
+        source: "home",
+      },
+      userId: session?.user.id,
+    });
   }
 
   function openBusinessFromDiscoveryPost(business: Business, tileKey: string) {
@@ -3687,12 +3952,14 @@ function KoloApp() {
       const postId = businessReturnFeedPostId;
 
       setBusinessReturnFeedPostId(null);
+      setSelectedBusinessAnalyticsMetadata(null);
       setSelectedBusiness(null);
       setActiveTab("feed");
       setSelectedFeedPostId(postId);
       return;
     }
 
+    setSelectedBusinessAnalyticsMetadata(null);
     setSelectedBusiness(null);
     setActiveTab(businessReturnTab);
   }
@@ -3732,6 +3999,8 @@ function KoloApp() {
   function openMainTab(tab: MainTab) {
     setDiscoveryReturnPostKey(null);
     setBusinessReturnFeedPostId(null);
+    setSelectedBusinessAnalyticsMetadata(null);
+    setSelectedContentAnalyticsMetadata(null);
     setSelectedFeedPostId(null);
     setSelectedBusiness(null);
     setIsMessageThreadOpen(false);
@@ -3741,6 +4010,18 @@ function KoloApp() {
 
   const canViewContacts = Boolean(session);
   const activeMainTab = getActiveMainTab();
+  const shouldShowPushBanner =
+    hasSeenPushPrompt &&
+    !hasDismissedPushPromptThisSession &&
+    !isPushBannerDismissed &&
+    !notificationPrompt &&
+    Boolean(session?.user.id) &&
+    pushNotificationStatus !== "enabled" &&
+    pushNotificationStatus !== "unsupported" &&
+    (activeTab === "home" || activeTab === "feed");
+  const pushBannerReservedHeight = shouldShowPushBanner
+    ? Math.max(pushBannerHeight, Platform.OS === "android" ? 150 : 168)
+    : 0;
 
   return (
     <View style={[styles.safeArea, isDarkMode ? styles.darkSafeArea : null]}>
@@ -3750,22 +4031,7 @@ function KoloApp() {
         translucent
       />
       <View style={styles.appShell}>
-        <AnnouncementCenter
-          announcements={visibleAnnouncements}
-          isDarkMode={isDarkMode}
-          labels={labels}
-          locale={locale}
-          onDismiss={handleDismissAnnouncement}
-          onDismissAll={handleDismissAllAnnouncements}
-        />
-        {hasSeenPushPrompt &&
-        !hasDismissedPushPromptThisSession &&
-        !isPushBannerDismissed &&
-        !notificationPrompt &&
-        Boolean(session?.user.id) &&
-        pushNotificationStatus !== "enabled" &&
-        pushNotificationStatus !== "unsupported" &&
-        (activeTab === "home" || activeTab === "feed") ? (
+        {shouldShowPushBanner ? (
           <NotificationOptInBanner
             isDarkMode={isDarkMode}
             labels={labels}
@@ -3773,23 +4039,55 @@ function KoloApp() {
             onEnable={() => {
               void showNotificationPrompt("home_banner");
             }}
+            onHeightChange={(height) => {
+              setPushBannerHeight((currentHeight) =>
+                Math.abs(currentHeight - height) > 1 ? height : currentHeight,
+              );
+            }}
           />
         ) : null}
+        {shouldShowPushBanner ? (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.pushBannerReservedSpace,
+              { height: pushBannerReservedHeight },
+            ]}
+          />
+        ) : null}
+        <AnnouncementCenter
+          announcements={visibleAnnouncements}
+          hasTopNotificationPrompt={shouldShowPushBanner}
+          isDarkMode={isDarkMode}
+          labels={labels}
+          locale={locale}
+          onDismiss={handleDismissAnnouncement}
+          onDismissAll={handleDismissAllAnnouncements}
+        />
         <Animated.View style={[styles.contentArea, pageTransitionStyle]}>
           {activeTab === "home" ? (
             <HomeScreen
               businesses={businesses}
               feedPosts={feedPosts}
               hasTopAnnouncement={visibleAnnouncements.length > 0}
-              isDataReady={!isDirectoryLoading && hasResolvedInitialLocation}
+              hasTopNotificationPrompt={shouldShowPushBanner}
+              homeDiscoveryState={homeDiscoveryState}
+              isDataReady={
+                !isDirectoryLoading &&
+                hasResolvedInitialLocation &&
+                hasLoadedHomeDiscoveryState
+              }
               isDarkMode={isDarkMode}
               labels={labels}
               locale={locale}
               location={location}
-              onBusinessPress={openBusinessScreen}
+              onBusinessPress={handleHomeBusinessPress}
               onContentPress={handleStandaloneContentPress}
-              onFeedPostPress={(post) => setSelectedFeedPostId(post.id)}
-              onOpenSearch={() => setActiveTab("search")}
+              onFeedPostPress={handleHomeFeedPostPress}
+              onOpenEvents={() => openMainTab("events")}
+              onOpenFeed={() => openMainTab("feed")}
+              onOpenSearch={() => openMainTab("search")}
+              onSectionView={handleHomeSectionView}
               initialScrollOffset={homeScrollOffset.current}
               onCategoryPress={(categorySlug) => {
                 setSelectedCategory(categorySlug);
@@ -3804,6 +4102,7 @@ function KoloApp() {
               query={query}
               selectedCategory={selectedCategory}
               session={session}
+              weeklyTrendingBusinessScores={weeklyTrendingBusinessScores}
             />
           ) : null}
 
@@ -4124,11 +4423,13 @@ function KoloApp() {
         onContentContactPress={handleContentContactPress}
         onShareContent={handleShareContent}
         onBusinessPress={(business) => {
+          setSelectedContentAnalyticsMetadata(null);
           setSelectedContentEntry(null);
           openBusinessScreen(business);
         }}
         onClose={handleContentModalClose}
         onRequireSignIn={() => {
+          setSelectedContentAnalyticsMetadata(null);
           setSelectedContentEntry(null);
           setSelectedBusiness(null);
           setActiveProfilePanel("account");
@@ -4157,14 +4458,20 @@ function NotificationOptInBanner({
   labels,
   onDismiss,
   onEnable,
+  onHeightChange,
 }: {
   isDarkMode: boolean;
   labels: Record<string, string>;
   onDismiss: () => void;
   onEnable: () => void;
+  onHeightChange: (height: number) => void;
 }) {
   return (
-    <View style={styles.pushBannerSlot}>
+    <View
+      onLayout={(event) => onHeightChange(event.nativeEvent.layout.height)}
+      pointerEvents="box-none"
+      style={styles.pushBannerSlot}
+    >
       <View style={[styles.pushBanner, isDarkMode ? styles.darkCard : null]}>
         <View style={[styles.pushBannerIcon, isDarkMode ? styles.darkIconBox : null]}>
           <Bell color={isDarkMode ? "#FFFFFF" : "#111111"} size={21} strokeWidth={2.7} />
@@ -5863,6 +6170,8 @@ function HomeScreen({
   businesses,
   feedPosts,
   hasTopAnnouncement,
+  hasTopNotificationPrompt,
+  homeDiscoveryState,
   initialScrollOffset,
   isDataReady,
   isDarkMode,
@@ -5872,35 +6181,54 @@ function HomeScreen({
   onBusinessPress,
   onContentPress,
   onFeedPostPress,
+  onOpenEvents,
+  onOpenFeed,
   onOpenSearch,
   onCategoryPress,
   onScrollOffsetChange,
+  onSectionView,
   onShareContent,
   profile,
   query,
   selectedCategory,
   session,
+  weeklyTrendingBusinessScores,
 }: {
   businesses: Business[];
   feedPosts: MobileFeedPost[];
   hasTopAnnouncement: boolean;
+  hasTopNotificationPrompt: boolean;
+  homeDiscoveryState: HomeDiscoveryState;
   initialScrollOffset: number;
   isDataReady: boolean;
   isDarkMode: boolean;
   labels: Record<string, string>;
   locale: Locale;
   location: string;
-  onBusinessPress: (business: Business) => void;
-  onContentPress: (entry: ContentDetailEntry) => void;
-  onFeedPostPress: (post: MobileFeedPost) => void;
+  onBusinessPress: (
+    business: Business,
+    metadata?: HomeInteractionMetadata,
+  ) => void;
+  onContentPress: (
+    entry: ContentDetailEntry,
+    metadata?: HomeInteractionMetadata,
+  ) => void;
+  onFeedPostPress: (
+    post: MobileFeedPost,
+    metadata?: HomeInteractionMetadata,
+  ) => void;
+  onOpenEvents: () => void;
+  onOpenFeed: () => void;
   onOpenSearch: () => void;
   onCategoryPress: (categorySlug: string) => void;
   onScrollOffsetChange: (offset: number) => void;
+  onSectionView: (payload: HomeSectionAnalyticsPayload) => void;
   onShareContent: (entry: ContentDetailEntry) => Promise<void>;
   profile: UserProfile | null;
   query: string;
   selectedCategory: string;
   session: Session | null;
+  weeklyTrendingBusinessScores: Map<string, number>;
 }) {
   const scrollRef = useRef<ScrollView>(null);
   const homeCopy = getHomeCopy(locale);
@@ -5921,6 +6249,7 @@ function HomeScreen({
     return (
       <HomeLoadingScreen
         hasTopAnnouncement={hasTopAnnouncement}
+        hasTopNotificationPrompt={hasTopNotificationPrompt}
         isDarkMode={isDarkMode}
         labels={labels}
         locale={locale}
@@ -5932,72 +6261,62 @@ function HomeScreen({
   const effectiveQuery = getEffectiveSearchQuery(query);
   const selectedCategorySlug =
     selectedCategory === "all" ? "" : normalizeCategorySlug(selectedCategory);
+  const followedBusinesses = uniqueBusinesses.filter((business) => business.isSaved);
   const categoryCards = getHomeCategoryCards({
     businesses: uniqueBusinesses,
-    followedBusinesses: uniqueBusinesses.filter((business) => business.isSaved),
+    followedBusinesses,
     locale,
     location,
     query: effectiveQuery,
     selectedCategorySlug,
-  }).slice(0, 12);
+  }).slice(0, 10);
   const preferredCategorySlugs = categoryCards.map(({ category }) => category.slug);
   const locationTrimmed = location.trim();
-  const locationAwareBusinesses = uniqueBusinesses.filter(
-    (business) =>
-      !locationTrimmed ||
-      business.servesAllCanada ||
-      isNearLocation(business.city, locationTrimmed),
+  const contentEntries = getHomeContentEntries(uniqueBusinesses);
+  const newInKoloBusinesses = sortHomeBusinessesByCreatedAt(uniqueBusinesses).slice(
+    0,
+    10,
   );
-  const newNearbyBusinesses = sortHomeBusinessesByFreshness(
-    rankBusinesses(
-      locationAwareBusinesses.length ? locationAwareBusinesses : uniqueBusinesses,
-      {
-        categorySlug: selectedCategorySlug || undefined,
-        location,
+  const nearbyBusinesses = locationTrimmed
+    ? getHomeNearbyBusinesses({
+        businesses: uniqueBusinesses,
+        location: locationTrimmed,
         query: effectiveQuery,
-      },
-    ),
-  ).slice(0, 10);
-  const newNearbyKeys = new Set(
-    newNearbyBusinesses.map((business) => getBusinessDedupeKey(business)),
+        selectedCategorySlug,
+      }).slice(0, 10)
+    : [];
+  const discoveryBusinesses = getHomeDiscoveryBusinesses({
+    businesses: uniqueBusinesses,
+    homeDiscoveryState,
+    location: locationTrimmed,
+    preferredCategorySlugs,
+    query: effectiveQuery,
+    selectedCategorySlug,
+  }).slice(0, 10);
+  const upcomingEventEntries = getUpcomingHomeEventEntries(contentEntries).slice(
+    0,
+    10,
   );
-  const followedBusinesses = uniqueBusinesses.filter((business) => business.isSaved);
-  const followedBusinessKeys = new Set(
-    followedBusinesses.map((business) => getBusinessDedupeKey(business)),
-  );
-  const followedContentItems = getHomeContentEntries(followedBusinesses).slice(0, 10);
-  const interestContentItems = getHomeContentEntries(
-    uniqueBusinesses.filter(
-      (business) =>
-        preferredCategorySlugs.includes(business.categorySlug) ||
-        isHomeBusinessPreferenceMatch(business, effectiveQuery),
-    ),
-  )
-    .filter(({ business }) => !followedBusinessKeys.has(getBusinessDedupeKey(business)))
-    .slice(0, 10);
-  const freshContentItems = getHomeContentEntries(uniqueBusinesses).slice(0, 10);
-  const primaryContentItems = followedContentItems.length
-    ? followedContentItems
-    : interestContentItems.length
-      ? interestContentItems
-      : freshContentItems;
-  const recommendedBusinesses = rankBusinesses(
-    uniqueBusinesses.filter(
-      (business) =>
-        !newNearbyKeys.has(getBusinessDedupeKey(business)) &&
-        (preferredCategorySlugs.includes(business.categorySlug) ||
-          isHomeBusinessPreferenceMatch(business, effectiveQuery) ||
-          followedBusinessKeys.has(getBusinessDedupeKey(business))),
-    ),
-    {
-      categorySlug: selectedCategorySlug || undefined,
-      location,
-      query: effectiveQuery,
-    },
-  ).slice(0, 10);
+  const trendingBusinesses = getHomeTrendingBusinesses({
+    businesses: uniqueBusinesses,
+    location: locationTrimmed,
+    query: effectiveQuery,
+    scoreByBusinessId: weeklyTrendingBusinessScores,
+    selectedCategorySlug,
+  }).slice(0, 10);
+  const relatedBusinesses = getHomeRelatedBusinesses({
+    businesses: uniqueBusinesses,
+    homeDiscoveryState,
+    location: locationTrimmed,
+    preferredCategorySlugs,
+    query: effectiveQuery,
+    selectedCategorySlug,
+  }).slice(0, 10);
   const storyBusinesses = getUniqueBusinesses([
-    ...recommendedBusinesses,
-    ...newNearbyBusinesses,
+    ...discoveryBusinesses,
+    ...newInKoloBusinesses,
+    ...trendingBusinesses,
+    ...nearbyBusinesses,
     ...rankBusinesses(uniqueBusinesses, {
       categorySlug: selectedCategorySlug || undefined,
       location,
@@ -6009,15 +6328,21 @@ function HomeScreen({
     )
     .slice(0, 14);
   const feedPreviewPosts = feedPosts.slice(0, 8);
-  const contentTitle = followedContentItems.length
-    ? homeCopy.followingContentTitle
-    : homeCopy.freshContentTitle;
-  const contentSubtitle = followedContentItems.length
-    ? homeCopy.followingContentSubtitle
-    : homeCopy.freshContentSubtitle;
   const nearbySubtitle = locationTrimmed
     ? `${homeCopy.nearbySubtitle} ${locationTrimmed}`
-    : homeCopy.nearbyFallbackSubtitle;
+    : "";
+  const getHomeMetadata = (
+    homeSection: string,
+    position: number,
+    recommendationReason: HomeRecommendationReason,
+  ): HomeInteractionMetadata => ({
+    homeSection,
+    position,
+    recommendationClicked: true,
+    recommendationReason,
+    rotationBucket: homeDiscoveryState.bucket,
+    source: "home",
+  });
 
   return (
     <ScrollView
@@ -6025,6 +6350,9 @@ function HomeScreen({
         styles.screenContent,
         styles.homeScreenContent,
         hasTopAnnouncement ? styles.homeScreenContentWithAnnouncement : null,
+        hasTopNotificationPrompt
+          ? styles.homeScreenContentWithNotificationPrompt
+          : null,
       ]}
       keyboardShouldPersistTaps="handled"
       onScroll={(event) => {
@@ -6045,17 +6373,26 @@ function HomeScreen({
           horizontal
           showsHorizontalScrollIndicator={false}
         >
-          {storyBusinesses.map((business) => (
+          {storyBusinesses.map((business, index) => (
             <HomeStoryBusiness
               business={business}
               isDarkMode={isDarkMode}
               key={getBusinessDedupeKey(business)}
               labels={labels}
-              onPress={() => onBusinessPress(business)}
+              onPress={() =>
+                onBusinessPress(
+                  business,
+                  getHomeMetadata(
+                    "stories",
+                    index,
+                    "discovery",
+                  ),
+                )
+              }
             />
           ))}
           <Pressable
-            accessibilityLabel={locale === "uk" ? "Ще" : "More"}
+            accessibilityLabel={homeCopy.more}
             accessibilityRole="button"
             onPress={onOpenSearch}
             style={styles.homeStoryItem}
@@ -6074,19 +6411,306 @@ function HomeScreen({
               />
             </View>
             <Text style={[styles.homeStoryName, isDarkMode ? styles.darkMutedText : null]}>
-              {locale === "uk" ? "Ще" : "More"}
+              {homeCopy.more}
             </Text>
           </Pressable>
         </ScrollView>
       ) : null}
 
-      <HomeRail
-        isDarkMode={isDarkMode}
-        subtitle={homeCopy.categorySubtitle}
-        title={homeCopy.categoryTitle}
-      >
-        {categoryCards.length ? (
-          categoryCards.map(({ category, count }) => (
+      {newInKoloBusinesses.length ? (
+        <HomeRail
+          actionLabel={homeCopy.viewAll}
+          analyticsKey={getHomeSectionAnalyticsKey(
+            homeDiscoveryState.bucket,
+            "new_in_kolo",
+            newInKoloBusinesses.map((business) => business.id),
+          )}
+          isDarkMode={isDarkMode}
+          onActionPress={onOpenSearch}
+          onVisible={() =>
+            onSectionView({
+              itemIds: newInKoloBusinesses.map((business) => business.id),
+              recommendationReason: "new",
+              rotationBucket: homeDiscoveryState.bucket,
+              section: "new_in_kolo",
+            })
+          }
+          subtitle={homeCopy.newInKoloSubtitle}
+          title={homeCopy.newInKoloTitle}
+        >
+          {newInKoloBusinesses.map((business, index) => (
+            <HomeBusinessFeatureCard
+              business={business}
+              isDarkMode={isDarkMode}
+              key={business.id}
+              labels={labels}
+              locale={locale}
+              onPress={() =>
+                onBusinessPress(
+                  business,
+                  getHomeMetadata("new_in_kolo", index, "new"),
+                )
+              }
+              signalLabel={homeCopy.newBadge}
+            />
+          ))}
+        </HomeRail>
+      ) : null}
+
+      {feedPreviewPosts.length ? (
+        <HomeRail
+          actionLabel={homeCopy.viewAll}
+          analyticsKey={getHomeSectionAnalyticsKey(
+            homeDiscoveryState.bucket,
+            "new_posts",
+            feedPreviewPosts.map((post) => post.id),
+          )}
+          isDarkMode={isDarkMode}
+          onActionPress={onOpenFeed}
+          onVisible={() =>
+            onSectionView({
+              itemIds: feedPreviewPosts.map((post) => post.id),
+              recommendationReason: "post",
+              rotationBucket: homeDiscoveryState.bucket,
+              section: "new_posts",
+            })
+          }
+          subtitle={homeCopy.postsSubtitle}
+          title={homeCopy.postsTitle}
+        >
+          {feedPreviewPosts.map((post, index) => (
+            <HomeFeedPostRailCard
+              isDarkMode={isDarkMode}
+              key={post.id}
+              labels={labels}
+              onPress={() =>
+                onFeedPostPress(
+                  post,
+                  getHomeMetadata("new_posts", index, "post"),
+                )
+              }
+              post={post}
+              profile={profile}
+              session={session}
+            />
+          ))}
+        </HomeRail>
+      ) : null}
+
+      {discoveryBusinesses.length ? (
+        <HomeRail
+          analyticsKey={getHomeSectionAnalyticsKey(
+            homeDiscoveryState.bucket,
+            "discovery",
+            discoveryBusinesses.map((business) => business.id),
+          )}
+          isDarkMode={isDarkMode}
+          onVisible={() =>
+            onSectionView({
+              itemIds: discoveryBusinesses.map((business) => business.id),
+              recommendationReason: "discovery",
+              rotationBucket: homeDiscoveryState.bucket,
+              section: "discovery",
+            })
+          }
+          subtitle={homeCopy.discoverySubtitle}
+          title={homeCopy.discoveryTitle}
+        >
+          {discoveryBusinesses.map((business, index) => (
+            <HomeBusinessFeatureCard
+              business={business}
+              isDarkMode={isDarkMode}
+              key={business.id}
+              labels={labels}
+              locale={locale}
+              onPress={() =>
+                onBusinessPress(
+                  business,
+                  getHomeMetadata("discovery", index, "discovery"),
+                )
+              }
+            />
+          ))}
+        </HomeRail>
+      ) : null}
+
+      {nearbyBusinesses.length ? (
+        <HomeRail
+          actionLabel={homeCopy.viewAll}
+          analyticsKey={getHomeSectionAnalyticsKey(
+            homeDiscoveryState.bucket,
+            "nearby",
+            nearbyBusinesses.map((business) => business.id),
+          )}
+          isDarkMode={isDarkMode}
+          onActionPress={onOpenSearch}
+          onVisible={() =>
+            onSectionView({
+              itemIds: nearbyBusinesses.map((business) => business.id),
+              recommendationReason: "nearby",
+              rotationBucket: homeDiscoveryState.bucket,
+              section: "nearby",
+            })
+          }
+          subtitle={nearbySubtitle}
+          title={homeCopy.nearbyTitle}
+        >
+          {nearbyBusinesses.map((business, index) => (
+            <HomeBusinessFeatureCard
+              business={business}
+              isDarkMode={isDarkMode}
+              key={business.id}
+              labels={labels}
+              locale={locale}
+              onPress={() =>
+                onBusinessPress(
+                  business,
+                  getHomeMetadata("nearby", index, "nearby"),
+                )
+              }
+              signalLabel={homeCopy.nearbyBadge}
+            />
+          ))}
+        </HomeRail>
+      ) : null}
+
+      {upcomingEventEntries.length ? (
+        <HomeRail
+          actionLabel={homeCopy.viewAll}
+          analyticsKey={getHomeSectionAnalyticsKey(
+            homeDiscoveryState.bucket,
+            "upcoming_events",
+            upcomingEventEntries.map(({ item }) => item.id),
+          )}
+          isDarkMode={isDarkMode}
+          onActionPress={onOpenEvents}
+          onVisible={() =>
+            onSectionView({
+              itemIds: upcomingEventEntries.map(({ item }) => item.id),
+              recommendationReason: "event",
+              rotationBucket: homeDiscoveryState.bucket,
+              section: "upcoming_events",
+            })
+          }
+          subtitle={homeCopy.eventsSubtitle}
+          title={homeCopy.eventsTitle}
+        >
+          {upcomingEventEntries.map(({ business, item }, index) => (
+            <HomeContentRailCard
+              business={business}
+              isDarkMode={isDarkMode}
+              item={item}
+              key={item.id}
+              labels={labels}
+              onPress={() =>
+                onContentPress(
+                  { business, item },
+                  getHomeMetadata("upcoming_events", index, "event"),
+                )
+              }
+              onShare={() => {
+                void onShareContent({ business, item });
+              }}
+            />
+          ))}
+        </HomeRail>
+      ) : null}
+
+      {trendingBusinesses.length ? (
+        <HomeRail
+          analyticsKey={getHomeSectionAnalyticsKey(
+            homeDiscoveryState.bucket,
+            "trending_week",
+            trendingBusinesses.map((business) => business.id),
+          )}
+          isDarkMode={isDarkMode}
+          onVisible={() =>
+            onSectionView({
+              itemIds: trendingBusinesses.map((business) => business.id),
+              recommendationReason: "trending",
+              rotationBucket: homeDiscoveryState.bucket,
+              section: "trending_week",
+            })
+          }
+          subtitle={homeCopy.trendingSubtitle}
+          title={homeCopy.trendingTitle}
+        >
+          {trendingBusinesses.map((business, index) => (
+            <HomeBusinessFeatureCard
+              business={business}
+              isDarkMode={isDarkMode}
+              key={business.id}
+              labels={labels}
+              locale={locale}
+              onPress={() =>
+                onBusinessPress(
+                  business,
+                  getHomeMetadata("trending_week", index, "trending"),
+                )
+              }
+              signalLabel={homeCopy.weekBadge}
+            />
+          ))}
+        </HomeRail>
+      ) : null}
+
+      {relatedBusinesses.length ? (
+        <HomeRail
+          analyticsKey={getHomeSectionAnalyticsKey(
+            homeDiscoveryState.bucket,
+            "related",
+            relatedBusinesses.map((business) => business.id),
+          )}
+          isDarkMode={isDarkMode}
+          onVisible={() =>
+            onSectionView({
+              itemIds: relatedBusinesses.map((business) => business.id),
+              recommendationReason: "related",
+              rotationBucket: homeDiscoveryState.bucket,
+              section: "related",
+            })
+          }
+          subtitle={homeCopy.relatedSubtitle}
+          title={homeCopy.relatedTitle}
+        >
+          {relatedBusinesses.map((business, index) => (
+            <HomeBusinessFeatureCard
+              business={business}
+              isDarkMode={isDarkMode}
+              key={business.id}
+              labels={labels}
+              locale={locale}
+              onPress={() =>
+                onBusinessPress(
+                  business,
+                  getHomeMetadata("related", index, "related"),
+                )
+              }
+            />
+          ))}
+        </HomeRail>
+      ) : null}
+
+      {categoryCards.length ? (
+        <HomeRail
+          analyticsKey={getHomeSectionAnalyticsKey(
+            homeDiscoveryState.bucket,
+            "categories",
+            categoryCards.map(({ category }) => category.slug),
+          )}
+          isDarkMode={isDarkMode}
+          onVisible={() =>
+            onSectionView({
+              itemIds: categoryCards.map(({ category }) => category.slug),
+              recommendationReason: "category",
+              rotationBucket: homeDiscoveryState.bucket,
+              section: "categories",
+            })
+          }
+          subtitle={homeCopy.categorySubtitle}
+          title={homeCopy.categoryTitle}
+        >
+          {categoryCards.map(({ category, count }) => (
             <HomeCategoryRailCard
               categorySlug={category.slug}
               count={count}
@@ -6095,101 +6719,6 @@ function HomeScreen({
               name={category.name[locale]}
               onPress={() => onCategoryPress(category.slug)}
               supportingText={labels.businesses}
-            />
-          ))
-        ) : (
-          <HomeEmptyRailCard
-            isDarkMode={isDarkMode}
-            text={homeCopy.emptyContentText}
-          />
-        )}
-      </HomeRail>
-
-      <HomeRail
-        isDarkMode={isDarkMode}
-        subtitle={contentSubtitle}
-        title={contentTitle}
-      >
-        {primaryContentItems.length ? (
-          primaryContentItems.map(({ business, item }) => (
-            <HomeContentRailCard
-              business={business}
-              isDarkMode={isDarkMode}
-              item={item}
-              key={item.id}
-              labels={labels}
-              onPress={() => onContentPress({ business, item })}
-              onShare={() => {
-                void onShareContent({ business, item });
-              }}
-            />
-          ))
-        ) : (
-          <HomeEmptyRailCard
-            isDarkMode={isDarkMode}
-            text={homeCopy.emptyContentText}
-          />
-        )}
-      </HomeRail>
-
-      <HomeRail
-        isDarkMode={isDarkMode}
-        subtitle={nearbySubtitle}
-        title={homeCopy.nearbyTitle}
-      >
-        {newNearbyBusinesses.length ? (
-          newNearbyBusinesses.map((business) => (
-            <HomeBusinessFeatureCard
-              business={business}
-              isDarkMode={isDarkMode}
-              key={business.id}
-              labels={labels}
-              locale={locale}
-              onPress={() => onBusinessPress(business)}
-            />
-          ))
-        ) : (
-          <HomeEmptyRailCard
-            isDarkMode={isDarkMode}
-            text={homeCopy.emptyContentText}
-          />
-        )}
-      </HomeRail>
-
-      {recommendedBusinesses.length ? (
-        <HomeRail
-          isDarkMode={isDarkMode}
-          subtitle={homeCopy.recommendedSubtitle}
-          title={homeCopy.recommendedTitle}
-        >
-          {recommendedBusinesses.map((business) => (
-            <HomeBusinessFeatureCard
-              business={business}
-              isDarkMode={isDarkMode}
-              key={business.id}
-              labels={labels}
-              locale={locale}
-              onPress={() => onBusinessPress(business)}
-            />
-          ))}
-        </HomeRail>
-      ) : null}
-
-      {feedPreviewPosts.length ? (
-        <HomeRail
-          isDarkMode={isDarkMode}
-          subtitle={homeCopy.communitySubtitle}
-          title={homeCopy.communityTitle}
-        >
-          {feedPreviewPosts.map((post) => (
-            <HomeFeedPostRailCard
-              isDarkMode={isDarkMode}
-              key={post.id}
-              labels={labels}
-              onPress={() => onFeedPostPress(post)}
-              post={post}
-              profile={profile}
-              session={session}
             />
           ))}
         </HomeRail>
@@ -6200,11 +6729,13 @@ function HomeScreen({
 
 function HomeLoadingScreen({
   hasTopAnnouncement,
+  hasTopNotificationPrompt,
   isDarkMode,
   labels,
   locale,
 }: {
   hasTopAnnouncement: boolean;
+  hasTopNotificationPrompt: boolean;
   isDarkMode: boolean;
   labels: Record<string, string>;
   locale: Locale;
@@ -6218,6 +6749,9 @@ function HomeLoadingScreen({
         styles.screenContent,
         styles.homeScreenContent,
         hasTopAnnouncement ? styles.homeScreenContentWithAnnouncement : null,
+        hasTopNotificationPrompt
+          ? styles.homeScreenContentWithNotificationPrompt
+          : null,
       ]}
       keyboardShouldPersistTaps="handled"
       style={styles.screen}
@@ -6378,16 +6912,35 @@ function HomeLoadingRailCard({
 }
 
 function HomeRail({
+  actionLabel,
   children,
+  analyticsKey,
   isDarkMode,
+  onActionPress,
+  onVisible,
   subtitle,
   title,
 }: {
+  actionLabel?: string;
   children: ReactNode;
+  analyticsKey?: string;
   isDarkMode: boolean;
+  onActionPress?: () => void;
+  onVisible?: () => void;
   subtitle?: string;
   title: string;
 }) {
+  const lastVisibleKeyRef = useRef("");
+
+  useEffect(() => {
+    if (!analyticsKey || !onVisible || lastVisibleKeyRef.current === analyticsKey) {
+      return;
+    }
+
+    lastVisibleKeyRef.current = analyticsKey;
+    onVisible();
+  }, [analyticsKey, onVisible]);
+
   return (
     <View style={styles.homeRail}>
       <View style={styles.homeSectionHeader}>
@@ -6401,6 +6954,20 @@ function HomeRail({
             </Text>
           ) : null}
         </View>
+        {actionLabel && onActionPress ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onActionPress}
+            style={[styles.homeRailAction, isDarkMode ? styles.darkIconBox : null]}
+          >
+            <Text
+              numberOfLines={1}
+              style={[styles.homeRailActionText, isDarkMode ? styles.darkText : null]}
+            >
+              {actionLabel}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
       <ScrollView
         contentContainerStyle={styles.homeRailContent}
@@ -10874,12 +11441,14 @@ function HomeBusinessFeatureCard({
   labels,
   locale,
   onPress,
+  signalLabel,
 }: {
   business: Business;
   isDarkMode: boolean;
   labels: Record<string, string>;
   locale: Locale;
   onPress: () => void;
+  signalLabel?: string;
 }) {
   const contentCount = business.contentItems?.length ?? 0;
   const logoUrl = getRenderableImageUrl(
@@ -10931,10 +11500,19 @@ function HomeBusinessFeatureCard({
       >
         {business.description}
       </Text>
-      {contentCount > 0 ? (
-        <Text style={[styles.homeFeatureSignal, isDarkMode ? styles.darkBadge : null]}>
-          {contentCount} {labels.contentItems}
-        </Text>
+      {signalLabel || contentCount > 0 ? (
+        <View style={styles.homeFeatureSignalRow}>
+          {signalLabel ? (
+            <Text style={[styles.homeFeatureSignal, isDarkMode ? styles.darkBadge : null]}>
+              {signalLabel}
+            </Text>
+          ) : null}
+          {contentCount > 0 ? (
+            <Text style={[styles.homeFeatureSignal, isDarkMode ? styles.darkBadge : null]}>
+              {contentCount} {labels.contentItems}
+            </Text>
+          ) : null}
+        </View>
       ) : null}
     </Pressable>
   );
@@ -11338,6 +11916,7 @@ function PublicContentCard({
 
 function AnnouncementCenter({
   announcements,
+  hasTopNotificationPrompt,
   isDarkMode,
   labels,
   locale,
@@ -11345,6 +11924,7 @@ function AnnouncementCenter({
   onDismissAll,
 }: {
   announcements: AppAnnouncement[];
+  hasTopNotificationPrompt: boolean;
   isDarkMode: boolean;
   labels: Record<string, string>;
   locale: Locale;
@@ -11366,7 +11946,14 @@ function AnnouncementCenter({
 
   return (
     <>
-      <View style={styles.announcementBannerSlot}>
+      <View
+        style={[
+          styles.announcementBannerSlot,
+          hasTopNotificationPrompt
+            ? styles.announcementBannerSlotBelowPushBanner
+            : null,
+        ]}
+      >
         <Pressable
           accessibilityLabel={labels.notifications}
           accessibilityRole="button"
@@ -13512,44 +14099,419 @@ function getContentTimestamp(item: BusinessContentItem) {
   return Number.isNaN(parsedDate.getTime()) ? 0 : parsedDate.getTime();
 }
 
-function getHomeCopy(locale: Locale) {
-  if (locale === "uk") {
+function getHomeCopy(_locale: Locale) {
+  return {
+    categorySubtitle: "Швидкий шлях до напрямків, які зараз найактивніші.",
+    categoryTitle: "Категорії",
+    communitySubtitle: "Короткі оновлення від людей і бізнесів у Kolo.",
+    communityTitle: "Нові публікації",
+    discoverySubtitle: "Добірка оновлюється, щоб показувати більше різних бізнесів.",
+    discoveryTitle: "Відкрийте для себе",
+    emptyContentText: "Поки немає достатньо нових оновлень.",
+    eventsSubtitle: "Актуальні події, які ще попереду.",
+    eventsTitle: "Найближчі події",
+    followingContentSubtitle: "Сервіси, продукти й події від бізнесів, за якими ви стежите.",
+    followingContentTitle: "Від ваших підписок",
+    freshContentSubtitle: "Свіжі пропозиції, продукти й події, які можна відкрити свайпом.",
+    freshContentTitle: "Нові публікації",
+    heroIntro: "Що нового або цікавого є в Kolo сьогодні.",
+    more: "Ще",
+    nearbyBadge: "Поруч",
+    nearbyFallbackSubtitle: "",
+    nearbySubtitle: "Поруч із",
+    nearbyTitle: "Нове поруч",
+    newBadge: "Нове",
+    newInKoloSubtitle: "Свіжі бізнеси, які нещодавно з'явилися.",
+    newInKoloTitle: "Нове в Kolo",
+    postsSubtitle: "Останні оновлення від спільноти.",
+    postsTitle: "Нові публікації",
+    recommendedSubtitle: "Підібрано за вашими підписками, пошуком і категоріями.",
+    recommendedTitle: "Може зацікавити",
+    relatedSubtitle: "Схоже на ваші підписки, пошук і перегляди.",
+    relatedTitle: "Можливо, вам сподобається",
+    trendingSubtitle: "Бізнеси, які частіше відкривали, зберігали або поширювали.",
+    trendingTitle: "Популярне цього тижня",
+    viewAll: "Переглянути всі",
+    weekBadge: "Цього тижня",
+  };
+}
+
+function parseHomeDiscoveryState(value: string | null) {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    const parsedValue = JSON.parse(value) as Partial<HomeDiscoveryState>;
+
+    if (!parsedValue || typeof parsedValue !== "object") {
+      return undefined;
+    }
+
+    return parsedValue;
+  } catch {
+    return undefined;
+  }
+}
+
+function createHomeDiscoveryState(
+  savedState?: Partial<HomeDiscoveryState>,
+): HomeDiscoveryState {
+  const bucket = getHomeRotationBucket();
+  const savedCurrentDiscoveryIds = getUniqueStringList(
+    savedState?.currentDiscoveryBusinessIds,
+  );
+  const savedRecentBusinessIds = getUniqueStringList(savedState?.recentBusinessIds);
+  const viewedBusinessIds = getUniqueStringList(
+    savedState?.viewedBusinessIds,
+  ).slice(0, HOME_RECENT_BUSINESS_LIMIT);
+
+  if (
+    savedState?.bucket === bucket &&
+    typeof savedState.seed === "number" &&
+    Number.isFinite(savedState.seed)
+  ) {
     return {
-      categorySubtitle: "На основі підписок, локації та останнього пошуку.",
-      categoryTitle: "Категорії для вас",
-      communitySubtitle: "Короткі оновлення від людей і бізнесів у Kolo.",
-      communityTitle: "Пости спільноти",
-      emptyContentText: "Поки немає нових оновлень у цих категоріях.",
-      followingContentSubtitle: "Сервіси, продукти й події від бізнесів, за якими ви стежите.",
-      followingContentTitle: "Від ваших підписок",
-      freshContentSubtitle: "Свіжі пропозиції, продукти й події, які можна відкрити свайпом.",
-      freshContentTitle: "Нові послуги, продукти та події",
-      heroIntro: "Персональні добірки бізнесів, послуг, продуктів, подій і постів у кілька свайпів.",
-      nearbyFallbackSubtitle: "Підбірка по Канаді, доки локація не вибрана.",
-      nearbySubtitle: "Поруч із",
-      nearbyTitle: "Нові бізнеси поруч",
-      recommendedSubtitle: "Підібрано за вашими підписками, пошуком і категоріями.",
-      recommendedTitle: "Може зацікавити",
+      bucket,
+      currentDiscoveryBusinessIds: savedCurrentDiscoveryIds.slice(
+        0,
+        HOME_RECENT_BUSINESS_LIMIT,
+      ),
+      recentBusinessIds: savedRecentBusinessIds.slice(0, HOME_RECENT_BUSINESS_LIMIT),
+      seed: savedState.seed,
+      viewedBusinessIds,
     };
   }
 
   return {
-    categorySubtitle: "Based on following, location, and your latest search.",
-    categoryTitle: "Categories for you",
-    communitySubtitle: "Short updates from people and businesses in Kolo.",
-    communityTitle: "Community posts",
-    emptyContentText: "No new updates in these categories yet.",
-    followingContentSubtitle: "Services, products, and events from businesses you follow.",
-    followingContentTitle: "From your following",
-    freshContentSubtitle: "Fresh offers, products, and events you can swipe through.",
-    freshContentTitle: "New services, products & events",
-    heroIntro: "Personal picks of businesses, services, products, events, and posts in a few swipes.",
-    nearbyFallbackSubtitle: "Canada-wide picks until a location is selected.",
-    nearbySubtitle: "Near",
-    nearbyTitle: "New businesses nearby",
-    recommendedSubtitle: "Picked from your following, search, and categories.",
-    recommendedTitle: "You may like",
+    bucket,
+    currentDiscoveryBusinessIds: [],
+    recentBusinessIds: getUniqueStringList([
+      ...savedCurrentDiscoveryIds,
+      ...savedRecentBusinessIds,
+    ]).slice(0, HOME_RECENT_BUSINESS_LIMIT),
+    seed: Math.floor(Math.random() * 2_147_483_647),
+    viewedBusinessIds,
   };
+}
+
+function getHomeRotationBucket(date = new Date()) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function getHomeSectionAnalyticsKey(
+  rotationBucket: string,
+  section: string,
+  itemIds: string[],
+) {
+  return `${rotationBucket}:${section}:${itemIds.join("|")}`;
+}
+
+function getUpcomingHomeEventEntries(entries: ContentDetailEntry[]) {
+  const now = Date.now();
+
+  return entries
+    .filter(
+      ({ item }) =>
+        item.type === "event" && getDateTimestamp(item.startsAt) >= now,
+    )
+    .sort(
+      (first, second) =>
+        getDateTimestamp(first.item.startsAt) -
+        getDateTimestamp(second.item.startsAt),
+    );
+}
+
+function getHomeNearbyBusinesses({
+  businesses,
+  location,
+  query,
+  selectedCategorySlug,
+}: {
+  businesses: Business[];
+  location: string;
+  query: string;
+  selectedCategorySlug: string;
+}) {
+  const nearbyBusinesses = businesses.filter(
+    (business) =>
+      business.servesAllCanada || isNearLocation(business.city, location),
+  );
+
+  return sortHomeBusinessesByFreshness(
+    rankBusinesses(nearbyBusinesses, {
+      categorySlug: selectedCategorySlug || undefined,
+      location,
+      query,
+    }),
+  );
+}
+
+function getHomeDiscoveryBusinesses({
+  businesses,
+  homeDiscoveryState,
+  location,
+  preferredCategorySlugs,
+  query,
+  selectedCategorySlug,
+}: {
+  businesses: Business[];
+  homeDiscoveryState: HomeDiscoveryState;
+  location: string;
+  preferredCategorySlugs: string[];
+  query: string;
+  selectedCategorySlug: string;
+}) {
+  const recentBusinessIds = new Set(homeDiscoveryState.recentBusinessIds);
+  const viewedBusinessIds = new Set(homeDiscoveryState.viewedBusinessIds);
+
+  return businesses
+    .map((business, index) => {
+      const stableScore =
+        getStableHomeRotationScore(
+          getHomeBusinessStableId(business),
+          homeDiscoveryState.seed,
+          "discovery",
+        ) * 34;
+      const repeatPenalty =
+        Number(Boolean(business.isSaved)) * 18 +
+        Number(viewedBusinessIds.has(business.id)) * 12 +
+        Number(recentBusinessIds.has(business.id)) * 20;
+
+      return {
+        business,
+        score:
+          stableScore +
+          getHomePreferenceScore(business, {
+            location,
+            preferredCategorySlugs,
+            query,
+            selectedCategorySlug,
+          }) +
+          getHomeProfileSignalScore(business) +
+          getHomeRecencyBoost(business) -
+          repeatPenalty -
+          index * 0.01,
+      };
+    })
+    .sort((first, second) => second.score - first.score)
+    .map(({ business }) => business);
+}
+
+function getHomeTrendingBusinesses({
+  businesses,
+  location,
+  query,
+  scoreByBusinessId,
+  selectedCategorySlug,
+}: {
+  businesses: Business[];
+  location: string;
+  query: string;
+  scoreByBusinessId: Map<string, number>;
+  selectedCategorySlug: string;
+}) {
+  if (!scoreByBusinessId.size) {
+    return [];
+  }
+
+  return businesses
+    .map((business) => ({
+      business,
+      score:
+        (scoreByBusinessId.get(business.id) ?? 0) +
+        getHomePreferenceScore(business, {
+          location,
+          preferredCategorySlugs: [],
+          query,
+          selectedCategorySlug,
+        }) *
+          0.15,
+    }))
+    .filter(({ score }) => score > 0)
+    .sort((first, second) => second.score - first.score)
+    .map(({ business }) => business);
+}
+
+function getHomeRelatedBusinesses({
+  businesses,
+  homeDiscoveryState,
+  location,
+  preferredCategorySlugs,
+  query,
+  selectedCategorySlug,
+}: {
+  businesses: Business[];
+  homeDiscoveryState: HomeDiscoveryState;
+  location: string;
+  preferredCategorySlugs: string[];
+  query: string;
+  selectedCategorySlug: string;
+}) {
+  const viewedBusinessIds = new Set(homeDiscoveryState.viewedBusinessIds);
+  const viewedCategories = new Set(
+    businesses
+      .filter((business) => viewedBusinessIds.has(business.id))
+      .map((business) => business.categorySlug),
+  );
+  const followedCategories = new Set(
+    businesses
+      .filter((business) => business.isSaved)
+      .map((business) => business.categorySlug),
+  );
+  const relatedCategorySlugs = new Set([
+    ...preferredCategorySlugs,
+    ...viewedCategories,
+    ...followedCategories,
+    ...(selectedCategorySlug ? [selectedCategorySlug] : []),
+  ]);
+  const hasBehaviorSignal =
+    viewedBusinessIds.size > 0 ||
+    followedCategories.size > 0 ||
+    Boolean(query) ||
+    Boolean(selectedCategorySlug);
+
+  if (!hasBehaviorSignal) {
+    return [];
+  }
+
+  return businesses
+    .filter((business) => !business.isSaved)
+    .map((business) => ({
+      business,
+      score:
+        Number(relatedCategorySlugs.has(business.categorySlug)) * 22 +
+        getHomePreferenceScore(business, {
+          location,
+          preferredCategorySlugs,
+          query,
+          selectedCategorySlug,
+        }) +
+        getHomeProfileSignalScore(business) * 0.6 +
+        getHomeRecencyBoost(business) * 0.5,
+    }))
+    .filter(({ score }) => score > 0)
+    .sort((first, second) => second.score - first.score)
+    .map(({ business }) => business);
+}
+
+function getHomePreferenceScore(
+  business: Business,
+  {
+    location,
+    preferredCategorySlugs,
+    query,
+    selectedCategorySlug,
+  }: {
+    location: string;
+    preferredCategorySlugs: string[];
+    query: string;
+    selectedCategorySlug: string;
+  },
+) {
+  return (
+    Number(Boolean(selectedCategorySlug && business.categorySlug === selectedCategorySlug)) *
+      16 +
+    Number(preferredCategorySlugs.includes(business.categorySlug)) * 8 +
+    Number(Boolean(query && isHomeBusinessPreferenceMatch(business, query))) * 12 +
+    Number(
+      Boolean(
+        location &&
+          (business.servesAllCanada || isNearLocation(business.city, location)),
+      ),
+    ) *
+      7
+  );
+}
+
+function getHomeProfileSignalScore(business: Business) {
+  const publicContentItems = getPublicBusinessContentItems(business.contentItems);
+
+  return (
+    Number(Boolean(business.logoUrl)) * 5 +
+    Number(business.description.trim().length >= 80) * 4 +
+    Number(Boolean(business.phone || business.website || business.instagram)) * 5 +
+    Math.min(publicContentItems.length, 4) * 3 +
+    Math.min(business.followerCount ?? 0, 4)
+  );
+}
+
+function getHomeRecencyBoost(business: Business) {
+  const freshnessTimestamp = getBusinessFreshnessTimestamp(business);
+
+  if (!freshnessTimestamp) {
+    return 0;
+  }
+
+  const ageInDays = (Date.now() - freshnessTimestamp) / (1000 * 60 * 60 * 24);
+
+  if (ageInDays <= 7) {
+    return 10;
+  }
+
+  if (ageInDays <= 30) {
+    return 6;
+  }
+
+  if (ageInDays <= 90) {
+    return 3;
+  }
+
+  return 0;
+}
+
+function getStableHomeRotationScore(
+  value: string,
+  seed: number,
+  section: string,
+) {
+  const text = `${section}:${seed}:${value}`;
+  let hash = 2_166_136_261;
+
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16_777_619);
+  }
+
+  return (hash >>> 0) / 4_294_967_295;
+}
+
+function getHomeBusinessStableId(business: Business) {
+  return business.id || business.registrationId || getBusinessDedupeKey(business);
+}
+
+function getUniqueStringList(values: unknown) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  const seenValues = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    if (typeof value !== "string" || !value.trim()) {
+      continue;
+    }
+
+    if (seenValues.has(value)) {
+      continue;
+    }
+
+    seenValues.add(value);
+    result.push(value);
+  }
+
+  return result;
+}
+
+function areStringListsEqual(firstList: string[], secondList: string[]) {
+  return (
+    firstList.length === secondList.length &&
+    firstList.every((value, index) => value === secondList[index])
+  );
 }
 
 function getHomeContentEntries(businesses: Business[]) {
@@ -13670,6 +14632,19 @@ function sortHomeBusinessesByFreshness(businesses: Business[]) {
     (first, second) =>
       getBusinessFreshnessTimestamp(second) - getBusinessFreshnessTimestamp(first),
   );
+}
+
+function sortHomeBusinessesByCreatedAt(businesses: Business[]) {
+  return [...businesses].sort((first, second) => {
+    const createdDelta =
+      getDateTimestamp(second.createdAt) - getDateTimestamp(first.createdAt);
+
+    if (createdDelta !== 0) {
+      return createdDelta;
+    }
+
+    return getBusinessFreshnessTimestamp(second) - getBusinessFreshnessTimestamp(first);
+  });
 }
 
 function getBusinessFreshnessTimestamp(business: Business) {
@@ -14390,6 +15365,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: Platform.OS === "android" ? 46 : 54,
   },
+  announcementBannerSlotBelowPushBanner: {
+    paddingTop: 8,
+  },
   announcementCard: {
     backgroundColor: "#FFFFFF",
     borderColor: "#FFFFFF",
@@ -14462,8 +15440,18 @@ const styles = StyleSheet.create({
     shadowRadius: 28,
   },
   pushBannerSlot: {
+    elevation: 40,
+    left: 0,
     paddingHorizontal: 12,
-    paddingTop: 8,
+    paddingBottom: 2,
+    paddingTop: Platform.OS === "android" ? 44 : 62,
+    position: "absolute",
+    right: 0,
+    top: 0,
+    zIndex: 40,
+  },
+  pushBannerReservedSpace: {
+    flexShrink: 0,
   },
   pushBanner: {
     alignItems: "flex-start",
@@ -15499,7 +16487,7 @@ const styles = StyleSheet.create({
     width: 42,
   },
   discoveryViewerShell: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "#F7F3EC",
     zIndex: 20,
   },
@@ -16779,6 +17767,22 @@ const styles = StyleSheet.create({
   homeRail: {
     gap: 10,
   },
+  homeRailAction: {
+    alignItems: "center",
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexShrink: 0,
+    justifyContent: "center",
+    minHeight: 32,
+    paddingHorizontal: 12,
+  },
+  homeRailActionText: {
+    color: "#111111",
+    fontSize: 12,
+    fontWeight: "900",
+  },
   homeRailContent: {
     gap: 12,
     paddingHorizontal: 16,
@@ -16945,6 +17949,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
+  homeFeatureSignalRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+  },
   infoPill: {
     alignItems: "center",
     backgroundColor: "#F8F4ED",
@@ -17106,6 +18115,9 @@ const styles = StyleSheet.create({
   },
   homeScreenContentWithAnnouncement: {
     paddingTop: 16,
+  },
+  homeScreenContentWithNotificationPrompt: {
+    paddingTop: 8,
   },
   input: {
     backgroundColor: "#FFFEFB",
@@ -17376,7 +18388,7 @@ const styles = StyleSheet.create({
     width: 38,
   },
   modalDismissLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   modalKeyboardAvoider: {
     flex: 1,
@@ -17487,7 +18499,7 @@ const styles = StyleSheet.create({
     shadowRadius: 22,
   },
   introductionFocusGlow: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(255, 255, 255, 0.18)",
     borderColor: "rgba(17, 17, 17, 0.12)",
     borderRadius: 26,
@@ -17521,7 +18533,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(17, 17, 17, 0.08)",
   },
   introductionOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(17, 17, 17, 0.16)",
     justifyContent: "flex-end",
     padding: 10,
