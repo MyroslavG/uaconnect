@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 
 import { logServerError, logServerEvent } from "@/lib/diagnostics";
+import { validateRequiredBusinessKeywords } from "@/lib/business-keywords";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { uploadBusinessLogo } from "@/lib/supabase/logo-upload";
 import { createClient } from "@/lib/supabase/server";
@@ -55,7 +56,9 @@ export async function submitBusinessRegistration(
   const categorySlug = String(formData.get("categorySlug") ?? "").trim();
   const city = String(formData.get("city") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
-  const keywords = optionalText(formData.get("keywords"));
+  const keywordsValidation = validateRequiredBusinessKeywords(
+    String(formData.get("keywords") ?? ""),
+  );
   const servesAllCanada = formData.get("servesAllCanada") === "on";
 
   if (!businessName || !categorySlug || !city || !description) {
@@ -72,6 +75,18 @@ export async function submitBusinessRegistration(
     return {
       ok: false,
       message: "Please fill in the required business details.",
+    };
+  }
+
+  if (!keywordsValidation.ok) {
+    logServerEvent("business_registration.keyword_validation_failed", {
+      keywordCount: keywordsValidation.keywords.length,
+      userId: user.id,
+    });
+
+    return {
+      ok: false,
+      message: keywordsValidation.message,
     };
   }
 
@@ -107,7 +122,7 @@ export async function submitBusinessRegistration(
     address: optionalText(formData.get("address")),
     serves_all_canada: servesAllCanada,
     description,
-    keywords,
+    keywords: keywordsValidation.value,
     phone: optionalText(formData.get("phone")),
     website: optionalText(formData.get("website")),
     instagram: optionalText(formData.get("instagram")),

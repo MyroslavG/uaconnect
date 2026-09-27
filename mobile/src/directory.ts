@@ -1,4 +1,8 @@
 import { isSupabaseConfigured, supabase } from "./supabase";
+import {
+  formatBusinessKeywords,
+  validateRequiredBusinessKeywords,
+} from "./businessKeywords";
 import { getPublicBusinessContentItems } from "./contentVisibility";
 import type {
   Business,
@@ -522,6 +526,12 @@ export async function createBusinessRegistration(
     throw new Error("Supabase is not configured for the mobile app.");
   }
 
+  const keywordsValidation = validateRequiredBusinessKeywords(input.keywords);
+
+  if (!keywordsValidation.ok) {
+    throw new Error("Add 3-10 search keywords.");
+  }
+
   const { data, error } = await supabase
     .from("business_registrations")
     .insert({
@@ -530,7 +540,7 @@ export async function createBusinessRegistration(
       category_slug: input.categorySlug,
       city: input.city.trim(),
       description: input.description.trim(),
-      keywords: normalizeNullable(input.keywords),
+      keywords: keywordsValidation.value,
       instagram: normalizeNullable(input.instagram),
       owner_id: ownerId,
       phone: normalizeNullable(input.phone),
@@ -573,13 +583,19 @@ export async function updateOwnedBusiness(business: Business, ownerId: string) {
   }
 
   const registrationId = business.registrationId ?? business.id;
+  const keywordsValidation = validateRequiredBusinessKeywords(business.keywords);
+
+  if (!keywordsValidation.ok) {
+    throw new Error("Add 3-10 search keywords.");
+  }
+
   const registrationPayload = {
     address: business.address ?? "",
     business_name: business.name.trim(),
     category_slug: business.categorySlug,
     city: business.city.trim(),
     description: business.description.trim(),
-    keywords: normalizeNullable(business.keywords),
+    keywords: formatBusinessKeywords(keywordsValidation.value),
     instagram: normalizeNullable(business.instagram),
     logo_url: normalizeNullable(business.logoUrl),
     phone: normalizeNullable(business.phone),

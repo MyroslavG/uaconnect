@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { validateRequiredBusinessKeywords } from "@/lib/business-keywords";
 import { logServerError, logServerEvent } from "@/lib/diagnostics";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { uploadProfileAvatar } from "@/lib/supabase/avatar-upload";
@@ -174,7 +175,9 @@ export async function updateBusinessRegistration(
   const categorySlug = String(formData.get("categorySlug") ?? "").trim();
   const city = String(formData.get("city") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
-  const keywords = optionalText(formData.get("keywords"));
+  const keywordsValidation = validateRequiredBusinessKeywords(
+    String(formData.get("keywords") ?? ""),
+  );
   const servesAllCanada = formData.get("servesAllCanada") === "on";
 
   if (!id || !businessName || !categorySlug || !city || !description) {
@@ -193,6 +196,19 @@ export async function updateBusinessRegistration(
     return {
       ok: false,
       message: "Please fill in the required business details.",
+    };
+  }
+
+  if (!keywordsValidation.ok) {
+    logServerEvent("business_update.keyword_validation_failed", {
+      keywordCount: keywordsValidation.keywords.length,
+      registrationId: id,
+      userId: user.id,
+    });
+
+    return {
+      ok: false,
+      message: keywordsValidation.message,
     };
   }
 
@@ -266,7 +282,7 @@ export async function updateBusinessRegistration(
     address: optionalText(formData.get("address")),
     serves_all_canada: servesAllCanada,
     description,
-    keywords,
+    keywords: keywordsValidation.value,
     phone: optionalText(formData.get("phone")),
     website: optionalText(formData.get("website")),
     instagram: optionalText(formData.get("instagram")),
@@ -320,7 +336,7 @@ export async function updateBusinessRegistration(
       address: optionalText(formData.get("address")) ?? "",
       serves_all_canada: servesAllCanada,
       description,
-      keywords,
+      keywords: keywordsValidation.value,
       phone: optionalText(formData.get("phone")),
       website: optionalText(formData.get("website")),
       instagram: optionalText(formData.get("instagram")),

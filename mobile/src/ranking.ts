@@ -50,18 +50,19 @@ function getBusinessRankScore(
 }
 
 function getSearchScore(business: Business, query?: string) {
-  const normalizedQuery = normalize(query);
+  const searchTerms = getExpandedSearchTerms(query);
 
-  if (!normalizedQuery) {
+  if (searchTerms.length === 0) {
     return 0;
   }
 
   const fields = [
     { value: business.name, weight: 70 },
     { value: business.categorySlug, weight: 34 },
+    { value: getCategorySearchAliases(business.categorySlug), weight: 32 },
     { value: business.city, weight: 24 },
     { value: business.address, weight: 14 },
-    { value: business.keywords, weight: 56 },
+    { value: business.keywords, weight: 88 },
     { value: business.description, weight: 22 },
     {
       value: (business.contentItems ?? [])
@@ -78,19 +79,28 @@ function getSearchScore(business: Business, query?: string) {
       return total;
     }
 
-    if (value === normalizedQuery) {
-      return total + field.weight;
-    }
+    const bestTermScore = Math.max(
+      0,
+      ...searchTerms.map((term, index) => {
+        const aliasMultiplier = index === 0 ? 1 : 0.72;
 
-    if (value.startsWith(normalizedQuery)) {
-      return total + field.weight * 0.75;
-    }
+        if (value === term) {
+          return field.weight * aliasMultiplier;
+        }
 
-    if (value.includes(normalizedQuery)) {
-      return total + field.weight * 0.45;
-    }
+        if (value.startsWith(term)) {
+          return field.weight * 0.75 * aliasMultiplier;
+        }
 
-    return total;
+        if (value.includes(term)) {
+          return field.weight * 0.45 * aliasMultiplier;
+        }
+
+        return 0;
+      }),
+    );
+
+    return total + bestTermScore;
   }, 0);
 
   return Math.min(score, 140);
@@ -242,5 +252,101 @@ function getTimestamp(value: string | undefined) {
 }
 
 function normalize(value: string | undefined) {
-  return value?.trim().toLowerCase() ?? "";
+  return value?.trim().replace(/\s+/g, " ").toLowerCase() ?? "";
+}
+
+function getCategorySearchAliases(categorySlug: string) {
+  const aliases: Record<string, string> = {
+    "advertising-services":
+      "advertising marketing design print branding social media реклама маркетинг дизайн друк брендинг соцмережі",
+    "auto-repair":
+      "auto car repair detailing mechanic авто автосервіс ремонт детайлінг механік",
+    beauty:
+      "beauty hair nails manicure pedicure makeup brows salon краса волосся нігті манікюр педикюр макіяж брови салон ногти маникюр педикюр",
+    bookkeepers:
+      "bookkeeper bookkeeping accountant accounting payroll invoices reporting tax finance бухгалтер бухгалтерія облік зарплата рахунки звітність фінанси",
+    cleaning:
+      "cleaning cleaner housekeeping move out прибирання клінінг чистка",
+    construction:
+      "construction renovation contractor repair building будівництво ремонт майстер",
+    events:
+      "events party wedding decor planning івенти події весілля декор свято",
+    flowers:
+      "flowers florist bouquets квіти флорист букети",
+    "grocery-stores":
+      "food grocery bakery catering products cake sweets їжа продукти пекарня кейтеринг торт торти десерти",
+    "insurance-brokers":
+      "insurance broker страхування страховий брокер",
+    "it-services":
+      "it tech software websites automation ai support technology repair phone iphone сайти техпідтримка автоматизація ремонт телефон айфон",
+    lawyers:
+      "law lawyer legal attorney immigration юрист юридичні правова імміграція",
+    "mortgage-brokers":
+      "mortgage broker financing refinance renewal pre approval home loan іпотека іпотечний брокер кредит фінансування рефінансування житло",
+    moving:
+      "moving movers relocation packing delivery furniture transport переїзд перевезення доставка пакування меблі",
+    photographers:
+      "photo video photography photographer фотo фото відео фотограф зйомка",
+    realtors:
+      "realtor real estate home mortgage рієлтор нерухомість житло",
+    "repair-services":
+      "repair handyman appliance furniture service phone iphone ремонт майстер техніка меблі телефон айфон",
+    restaurants:
+      "food restaurant cafe bakery catering kitchen cake sweets їжа ресторан кафе пекарня кейтеринг кухня торт десерти",
+    shops:
+      "shop store retail boutique магазин крамниця товари",
+    "textile-decor":
+      "textile decor pillows curtains upholstery home текстиль декор подушки штори перетяжка",
+    "travel-tours":
+      "travel tours trips tickets vacation подорожі тури квитки відпочинок",
+    tutors:
+      "tutor lessons teacher education репетитор уроки навчання викладач",
+    "wellness-care":
+      "wellness yoga trainer meditation mental health self care massage здоров'я йога тренер медитація психолог масаж",
+  };
+
+  return aliases[categorySlug] ?? "";
+}
+
+function getExpandedSearchTerms(query: string | undefined) {
+  const normalizedQuery = normalize(query);
+
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  const aliasGroups = [
+    ["нігті", "ногти", "nails", "nail", "манікюр", "маникюр", "manicure"],
+    ["брови", "brows", "eyebrows"],
+    ["макіяж", "макияж", "makeup", "mua"],
+    ["іпотека", "ипотека", "mortgage", "home loan", "pre approval"],
+    ["бухгалтер", "bookkeeper", "bookkeeping", "accountant", "accounting"],
+    ["переїзд", "переезд", "moving", "movers", "relocation"],
+    ["торт", "торти", "cake", "cakes", "dessert", "десерт"],
+    ["фото", "photographer", "photography", "фотограф"],
+    ["ремонт телефону", "phone repair", "iphone repair", "айфон", "телефон"],
+    ["сайт", "website", "web design", "розробка сайту", "вебсайт"],
+    ["страхування", "insurance", "broker"],
+    ["юрист", "lawyer", "legal", "immigration"],
+    ["репетитор", "tutor", "lessons", "teacher"],
+    ["клінінг", "cleaning", "cleaner", "прибирання"],
+    ["масаж", "massage", "wellness"],
+  ];
+  const terms = new Set([normalizedQuery]);
+
+  for (const group of aliasGroups) {
+    const normalizedGroup = group.map(normalize).filter(Boolean);
+    const isMatch = normalizedGroup.some(
+      (alias) =>
+        alias === normalizedQuery ||
+        alias.includes(normalizedQuery) ||
+        normalizedQuery.includes(alias),
+    );
+
+    if (isMatch) {
+      normalizedGroup.forEach((alias) => terms.add(alias));
+    }
+  }
+
+  return Array.from(terms);
 }

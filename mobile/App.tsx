@@ -125,6 +125,12 @@ import {
 } from "./src/account";
 import { trackMobileAnalyticsEvent } from "./src/analytics";
 import {
+  BUSINESS_KEYWORD_MAX_COUNT,
+  formatBusinessKeywords,
+  parseBusinessKeywords,
+  validateRequiredBusinessKeywords,
+} from "./src/businessKeywords";
+import {
   createMobileFeedComment,
   createMobileFeedPost,
   deleteMobileFeedComment,
@@ -366,7 +372,12 @@ const copy = {
     contentDescription: "Опис",
     contentItems: "записів",
     keywords: "Ключові слова",
-    keywordsHint: "Наприклад: нігті, манікюр, брови, ремонт iPhone, кейтеринг",
+    keywordsAdd: "Додати",
+    keywordsHelper:
+      "Додайте 3-10 слів або фраз, за якими клієнти можуть знайти ваш бізнес.",
+    keywordsHint: "нігті, манікюр, ремонт iPhone",
+    keywordsRequired:
+      "Додайте від 3 до 10 ключових слів для пошуку.",
     contentLink: "Посилання",
     community: "Спільнота",
     contentPhoto: "Фото",
@@ -679,7 +690,11 @@ const copy = {
     contentDescription: "Description",
     contentItems: "items",
     keywords: "Keywords",
-    keywordsHint: "Example: nails, manicure, brows, iPhone repair, catering",
+    keywordsAdd: "Add",
+    keywordsHelper:
+      "Add 3-10 words or phrases customers can use to find your business.",
+    keywordsHint: "nails, manicure, iPhone repair",
+    keywordsRequired: "Add 3 to 10 search keywords.",
     contentLink: "Link",
     community: "Community",
     contentPhoto: "Photo",
@@ -2251,6 +2266,7 @@ function KoloApp() {
   const results = useMemo(
     () => {
       const searchQuery = getEffectiveSearchQuery(query);
+      const searchTerms = getExpandedSearchTerms(searchQuery);
       const filteredBusinesses = businesses.filter((business) => {
         const category = getCategoryName(business.categorySlug, locale);
         const aliases = getSearchAliases(business.categorySlug);
@@ -2262,7 +2278,8 @@ function KoloApp() {
           `${business.name} ${business.description} ${business.keywords ?? ""} ${business.city} ${locationAliases} ${category} ${aliases} ${contentText}`,
         );
         const matchesQuery =
-          !searchQuery || haystack.includes(normalize(searchQuery));
+          searchTerms.length === 0 ||
+          searchTerms.some((term) => haystack.includes(term));
         const matchesCategory =
           selectedCategory === "all" || business.categorySlug === selectedCategory;
         const matchesLocation =
@@ -7394,6 +7411,13 @@ function RegisterScreen({
       return;
     }
 
+    const keywordsValidation = validateRequiredBusinessKeywords(keywords);
+
+    if (!keywordsValidation.ok) {
+      setSubmitError(labels.keywordsRequired);
+      return;
+    }
+
     if (isSupabaseConfigured && !isSignedIn) {
       setSubmitError(labels.signInRequired);
       return;
@@ -7407,7 +7431,7 @@ function RegisterScreen({
         city,
         description,
         instagram,
-        keywords,
+        keywords: keywordsValidation.value,
         logo,
         name,
         phone,
@@ -7502,19 +7526,13 @@ function RegisterScreen({
           />
         </Field>
         <Field isDarkMode={isDarkMode} label={labels.keywords}>
-          <TextInput
-            multiline
-            onChangeText={(value) => {
+          <BusinessKeywordInput
+            isDarkMode={isDarkMode}
+            labels={labels}
+            onChange={(value) => {
               setKeywords(value);
               setSubmitError("");
             }}
-            placeholder={labels.keywordsHint}
-            placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
-            style={[
-              styles.input,
-              styles.textAreaSmall,
-              isDarkMode ? styles.darkInput : null,
-            ]}
             value={keywords}
           />
         </Field>
@@ -7658,8 +7676,15 @@ function DashboardScreen({
     try {
       setSaved(false);
       setSaveError("");
+      const keywordsValidation = validateRequiredBusinessKeywords(draft.keywords);
+
+      if (!keywordsValidation.ok) {
+        setSaveError(labels.keywordsRequired);
+        return;
+      }
+
       setIsSaving(true);
-      await onSave(draft);
+      await onSave({ ...draft, keywords: keywordsValidation.value });
       setSaved(true);
       setIsEditingProfile(false);
     } catch (error) {
@@ -7842,19 +7867,13 @@ function DashboardScreen({
             />
           </Field>
           <Field isDarkMode={isDarkMode} label={labels.keywords}>
-            <TextInput
-              multiline
-              onChangeText={(value) => {
+            <BusinessKeywordInput
+              isDarkMode={isDarkMode}
+              labels={labels}
+              onChange={(value) => {
                 setDraft({ ...draft, keywords: value });
                 setSaved(false);
               }}
-              placeholder={labels.keywordsHint}
-              placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
-              style={[
-                styles.input,
-                styles.textAreaSmall,
-                isDarkMode ? styles.darkInput : null,
-              ]}
               value={draft.keywords ?? ""}
             />
           </Field>
@@ -13678,6 +13697,120 @@ function LocationPicker({
   );
 }
 
+function BusinessKeywordInput({
+  isDarkMode,
+  labels,
+  onChange,
+  value,
+}: {
+  isDarkMode: boolean;
+  labels: Record<string, string>;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  const [draft, setDraft] = useState("");
+  const keywords = parseBusinessKeywords(value);
+  const canAddMore = keywords.length < BUSINESS_KEYWORD_MAX_COUNT;
+
+  function updateKeywords(nextKeywords: string[]) {
+    onChange(formatBusinessKeywords(nextKeywords));
+  }
+
+  function addDraft() {
+    const draftKeywords = parseBusinessKeywords(draft);
+
+    if (!draftKeywords.length || !canAddMore) {
+      setDraft("");
+      return;
+    }
+
+    const nextKeywords = [
+      ...keywords,
+      ...draftKeywords.filter((keyword) => !keywords.includes(keyword)),
+    ].slice(0, BUSINESS_KEYWORD_MAX_COUNT);
+
+    updateKeywords(nextKeywords);
+    setDraft("");
+  }
+
+  function removeKeyword(keyword: string) {
+    updateKeywords(keywords.filter((candidate) => candidate !== keyword));
+  }
+
+  return (
+    <View style={styles.keywordInputGroup}>
+      <View style={[styles.keywordChipBox, isDarkMode ? styles.darkInput : null]}>
+        <View style={styles.keywordChipList}>
+          {keywords.map((keyword) => (
+            <Pressable
+              accessibilityRole="button"
+              key={keyword}
+              onPress={() => removeKeyword(keyword)}
+              style={[
+                styles.keywordChip,
+                isDarkMode ? styles.darkKeywordChip : null,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.keywordChipText,
+                  isDarkMode ? styles.darkText : null,
+                ]}
+              >
+                {keyword}
+              </Text>
+              <X
+                color={isDarkMode ? "#C7C7CC" : "#6E6E73"}
+                size={13}
+                strokeWidth={2.8}
+              />
+            </Pressable>
+          ))}
+          {canAddMore ? (
+            <TextInput
+              autoCapitalize="none"
+              onBlur={addDraft}
+              onChangeText={setDraft}
+              onSubmitEditing={addDraft}
+              placeholder={labels.keywordsHint}
+              placeholderTextColor={isDarkMode ? "#A1A1A6" : "#6E6E73"}
+              returnKeyType="done"
+              style={[
+                styles.keywordDraftInput,
+                isDarkMode ? styles.darkText : null,
+              ]}
+              value={draft}
+            />
+          ) : null}
+        </View>
+      </View>
+      <View style={styles.keywordMetaRow}>
+        <Text
+          style={[styles.keywordHelpText, isDarkMode ? styles.darkMutedText : null]}
+        >
+          {labels.keywordsHelper}
+        </Text>
+        <Text
+          style={[styles.keywordCounter, isDarkMode ? styles.darkMutedText : null]}
+        >
+          {keywords.length}/{BUSINESS_KEYWORD_MAX_COUNT}
+        </Text>
+      </View>
+      {draft.trim() && canAddMore ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={addDraft}
+          style={[styles.keywordAddButton, isDarkMode ? styles.darkIconBox : null]}
+        >
+          <Text style={[styles.keywordAddText, isDarkMode ? styles.darkText : null]}>
+            {labels.keywordsAdd}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 function Field({
   children,
   isDarkMode,
@@ -14660,9 +14793,9 @@ function getBusinessFreshnessTimestamp(business: Business) {
 }
 
 function isHomeBusinessPreferenceMatch(business: Business, query: string) {
-  const normalizedQuery = normalize(query);
+  const searchTerms = getExpandedSearchTerms(query);
 
-  if (!normalizedQuery) {
+  if (searchTerms.length === 0) {
     return false;
   }
 
@@ -14674,7 +14807,7 @@ function isHomeBusinessPreferenceMatch(business: Business, query: string) {
     `${business.name} ${business.description} ${business.keywords ?? ""} ${business.city} ${category} ${business.categorySlug} ${contentText}`,
   );
 
-  return haystack.includes(normalizedQuery);
+  return searchTerms.some((term) => haystack.includes(term));
 }
 
 function getDateTimestamp(value: string | undefined) {
@@ -15258,8 +15391,51 @@ function getSearchAliases(categorySlug: string) {
   return aliases[categorySlug] ?? "";
 }
 
+function getExpandedSearchTerms(query: string) {
+  const normalizedQuery = normalize(query);
+
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  const aliasGroups = [
+    ["нігті", "ногти", "nails", "nail", "манікюр", "маникюр", "manicure"],
+    ["брови", "brows", "eyebrows"],
+    ["макіяж", "макияж", "makeup", "mua"],
+    ["іпотека", "ипотека", "mortgage", "home loan", "pre approval"],
+    ["бухгалтер", "bookkeeper", "bookkeeping", "accountant", "accounting"],
+    ["переїзд", "переезд", "moving", "movers", "relocation"],
+    ["торт", "торти", "cake", "cakes", "dessert", "десерт"],
+    ["фото", "photographer", "photography", "фотограф"],
+    ["ремонт телефону", "phone repair", "iphone repair", "айфон", "телефон"],
+    ["сайт", "website", "web design", "розробка сайту", "вебсайт"],
+    ["страхування", "insurance", "broker"],
+    ["юрист", "lawyer", "legal", "immigration"],
+    ["репетитор", "tutor", "lessons", "teacher"],
+    ["клінінг", "cleaning", "cleaner", "прибирання"],
+    ["масаж", "massage", "wellness"],
+  ];
+  const terms = new Set([normalizedQuery]);
+
+  for (const group of aliasGroups) {
+    const normalizedGroup = group.map(normalize).filter(Boolean);
+    const isMatch = normalizedGroup.some(
+      (alias) =>
+        alias === normalizedQuery ||
+        alias.includes(normalizedQuery) ||
+        normalizedQuery.includes(alias),
+    );
+
+    if (isMatch) {
+      normalizedGroup.forEach((alias) => terms.add(alias));
+    }
+  }
+
+  return Array.from(terms);
+}
+
 function normalize(value: string) {
-  return value.trim().toLowerCase();
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 const styles = StyleSheet.create({
@@ -17154,6 +17330,10 @@ const styles = StyleSheet.create({
     borderColor: "#3A3A3C",
     color: "#F5F5F7",
   },
+  darkKeywordChip: {
+    backgroundColor: "#2C2C2E",
+    borderColor: "#3A3A3C",
+  },
   darkLoadingLine: {
     backgroundColor: "#3A3A3C",
   },
@@ -18149,6 +18329,80 @@ const styles = StyleSheet.create({
   },
   keyboardAwareContent: {
     paddingBottom: 128,
+  },
+  keywordAddButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+  },
+  keywordAddText: {
+    color: "#111111",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  keywordChip: {
+    alignItems: "center",
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+  },
+  keywordChipBox: {
+    backgroundColor: "#FFFEFB",
+    borderColor: "#DED5C8",
+    borderRadius: 14,
+    borderWidth: 1,
+    minHeight: 58,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  keywordChipList: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  keywordChipText: {
+    color: "#111111",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  keywordCounter: {
+    color: "#6E6E73",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  keywordDraftInput: {
+    color: "#111111",
+    flexGrow: 1,
+    fontSize: 15,
+    minHeight: 36,
+    minWidth: 150,
+    paddingHorizontal: 2,
+  },
+  keywordHelpText: {
+    color: "#6E6E73",
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
+  },
+  keywordInputGroup: {
+    gap: 8,
+  },
+  keywordMetaRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
   },
   locationOption: {
     alignItems: "center",
