@@ -1,4 +1,9 @@
 import type { Business, BusinessContentItem } from "@/lib/types";
+import {
+  getCategorySearchAliases,
+  getExpandedSearchTerms,
+  normalizeSearchText,
+} from "@/lib/search-aliases";
 
 type RankBusinessesOptions = {
   categorySlug?: string;
@@ -49,9 +54,9 @@ function getBusinessRankScore(
 }
 
 function getSearchScore(business: Business, query?: string) {
-  const normalizedQuery = normalize(query);
+  const searchTerms = getExpandedSearchTerms(query);
 
-  if (!normalizedQuery) {
+  if (searchTerms.length === 0) {
     return 0;
   }
 
@@ -64,7 +69,7 @@ function getSearchScore(business: Business, query?: string) {
     { value: business.neighborhood, weight: 18 },
     { value: business.address, weight: 14 },
     { value: business.description, weight: 22 },
-    { value: business.keywords, weight: 56 },
+    { value: business.keywords, weight: 88 },
     { value: business.tags.join(" "), weight: 18 },
     {
       value: (business.contentItems ?? [])
@@ -75,25 +80,34 @@ function getSearchScore(business: Business, query?: string) {
   ];
 
   const score = fields.reduce((total, field) => {
-    const value = normalize(field.value);
+    const value = normalizeSearchText(field.value);
 
     if (!value) {
       return total;
     }
 
-    if (value === normalizedQuery) {
-      return total + field.weight;
-    }
+    const bestTermScore = Math.max(
+      0,
+      ...searchTerms.map((term, index) => {
+        const aliasMultiplier = index === 0 ? 1 : 0.72;
 
-    if (value.startsWith(normalizedQuery)) {
-      return total + field.weight * 0.75;
-    }
+        if (value === term) {
+          return field.weight * aliasMultiplier;
+        }
 
-    if (value.includes(normalizedQuery)) {
-      return total + field.weight * 0.45;
-    }
+        if (value.startsWith(term)) {
+          return field.weight * 0.75 * aliasMultiplier;
+        }
 
-    return total;
+        if (value.includes(term)) {
+          return field.weight * 0.45 * aliasMultiplier;
+        }
+
+        return 0;
+      }),
+    );
+
+    return total + bestTermScore;
   }, 0);
 
   return Math.min(score, 140);
@@ -257,17 +271,4 @@ function getTimestamp(value: string | undefined) {
   const timestamp = new Date(value).getTime();
 
   return Number.isNaN(timestamp) ? 0 : timestamp;
-}
-
-function normalize(value: string | undefined) {
-  return value?.trim().toLowerCase() ?? "";
-}
-
-function getCategorySearchAliases(categorySlug: string) {
-  const aliases: Record<string, string> = {
-    beauty:
-      "beauty hair nails manicure pedicure makeup brows salon краса волосся нігті манікюр педикюр макіяж брови салон ногти маникюр педикюр",
-  };
-
-  return aliases[categorySlug] ?? "";
 }

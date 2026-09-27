@@ -1,6 +1,10 @@
 import businessesData from "@/data/businesses.json";
 import categoriesData from "@/data/categories.json";
 import citiesData from "@/data/cities.json";
+import {
+  getCategorySearchAliases,
+  getExpandedSearchTerms,
+} from "@/lib/search-aliases";
 import type { Business, Category, City } from "@/lib/types";
 
 export const cities = citiesData as City[];
@@ -50,9 +54,9 @@ export function searchBusinesses(
   source: Business[],
   query: string | undefined,
 ) {
-  const normalizedQuery = query?.trim().toLowerCase();
+  const searchTerms = getExpandedSearchTerms(query);
 
-  if (!normalizedQuery) {
+  if (searchTerms.length === 0) {
     return source;
   }
 
@@ -75,17 +79,8 @@ export function searchBusinesses(
       .join(" ")
       .toLowerCase();
 
-    return haystack.includes(normalizedQuery);
+    return searchTerms.some((term) => haystack.includes(term));
   });
-}
-
-function getCategorySearchAliases(categorySlug: string) {
-  const aliases: Record<string, string> = {
-    beauty:
-      "beauty hair nails manicure pedicure makeup brows salon краса волосся нігті манікюр педикюр макіяж брови салон ногти маникюр педикюр",
-  };
-
-  return aliases[categorySlug] ?? "";
 }
 
 export function getAllExploreParams() {

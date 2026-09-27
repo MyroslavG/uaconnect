@@ -4,6 +4,7 @@ import { type ReactNode, useActionState, useState } from "react";
 import { Send } from "lucide-react";
 
 import { submitBusinessRegistration } from "@/app/register/actions";
+import { BusinessKeywordInput } from "@/components/business-keyword-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,8 +42,11 @@ const text = {
       "Оберіть, якщо ваш бізнес може працювати з клієнтами з будь-якого міста Канади.",
     description: "Опис бізнесу",
     keywords: "Ключові слова для пошуку",
+    keywordsAdd: "Додати слово",
+    keywordsHelper:
+      "Додайте 3-10 слів або фраз, за якими клієнти можуть знайти ваш бізнес.",
     keywordsHint:
-      "Наприклад: нігті, манікюр, брови, ремонт iPhone, кейтеринг. Розділяйте комами.",
+      "нігті, манікюр, ремонт iPhone",
     submit: "Надіслати на перевірку",
     pending: "Надсилаємо...",
     success: "Заявку успішно надіслано на перевірку.",
@@ -69,8 +73,11 @@ const text = {
       "Choose this if your business can serve clients from any city in Canada.",
     description: "Business description",
     keywords: "Search keywords",
+    keywordsAdd: "Add keyword",
+    keywordsHelper:
+      "Add 3-10 words or phrases customers can use to find your business.",
     keywordsHint:
-      "Example: nails, manicure, brows, iPhone repair, catering. Separate with commas.",
+      "nails, manicure, iPhone repair",
     submit: "Submit for review",
     pending: "Submitting...",
     success: "Your business was successfully submitted for review.",
@@ -174,21 +181,22 @@ export function BusinessRegistrationForm({
           </FieldLabel>
           <Textarea id="description" name="description" required rows={5} />
         </div>
+        <div className="grid gap-2">
+          <FieldLabel htmlFor="keywords" badge={labels.required}>
+            {labels.keywords}
+          </FieldLabel>
+          <BusinessKeywordInput
+            addLabel={labels.keywordsAdd}
+            helper={labels.keywordsHelper}
+            id="keywords"
+            name="keywords"
+            placeholder={labels.keywordsHint}
+          />
+        </div>
       </div>
 
       <div className="grid gap-4 border-t pt-5">
         <FormSectionTitle title={labels.optionalSection} />
-        <div className="grid gap-2">
-          <FieldLabel htmlFor="keywords" badge={labels.optional}>
-            {labels.keywords}
-          </FieldLabel>
-          <Textarea
-            id="keywords"
-            name="keywords"
-            placeholder={labels.keywordsHint}
-            rows={3}
-          />
-        </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
             <FieldLabel htmlFor="address" badge={labels.optional}>

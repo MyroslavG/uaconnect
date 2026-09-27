@@ -25,6 +25,7 @@ import {
   updateBusinessRegistration,
   type DashboardActionState,
 } from "@/app/dashboard/actions";
+import { BusinessKeywordInput } from "@/components/business-keyword-input";
 import { BusinessLogo } from "@/components/business-logo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -80,8 +81,11 @@ const text = {
     address: "Адреса",
     description: "Опис бізнесу",
     keywords: "Ключові слова для пошуку",
+    keywordsAdd: "Додати слово",
+    keywordsHelper:
+      "Додайте 3-10 слів або фраз, за якими клієнти можуть знайти ваш бізнес.",
     keywordsHint:
-      "Наприклад: нігті, манікюр, брови, ремонт iPhone, кейтеринг. Розділяйте комами.",
+      "нігті, манікюр, ремонт iPhone",
     edit: "Редагувати",
     editTitle: "Редагувати профіль бізнесу",
     logoFile: "Логотип",
@@ -153,8 +157,11 @@ const text = {
     address: "Address",
     description: "Business description",
     keywords: "Search keywords",
+    keywordsAdd: "Add keyword",
+    keywordsHelper:
+      "Add 3-10 words or phrases customers can use to find your business.",
     keywordsHint:
-      "Example: nails, manicure, brows, iPhone repair, catering. Separate with commas.",
+      "nails, manicure, iPhone repair",
     edit: "Edit",
     editTitle: "Edit business profile",
     logoFile: "Logo",
@@ -482,16 +489,17 @@ export function DashboardBusinessEditor({
                   <div className="grid gap-2">
                     <FieldLabel
                       htmlFor={`keywords-${registration.id}`}
-                      badge={labels.optional}
+                      badge={labels.required}
                     >
                       {labels.keywords}
                     </FieldLabel>
-                    <Textarea
+                    <BusinessKeywordInput
+                      addLabel={labels.keywordsAdd}
+                      defaultValue={registration.keywords}
+                      helper={labels.keywordsHelper}
                       id={`keywords-${registration.id}`}
                       name="keywords"
-                      defaultValue={registration.keywords ?? ""}
                       placeholder={labels.keywordsHint}
-                      rows={3}
                     />
                   </div>
 
