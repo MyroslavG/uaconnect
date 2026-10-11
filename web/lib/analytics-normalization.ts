@@ -115,7 +115,7 @@ const cityAliasRules = [
     slug: "calgary",
   },
   {
-    aliases: ["edmonton", "edmonton ab", "едмонтон"],
+    aliases: ["edmonton", "edmonton ab", "едмонтон", "эдмонтон"],
     slug: "edmonton",
   },
   {

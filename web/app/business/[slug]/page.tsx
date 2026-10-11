@@ -284,6 +284,7 @@ export default async function BusinessProfilePage({
                       businessName: business.name,
                       businessSlug: business.slug,
                       contactType: "route",
+                      surface: "business_profile_location",
                     }}
                     className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition hover:text-primary"
                     href={addressMapUrl}
@@ -355,6 +356,7 @@ export default async function BusinessProfilePage({
                       businessName: business.name,
                       businessSlug: business.slug,
                       contactType: "phone",
+                      surface: "business_profile_contact",
                     }}
                     href={`tel:${business.phone}`}
                     className="flex items-center gap-3 rounded-md border bg-background p-3 transition hover:border-hover-blue-border hover:bg-hover-blue/35"
@@ -370,6 +372,7 @@ export default async function BusinessProfilePage({
                       businessName: business.name,
                       businessSlug: business.slug,
                       contactType: "website",
+                      surface: "business_profile_contact",
                     }}
                     className="flex items-center gap-3 rounded-md border bg-background p-3 transition hover:border-hover-blue-border hover:bg-hover-blue/35"
                     href={websiteUrl}
@@ -388,6 +391,7 @@ export default async function BusinessProfilePage({
                       businessName: business.name,
                       businessSlug: business.slug,
                       contactType: "instagram",
+                      surface: "business_profile_contact",
                     }}
                     href={instagramUrl}
                     target="_blank"
@@ -406,6 +410,7 @@ export default async function BusinessProfilePage({
                       businessName: business.name,
                       businessSlug: business.slug,
                       contactType: "route",
+                      surface: "business_profile_contact",
                     }}
                     className="flex items-start gap-3 rounded-md border bg-background p-3 transition hover:border-hover-blue-border hover:bg-hover-blue/35"
                     href={addressMapUrl}

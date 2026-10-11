@@ -22,7 +22,7 @@ export function AnalyticsLink({
     <a
       {...props}
       onClick={(event) => {
-        trackContactClick(analytics);
+        void trackContactClick(analytics);
         onClick?.(event);
       }}
     >

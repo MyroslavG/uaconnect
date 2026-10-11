@@ -8,6 +8,7 @@ import { ContactAccessCard } from "@/components/contact-access-card";
 import { ResultsMap } from "@/components/results-map";
 import { SearchLauncher } from "@/components/search-launcher";
 import { SearchLocationAutoFilter } from "@/components/search-location-auto-filter";
+import { SearchResultsTracker } from "@/components/search-results-tracker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -225,6 +226,16 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
   return (
     <div className="bg-background">
+      <SearchResultsTracker
+        categorySlug={category?.slug}
+        city={coordinates ? near : city?.slug ?? near}
+        enabled={!shouldShowDiscovery && !shouldAutoDetectLocation}
+        localOnly={localOnly}
+        query={query}
+        radiusInKm={coordinates ? radiusInKm : undefined}
+        resultCount={localizedResults.length}
+        source="web_search"
+      />
       <SearchLocationAutoFilter
         categories={categorySlug}
         cities={cities}

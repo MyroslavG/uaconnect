@@ -36,6 +36,7 @@ export type ContactAnalyticsTarget = {
   contactType: AnalyticsContactType;
   contentItemId?: string;
   contentType?: AnalyticsEventInsert["content_type"];
+  surface?: string;
 };
 
 export async function trackAnalyticsEvent(input: TrackAnalyticsEventInput) {
@@ -46,8 +47,8 @@ export async function trackAnalyticsEvent(input: TrackAnalyticsEventInput) {
   try {
     const supabase = createClient();
     const {
-      data: { user },
-    } = await supabase.auth.getUser();
+      data: { session },
+    } = await supabase.auth.getSession();
     const metadata = removeUndefinedValues(input.metadata ?? {});
     const categorySlug = normalizeAnalyticsCategorySlug(
       input.category_slug,
@@ -58,7 +59,7 @@ export async function trackAnalyticsEvent(input: TrackAnalyticsEventInput) {
       input.event_type === "search" ? ANALYTICS_ALL_LOCATION : null,
     );
 
-    await supabase.from("analytics_events").insert({
+    const { error } = await supabase.from("analytics_events").insert({
       ...input,
       anonymous_id: getOrCreateStoredId(anonymousIdKey, "anon"),
       category_slug: categorySlug,
@@ -66,15 +67,22 @@ export async function trackAnalyticsEvent(input: TrackAnalyticsEventInput) {
       metadata,
       platform: "web",
       session_id: getOrCreateStoredId(sessionIdKey, "session"),
-      user_id: user?.id ?? null,
+      user_id: session?.user.id ?? null,
     });
+
+    if (error) {
+      console.error("[kolo:web-analytics] Unable to record event", {
+        error,
+        eventType: input.event_type,
+      });
+    }
   } catch (error) {
     console.error("[kolo:web-analytics]", error);
   }
 }
 
 export function trackContactClick(target: ContactAnalyticsTarget) {
-  void trackAnalyticsEvent({
+  return trackAnalyticsEvent({
     business_id: target.businessId,
     business_name: target.businessName,
     business_slug: target.businessSlug,
@@ -82,6 +90,9 @@ export function trackContactClick(target: ContactAnalyticsTarget) {
     content_item_id: target.contentItemId,
     content_type: target.contentType,
     event_type: "contact_click",
+    metadata: {
+      surface: target.surface ?? "web_contact",
+    },
   });
 }
 

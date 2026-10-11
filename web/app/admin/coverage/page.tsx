@@ -45,7 +45,7 @@ type BusinessRow = Pick<
 >;
 type AnalyticsEventRow = Pick<
   Database["public"]["Tables"]["analytics_events"]["Row"],
-  "category_slug" | "city" | "event_type"
+  "category_slug" | "city" | "event_type" | "metadata"
 >;
 
 type CoverageCell = {
@@ -189,7 +189,7 @@ export default async function AdminCoveragePage() {
         .eq("status", "published"),
       supabase
         .from("analytics_events")
-        .select("event_type, city, category_slug")
+        .select("event_type, city, category_slug, metadata")
         .gte("occurred_at", since)
         .in("event_type", ["search", "search_zero_results"])
         .limit(10000),
@@ -655,9 +655,12 @@ function getCoverageData(
     const key = getCoverageKey(citySlug, categorySlug);
     const demand = searchDemand.get(key) ?? { searches: 0, zeroResults: 0 };
 
-    if (event.event_type === "search_zero_results") {
+    if (
+      event.event_type === "search_zero_results" ||
+      getMetadataNumber(event, "resultCount") === 0
+    ) {
       demand.zeroResults += 1;
-    } else {
+    } else if (event.event_type === "search") {
       demand.searches += 1;
     }
 
@@ -825,6 +828,27 @@ function normalizeCategorySlug(value: string | null | undefined) {
   const category = getCategory(normalizedSlug);
 
   return category?.slug ?? normalizedSlug;
+}
+
+function getMetadataNumber(event: AnalyticsEventRow, key: string) {
+  const metadata = event.metadata;
+
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const value = metadata[key];
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsedValue = Number(value);
+    return Number.isFinite(parsedValue) ? parsedValue : null;
+  }
+
+  return null;
 }
 
 function getCellClassName(status: CoverageCell["status"]) {
