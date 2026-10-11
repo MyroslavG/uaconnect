@@ -6,6 +6,7 @@ import {
   Grid3X3,
   MessageCircle,
   RadioTower,
+  SearchCheck,
   ShieldCheck,
   UserRound,
   UsersRound,
@@ -113,6 +114,17 @@ export async function AuthMenu({
             <Link href="/admin/analytics">
               <BarChart3 className="h-4 w-4" />
               {labels.adminAnalytics}
+            </Link>
+          </Button>
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="hidden md:inline-flex"
+          >
+            <Link href="/admin/search-quality">
+              <SearchCheck className="h-4 w-4" />
+              {labels.adminSearchQuality}
             </Link>
           </Button>
           <Button

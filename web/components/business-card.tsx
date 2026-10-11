@@ -17,6 +17,7 @@ type BusinessCardProps = {
   locale: Locale;
   searchTracking?: {
     position: number;
+    query: string;
   };
 };
 
@@ -50,6 +51,7 @@ export function BusinessCard({
         from: "search",
         matchReason: business.searchMatch?.reason ?? "match",
         position: String(searchTracking.position),
+        searchQuery: searchTracking.query.slice(0, 120),
         score: String(business.searchMatch?.score ?? 0),
       }).toString()}`
     : `/business/${business.slug}`;

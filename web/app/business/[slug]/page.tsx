@@ -44,6 +44,7 @@ type BusinessProfilePageProps = {
     from?: string;
     matchReason?: string;
     position?: string;
+    searchQuery?: string;
     score?: string;
   }>;
 };
@@ -145,6 +146,7 @@ export default async function BusinessProfilePage({
     : "match";
   const searchPosition = Number(resolvedSearchParams.position);
   const searchScore = Number(resolvedSearchParams.score);
+  const searchQuery = getSearchParamValue(resolvedSearchParams.searchQuery);
   const searchMetadata =
     resolvedSearchParams.from === "search" &&
     Number.isInteger(searchPosition) &&
@@ -154,6 +156,7 @@ export default async function BusinessProfilePage({
           position: searchPosition,
           recommendationReason: searchMatchReason,
           relevanceScore: Number.isFinite(searchScore) ? searchScore : 0,
+          searchQuery: searchQuery.slice(0, 120),
           source: "search",
         }
       : undefined;
@@ -471,6 +474,10 @@ export default async function BusinessProfilePage({
 
     </article>
   );
+}
+
+function getSearchParamValue(value: string | string[] | undefined) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function BusinessContentSection({

@@ -15,6 +15,7 @@ import {
   Phone,
   Plus,
   Save,
+  SearchCheck,
   Trash2,
 } from "lucide-react";
 
@@ -41,6 +42,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { Locale } from "@/lib/i18n";
+import { parseBusinessKeywords } from "@/lib/business-keywords";
 import type {
   BusinessContentType,
   BusinessRegistrationStatus,
@@ -86,6 +88,9 @@ const text = {
       "Додайте 3-10 слів або фраз, за якими клієнти можуть знайти ваш бізнес.",
     keywordsHint:
       "нігті, манікюр, ремонт iPhone",
+    keywordCompletionTitle: "Допоможіть клієнтам знайти вас",
+    keywordCompletionText:
+      "Додайте щонайменше 3 ключові слова через «Редагувати», щоб бізнес з'являвся за потрібними запитами.",
     edit: "Редагувати",
     editTitle: "Редагувати профіль бізнесу",
     logoFile: "Логотип",
@@ -162,6 +167,9 @@ const text = {
       "Add 3-10 words or phrases customers can use to find your business.",
     keywordsHint:
       "nails, manicure, iPhone repair",
+    keywordCompletionTitle: "Help customers find you",
+    keywordCompletionText:
+      "Use Edit to add at least 3 search keywords so your business can appear for relevant searches.",
     edit: "Edit",
     editTitle: "Edit business profile",
     logoFile: "Logo",
@@ -257,6 +265,8 @@ export function DashboardBusinessEditor({
   const hasContact = Boolean(
     registration.phone || registration.website || registration.instagram,
   );
+  const keywordCount = parseBusinessKeywords(registration.keywords).length;
+  const needsKeywordCompletion = keywordCount < 3 || keywordCount > 10;
   const serviceItems = contentItems.filter(
     (item) => item.content_type === "service",
   );
@@ -353,6 +363,19 @@ export function DashboardBusinessEditor({
           </div>
 
           <aside className="grid content-start gap-3 rounded-lg border bg-background/70 p-4">
+            {needsKeywordCompletion ? (
+              <div className="rounded-md border border-primary/20 bg-primary/10 p-3">
+                <div className="flex items-start gap-2">
+                  <SearchCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <div>
+                    <p className="text-sm font-black">{labels.keywordCompletionTitle}</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      {labels.keywordCompletionText}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <Dialog>
               <DialogTrigger asChild>
                 <Button className="w-full justify-center" type="button">

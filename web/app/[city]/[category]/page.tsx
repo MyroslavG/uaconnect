@@ -192,7 +192,11 @@ export default async function ExplorePage({
                   canViewContacts={canViewContacts}
                   priority={index < 2}
                   locale={locale}
-                  searchTracking={query?.trim() ? { position: index + 1 } : undefined}
+                  searchTracking={
+                    query?.trim()
+                      ? { position: index + 1, query }
+                      : undefined
+                  }
                 />
               ))}
             </div>

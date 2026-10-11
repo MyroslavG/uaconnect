@@ -84,6 +84,7 @@ export const analyticsTaxonomy = {
       "business_name",
       "city",
       "category_slug",
+      "metadata.searchQuery",
     ],
   },
   content_view: {

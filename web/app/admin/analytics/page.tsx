@@ -9,6 +9,7 @@ import {
   MousePointerClick,
   RadioTower,
   Search,
+  SearchCheck,
   ShieldCheck,
   TrendingUp,
   UsersRound,
@@ -64,6 +65,7 @@ const text = {
     updates: "Оновлення",
     media: "Media KPI",
     coverage: "Coverage",
+    searchQuality: "Якість пошуку",
     prospects: "Prospects",
     activeDay: "Активні за день",
     activeMonth: "Активні за місяць",
@@ -124,6 +126,7 @@ const text = {
     updates: "Updates",
     media: "Media KPI",
     coverage: "Coverage",
+    searchQuality: "Search quality",
     prospects: "Prospects",
     activeDay: "Active today",
     activeMonth: "Active this month",
@@ -275,6 +278,12 @@ export default async function AdminAnalyticsPage() {
             <Link href="/admin/coverage">
               <Grid3X3 className="h-4 w-4" />
               {labels.coverage as string}
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/admin/search-quality">
+              <SearchCheck className="h-4 w-4" />
+              {labels.searchQuality as string}
             </Link>
           </Button>
           <Button asChild variant="outline">

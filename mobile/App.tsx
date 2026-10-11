@@ -380,6 +380,9 @@ const copy = {
     keywordsHint: "нігті, манікюр, ремонт iPhone",
     keywordsRequired:
       "Додайте від 3 до 10 ключових слів для пошуку.",
+    keywordCompletionTitle: "Допоможіть клієнтам знайти вас",
+    keywordCompletionText:
+      "Додайте щонайменше 3 ключові слова, щоб бізнес з'являвся за потрібними запитами.",
     contentLink: "Посилання",
     community: "Спільнота",
     contentPhoto: "Фото",
@@ -697,6 +700,9 @@ const copy = {
       "Add 3-10 words or phrases customers can use to find your business.",
     keywordsHint: "nails, manicure, iPhone repair",
     keywordsRequired: "Add 3 to 10 search keywords.",
+    keywordCompletionTitle: "Help customers find you",
+    keywordCompletionText:
+      "Add at least 3 keywords so your business appears for relevant searches.",
     contentLink: "Link",
     community: "Community",
     contentPhoto: "Photo",
@@ -5226,6 +5232,7 @@ function SearchScreen({
                 position: index + 1,
                 recommendationReason: business.searchMatch?.reason ?? "match",
                 relevanceScore: business.searchMatch?.score ?? 0,
+                searchQuery: getEffectiveSearchQuery(query),
                 source: "search",
               })
             }
@@ -7833,6 +7840,8 @@ function DashboardScreen({
   const serviceItems = contentItems.filter((item) => item.type === "service");
   const eventItems = contentItems.filter((item) => item.type === "event");
   const productItems = contentItems.filter((item) => item.type === "product");
+  const keywordCount = parseBusinessKeywords(business.keywords).length;
+  const needsKeywordCompletion = keywordCount < 3 || keywordCount > 10;
 
   return (
     <KeyboardAwareScreen>
@@ -7880,6 +7889,40 @@ function DashboardScreen({
             locale={locale}
             onEdit={() => setIsEditingProfile(true)}
           />
+          {needsKeywordCompletion ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setIsEditingProfile(true)}
+              style={[
+                styles.keywordCompletionPrompt,
+                isDarkMode ? styles.darkSettingRow : null,
+              ]}
+            >
+              <Search
+                color={isDarkMode ? "#E5E5EA" : "#111111"}
+                size={20}
+                strokeWidth={2.6}
+              />
+              <View style={styles.flex}>
+                <Text
+                  style={[
+                    styles.keywordCompletionTitle,
+                    isDarkMode ? styles.darkText : null,
+                  ]}
+                >
+                  {labels.keywordCompletionTitle}
+                </Text>
+                <Text
+                  style={[
+                    styles.keywordCompletionText,
+                    isDarkMode ? styles.darkMutedText : null,
+                  ]}
+                >
+                  {labels.keywordCompletionText}
+                </Text>
+              </View>
+            </Pressable>
+          ) : null}
           <RankingExplanationCard isDarkMode={isDarkMode} labels={labels} />
         </>
       ) : null}
@@ -17509,6 +17552,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
     justifyContent: "space-between",
+  },
+  keywordCompletionPrompt: {
+    alignItems: "flex-start",
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    padding: 16,
+  },
+  keywordCompletionText: {
+    color: "#6E6E73",
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 3,
+  },
+  keywordCompletionTitle: {
+    color: "#111111",
+    fontSize: 15,
+    fontWeight: "800",
   },
   dashboardPreviewHeader: {
     alignItems: "flex-start",
