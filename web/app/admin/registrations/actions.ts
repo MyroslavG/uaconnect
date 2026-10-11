@@ -179,6 +179,10 @@ async function reviewRegistration(formData: FormData, status: BusinessRegistrati
   }
 
   const reviewedAt = new Date().toISOString();
+  const slug =
+    status === "approved"
+      ? await publishRegistrationBusiness(supabase, registration, reviewedAt)
+      : null;
   const { error: updateError } = await supabase
     .from("business_registrations")
     .update({
@@ -193,12 +197,7 @@ async function reviewRegistration(formData: FormData, status: BusinessRegistrati
     throw new Error(updateError.message);
   }
 
-  if (status === "approved") {
-    const slug = await publishRegistrationBusiness(
-      supabase,
-      registration,
-      reviewedAt,
-    );
+  if (slug) {
     revalidatePath(`/business/${slug}`);
   }
 

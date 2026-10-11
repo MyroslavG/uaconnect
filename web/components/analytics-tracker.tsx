@@ -37,57 +37,6 @@ export function AnalyticsTracker() {
       },
     });
 
-    if (pathname === "/search") {
-      const query = searchParams.get("q")?.trim() ?? "";
-      const city = searchParams.get("city") ?? searchParams.get("near") ?? null;
-      const category = searchParams.get("category") ?? null;
-      const localOnly = searchParams.get("localOnly") === "1";
-      const radius = searchParams.get("radius") ?? "";
-
-      void trackAnalyticsEvent({
-        category_slug: category,
-        city,
-        event_type: "search",
-        metadata: {
-          ...acquisitionMetadata,
-          localOnly,
-          radius,
-          source: "web_search",
-        },
-        search_query: query || null,
-      });
-    }
-
-    const pathSegments = pathname.split("/").filter(Boolean);
-
-    if (
-      pathSegments.length === 2 &&
-      ![
-        "admin",
-        "api",
-        "auth",
-        "business",
-        "claim",
-        "dashboard",
-        "notifications",
-        "privacy",
-        "register",
-        "search",
-        "support",
-      ].includes(pathSegments[0] ?? "")
-    ) {
-      void trackAnalyticsEvent({
-        category_slug: pathSegments[1],
-        city: pathSegments[0],
-        event_type: "search",
-        metadata: {
-          ...acquisitionMetadata,
-          localOnly: searchParams.get("localOnly") === "1",
-          source: "city_category_route",
-        },
-        search_query: searchParams.get("q")?.trim() || null,
-      });
-    }
   }, [pathname, searchParams, searchParamsString]);
 
   return null;

@@ -802,6 +802,7 @@ function BusinessContactBlock({
               businessName: contact.businessName,
               businessSlug: contact.businessSlug,
               contactType: contact.type,
+              surface: "content_business_contacts",
             }}
             className="flex min-w-0 items-center gap-3 rounded-lg border bg-background px-3 py-2.5 font-semibold text-foreground transition hover:border-hover-blue-border hover:bg-hover-blue"
             href={contact.href}
@@ -881,6 +882,7 @@ function ContentMeta({
               contactType: "route",
               contentItemId: item.id,
               contentType: item.type,
+              surface: "content_detail",
             }}
             className="flex items-center gap-3 rounded-lg border bg-card px-3 py-2.5 text-foreground transition hover:border-hover-blue-border hover:bg-hover-blue"
             href={formatMapLink(item.location)}
@@ -907,6 +909,7 @@ function ContentMeta({
             contactType: "link",
             contentItemId: item.id,
             contentType: item.type,
+            surface: "content_detail",
           }}
             className="flex min-w-0 items-center gap-3 rounded-lg border bg-card px-3 py-2.5 text-foreground transition hover:border-hover-blue-border hover:bg-hover-blue"
           href={linkUrl}

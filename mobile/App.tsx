@@ -2384,6 +2384,15 @@ function KoloApp() {
     }
 
     const searchQuery = getEffectiveSearchQuery(query);
+    const hasKeyword = Boolean(searchQuery);
+    const hasCategory = selectedCategory !== "all";
+    const hasLocation = Boolean(location.trim());
+    const hasSearchIntent = hasKeyword || hasCategory || hasLocation || localOnly;
+
+    if (!hasSearchIntent) {
+      return;
+    }
+
     const searchKey = JSON.stringify({
       category: selectedCategory,
       localOnly,
@@ -2404,8 +2413,12 @@ function KoloApp() {
         city: location.trim() || undefined,
         eventType: "search",
         metadata: {
+          hasCategory,
+          hasKeyword,
+          hasLocation,
           localOnly,
           resultCount: results.length,
+          source: "search_screen",
         },
         searchQuery: searchQuery || undefined,
         userId: session?.user.id,

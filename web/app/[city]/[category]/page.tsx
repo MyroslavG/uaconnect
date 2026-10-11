@@ -6,6 +6,7 @@ import { BusinessCard } from "@/components/business-card";
 import { ContactAccessCard } from "@/components/contact-access-card";
 import { ExploreFilters } from "@/components/explore-filters";
 import { ResultsMap } from "@/components/results-map";
+import { SearchResultsTracker } from "@/components/search-results-tracker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -147,6 +148,15 @@ export default async function ExplorePage({
 
   return (
     <div className="bg-background">
+      <SearchResultsTracker
+        categorySlug={category.slug}
+        city={city.slug}
+        enabled
+        localOnly={localOnly}
+        query={query}
+        resultCount={exploreBusinesses.length}
+        source="city_category_route"
+      />
       <section className="relative overflow-hidden bg-neutral-950 text-white">
         <div className="absolute inset-0 bg-[linear-gradient(105deg,rgba(10,12,11,0.96)_0%,rgba(10,12,11,0.78)_55%,rgba(10,12,11,0.45)_100%)]" />
         <div className="container relative py-9 md:py-12">

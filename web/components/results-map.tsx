@@ -90,6 +90,7 @@ export function ResultsMap({ businesses, title, labels }: ResultsMapProps) {
               businessName: selectedBusiness.name,
               businessSlug: selectedBusiness.slug,
               contactType: "route",
+              surface: "search_map",
             }}
             href={externalMapUrl}
             rel="noreferrer"
