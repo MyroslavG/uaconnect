@@ -1,3 +1,5 @@
+import { isSupabaseConfigured, supabase } from "./supabase";
+
 const categorySearchAliases: Record<string, string> = {
   "advertising-services": "advertising marketing design print branding social media реклама маркетинг дизайн друк брендинг соцмережі",
   "auto-repair": "auto car repair detailing mechanic авто автосервіс ремонт детайлінг механік",
@@ -48,6 +50,15 @@ export type SearchIntent = {
   normalizedQuery: string;
 };
 
+type SearchQueryRule = {
+  aliases: string[];
+  inferredCategorySlugs: string[];
+  query: string;
+};
+
+let cachedSearchQueryRules: { expiresAt: number; rules: SearchQueryRule[] } | null = null;
+const SEARCH_QUERY_RULES_CACHE_MS = 15 * 60 * 1000;
+
 export function getCategorySearchAliases(categorySlug: string) {
   return categorySearchAliases[categorySlug] ?? "";
 }
@@ -85,10 +96,97 @@ export function getSearchIntent(query: string | undefined): SearchIntent {
   return { expandedTerms, inferredCategorySlugs, normalizedQuery };
 }
 
+export async function getSearchIntentWithQueryRules(
+  query: string | undefined,
+): Promise<SearchIntent> {
+  const staticIntent = getSearchIntent(query);
+
+  if (!staticIntent.normalizedQuery || !isSupabaseConfigured) {
+    return staticIntent;
+  }
+
+  const rules = await getActiveSearchQueryRules();
+  return mergeSearchIntentWithRules(staticIntent, rules);
+}
+
 export function getExpandedSearchTerms(query: string | undefined) {
   return getSearchIntent(query).expandedTerms;
 }
 
 export function normalizeSearchText(value: string | undefined | null) {
   return value?.trim().replace(/\s+/g, " ").toLocaleLowerCase() ?? "";
+}
+
+async function getActiveSearchQueryRules(): Promise<SearchQueryRule[]> {
+  if (cachedSearchQueryRules && cachedSearchQueryRules.expiresAt > Date.now()) {
+    return cachedSearchQueryRules.rules;
+  }
+
+  const { data, error } = await supabase
+    .from("search_query_rules")
+    .select("query, aliases, inferred_category_slugs")
+    .eq("is_enabled", true)
+    .limit(250);
+
+  if (error) {
+    console.warn("[kolo:mobile-search-query-rules]", error);
+    return [];
+  }
+
+  const rules = (data ?? []).map((rule) => ({
+    aliases: Array.isArray(rule.aliases) ? rule.aliases : [],
+    inferredCategorySlugs: Array.isArray(rule.inferred_category_slugs)
+      ? rule.inferred_category_slugs
+      : [],
+    query: rule.query,
+  }));
+
+  cachedSearchQueryRules = {
+    expiresAt: Date.now() + SEARCH_QUERY_RULES_CACHE_MS,
+    rules,
+  };
+
+  return rules;
+}
+
+function mergeSearchIntentWithRules(
+  intent: SearchIntent,
+  rules: SearchQueryRule[],
+): SearchIntent {
+  if (!intent.normalizedQuery || !rules.length) {
+    return intent;
+  }
+
+  const expandedTerms = new Set(intent.expandedTerms);
+  const inferredCategorySlugs = new Set(intent.inferredCategorySlugs);
+
+  for (const rule of rules) {
+    const ruleTerms = [rule.query, ...rule.aliases]
+      .map(normalizeSearchText)
+      .filter(Boolean);
+
+    if (!ruleTerms.some((term) => isRuleMatch(intent.normalizedQuery, term))) {
+      continue;
+    }
+
+    ruleTerms.forEach((term) => expandedTerms.add(term));
+    rule.inferredCategorySlugs
+      .map((slug) => slug.trim())
+      .filter(Boolean)
+      .forEach((slug) => inferredCategorySlugs.add(slug));
+  }
+
+  return {
+    expandedTerms: Array.from(expandedTerms),
+    inferredCategorySlugs: Array.from(inferredCategorySlugs),
+    normalizedQuery: intent.normalizedQuery,
+  };
+}
+
+function isRuleMatch(query: string, ruleTerm: string) {
+  return (
+    query === ruleTerm ||
+    (ruleTerm.length >= 3 && query.includes(ruleTerm)) ||
+    (query.length >= 3 && ruleTerm.includes(query))
+  );
 }

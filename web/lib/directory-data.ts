@@ -6,7 +6,8 @@ import {
   type Coordinates,
 } from "@/lib/location";
 import { rankBusinesses } from "@/lib/business-ranking";
-import { getSearchIntent } from "@/lib/search-aliases";
+import { getSearchIntentWithQueryRules } from "@/lib/search-query-rules";
+import type { SearchIntent } from "@/lib/search-aliases";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
@@ -114,7 +115,7 @@ export async function searchDirectoryBusinesses({
   currentUserId,
 }: SearchDirectoryBusinessesOptions) {
   const hasContentSearch = Boolean(query?.trim());
-  const searchIntent = getSearchIntent(query);
+  const searchIntent = await getSearchIntentWithQueryRules(query);
   const selectedCity = citySlug ? cities.find((city) => city.slug === citySlug) : undefined;
   const [directoryBusinesses, relevanceMatches] = await Promise.all([
     getDirectoryBusinesses(currentUserId, {
@@ -208,7 +209,7 @@ async function fetchSearchRelevanceMatches({
   city?: string;
   localOnly: boolean;
   query: string;
-  searchIntent: ReturnType<typeof getSearchIntent>;
+  searchIntent: SearchIntent;
 }): Promise<SearchRelevanceMatch[] | null> {
   if (!query || !isSupabaseConfigured()) {
     return null;

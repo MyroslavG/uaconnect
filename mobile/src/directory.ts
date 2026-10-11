@@ -4,7 +4,7 @@ import {
   validateRequiredBusinessKeywords,
 } from "./businessKeywords";
 import { getPublicBusinessContentItems } from "./contentVisibility";
-import { getSearchIntent } from "./search-relevance";
+import { getSearchIntentWithQueryRules } from "./search-relevance";
 import type {
   Business,
   BusinessContentImageInput,
@@ -255,7 +255,7 @@ export async function fetchPublishedBusinessSearchMatches({
     return null;
   }
 
-  const intent = getSearchIntent(query);
+  const intent = await getSearchIntentWithQueryRules(query);
 
   if (!intent.normalizedQuery) {
     return null;

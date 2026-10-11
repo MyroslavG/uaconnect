@@ -16,10 +16,16 @@ import {
   AdminKeywordCompletionEditor,
   type KeywordCompletionBusiness,
 } from "@/components/admin-keyword-completion-editor";
+import {
+  AdminSearchQueryRulesEditor,
+  type AdminSearchQueryRule,
+} from "@/components/admin-search-query-rules-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { parseBusinessKeywords } from "@/lib/business-keywords";
+import { categories } from "@/lib/data";
+import { localizeCategories } from "@/lib/i18n";
 import { getCurrentUser, isCurrentUserAdmin } from "@/lib/supabase/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import type { Database, Json } from "@/lib/supabase/database.types";
@@ -51,6 +57,16 @@ type SearchQualityEvent = Pick<
   | "session_id"
 >;
 
+type SearchQueryRuleRow = Pick<
+  Database["public"]["Tables"]["search_query_rules"]["Row"],
+  | "aliases"
+  | "id"
+  | "inferred_category_slugs"
+  | "is_enabled"
+  | "note"
+  | "query"
+>;
+
 type QueryQualityRow = {
   businessOpens: number;
   contactClicks: number;
@@ -72,12 +88,13 @@ export default async function AdminSearchQualityPage() {
   ]);
   let businesses: BusinessRow[] = [];
   let events: SearchQualityEvent[] = [];
+  let searchQueryRules: SearchQueryRuleRow[] = [];
   let errorMessage = "";
 
   if (isSupabaseConfigured() && user && isAdmin) {
     const supabase = await createClient();
     const since = new Date(Date.now() - 30 * dayInMs).toISOString();
-    const [businessesResult, eventsResult] = await Promise.all([
+    const [businessesResult, eventsResult, rulesResult] = await Promise.all([
       supabase
         .from("businesses")
         .select("id, name, slug, category_slug, city, keywords, status")
@@ -98,11 +115,23 @@ export default async function AdminSearchQualityPage() {
         ])
         .order("occurred_at", { ascending: true })
         .limit(10000),
+      supabase
+        .from("search_query_rules")
+        .select("id, query, aliases, inferred_category_slugs, note, is_enabled")
+        .order("updated_at", { ascending: false })
+        .limit(250),
     ]);
 
     businesses = (businessesResult.data ?? []) as BusinessRow[];
     events = (eventsResult.data ?? []) as SearchQualityEvent[];
-    errorMessage = businessesResult.error?.message ?? eventsResult.error?.message ?? "";
+    searchQueryRules = (rulesResult.data ?? []) as SearchQueryRuleRow[];
+    errorMessage = [
+      businessesResult.error?.message,
+      eventsResult.error?.message,
+      rulesResult.error?.message,
+    ]
+      .filter(Boolean)
+      .join(" ");
   }
 
   if (!isSupabaseConfigured()) {
@@ -248,6 +277,36 @@ export default async function AdminSearchQualityPage() {
           variant="success"
         />
       </section>
+
+      <Card className="border-white/70 bg-card/95 shadow-sm dark:border-white/10">
+        <CardContent className="p-5">
+          <div className="mb-5 flex items-start gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+              <Search className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-2xl font-black">Правила запитів</h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                Перетворюйте популярні слова та синоніми на точніші результати без
+                зміни кожного профілю окремо.
+              </p>
+            </div>
+          </div>
+          <AdminSearchQueryRulesEditor
+            categories={localizeCategories(categories, "uk")}
+            rules={searchQueryRules.map(
+              (rule): AdminSearchQueryRule => ({
+                aliases: rule.aliases,
+                id: rule.id,
+                inferredCategorySlugs: rule.inferred_category_slugs,
+                isEnabled: rule.is_enabled,
+                note: rule.note,
+                query: rule.query,
+              }),
+            )}
+          />
+        </CardContent>
+      </Card>
 
       <Card className="border-white/70 bg-card/95 shadow-sm dark:border-white/10">
         <CardContent className="p-5">

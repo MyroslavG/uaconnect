@@ -65,6 +65,12 @@ export type SearchIntent = {
   normalizedQuery: string;
 };
 
+export type SearchQueryRule = {
+  aliases: string[];
+  inferredCategorySlugs: string[];
+  query: string;
+};
+
 export function getCategorySearchAliases(categorySlug: string) {
   return categorySearchAliases[categorySlug] ?? "";
 }
@@ -119,6 +125,48 @@ export function getSearchIntent(query: string | undefined): SearchIntent {
   };
 }
 
+export function mergeSearchIntentWithRules(
+  intent: SearchIntent,
+  rules: SearchQueryRule[],
+): SearchIntent {
+  if (!intent.normalizedQuery || !rules.length) {
+    return intent;
+  }
+
+  const expandedTerms = new Set(intent.expandedTerms);
+  const inferredCategorySlugs = new Set(intent.inferredCategorySlugs);
+
+  for (const rule of rules) {
+    const ruleTerms = [rule.query, ...rule.aliases]
+      .map(normalizeSearchText)
+      .filter(Boolean);
+
+    if (!ruleTerms.some((term) => isRuleMatch(intent.normalizedQuery, term))) {
+      continue;
+    }
+
+    ruleTerms.forEach((term) => expandedTerms.add(term));
+    rule.inferredCategorySlugs
+      .map((slug) => slug.trim())
+      .filter(Boolean)
+      .forEach((slug) => inferredCategorySlugs.add(slug));
+  }
+
+  return {
+    expandedTerms: Array.from(expandedTerms),
+    inferredCategorySlugs: Array.from(inferredCategorySlugs),
+    normalizedQuery: intent.normalizedQuery,
+  };
+}
+
 export function normalizeSearchText(value: string | undefined | null) {
   return value?.trim().replace(/\s+/g, " ").toLocaleLowerCase() ?? "";
+}
+
+function isRuleMatch(query: string, ruleTerm: string) {
+  return (
+    query === ruleTerm ||
+    (ruleTerm.length >= 3 && query.includes(ruleTerm)) ||
+    (query.length >= 3 && ruleTerm.includes(query))
+  );
 }

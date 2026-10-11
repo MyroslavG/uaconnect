@@ -696,6 +696,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      search_query_rules: {
+        Row: {
+          id: string;
+          query: string;
+          normalized_query: string;
+          aliases: string[];
+          inferred_category_slugs: string[];
+          note: string | null;
+          is_enabled: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          query: string;
+          normalized_query?: never;
+          aliases?: string[];
+          inferred_category_slugs?: string[];
+          note?: string | null;
+          is_enabled?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          query?: string;
+          normalized_query?: never;
+          aliases?: string[];
+          inferred_category_slugs?: string[];
+          note?: string | null;
+          is_enabled?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       media_kpi_snapshots: {
         Row: {
           id: string;

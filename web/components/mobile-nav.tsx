@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import {
   BarChart3,
   Bell,
@@ -95,17 +96,26 @@ export function MobileNav({
       </DialogTrigger>
       <DialogContent className="left-auto right-0 top-0 h-dvh w-[min(92vw,24rem)] max-w-none translate-x-0 translate-y-0 gap-0 rounded-none border-y-0 border-l bg-background/95 p-0 shadow-2xl backdrop-blur-xl data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right">
         <div className="flex h-full min-h-0 flex-col">
-          <DialogHeader className="border-b border-border/70 px-5 py-5">
+          <DialogHeader className="shrink-0 border-b border-border/70 px-5 py-5">
             <DialogTitle className="flex items-center gap-2 text-xl font-black">
-              <span className="grid h-9 w-9 place-items-center rounded-md bg-primary text-[10px] font-black text-primary-foreground shadow-sm">
-                UA
+              <span className="grid h-9 w-9 place-items-center overflow-hidden rounded-md border bg-card shadow-sm">
+                <Image
+                  alt=""
+                  className="h-7 w-7 object-contain dark:invert"
+                  height={28}
+                  src="/kolo-logo.png"
+                  width={28}
+                />
               </span>
-              UA<span className="text-primary">Connect</span>
+              Kolo
             </DialogTitle>
             <DialogDescription>{labels.mobileMenuDescription}</DialogDescription>
           </DialogHeader>
 
-          <nav className="grid gap-2 px-4 py-5" aria-label={labels.ariaNav}>
+          <nav
+            aria-label={labels.ariaNav}
+            className="grid min-h-0 flex-1 content-start gap-2 overflow-y-auto overscroll-contain px-4 py-5"
+          >
             {navItems.map((item) => {
               const Icon = item.icon;
 
@@ -218,7 +228,7 @@ export function MobileNav({
             ) : null}
           </nav>
 
-          <div className="grid gap-3 border-y border-border/70 px-4 py-4">
+          <div className="shrink-0 grid gap-3 border-y border-border/70 px-4 py-4">
             <div className="flex items-center justify-between gap-3 rounded-md bg-muted/60 px-3 py-3">
               <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">
                 {labels.language}
@@ -233,7 +243,7 @@ export function MobileNav({
             </div>
           </div>
 
-          <div className="mt-auto px-4 py-5">
+          <div className="shrink-0 px-4 py-5">
             {!supabaseConfigured ? (
               <Button asChild className="w-full" variant="outline">
                 <Link href="/register">{labels.setupSupabase}</Link>
