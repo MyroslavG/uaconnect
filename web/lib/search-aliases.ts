@@ -59,6 +59,99 @@ const queryAliasGroups = [
   ["масаж", "massage", "wellness"],
 ];
 
+const querySuggestionGroups = [
+  {
+    aliases: queryAliasGroups[0],
+    categorySlug: "beauty",
+    query: "манікюр",
+    title: { en: "Manicure & pedicure · Beauty", uk: "Манікюр і педикюр · Краса" },
+  },
+  {
+    aliases: queryAliasGroups[1],
+    categorySlug: "beauty",
+    query: "брови",
+    title: { en: "Brows · Beauty", uk: "Брови · Краса" },
+  },
+  {
+    aliases: queryAliasGroups[2],
+    categorySlug: "beauty",
+    query: "макіяж",
+    title: { en: "Makeup · Beauty", uk: "Макіяж · Краса" },
+  },
+  {
+    aliases: queryAliasGroups[3],
+    categorySlug: "mortgage-brokers",
+    query: "іпотека",
+    title: { en: "Mortgage · Mortgage brokers", uk: "Іпотека · Іпотечні брокери" },
+  },
+  {
+    aliases: queryAliasGroups[4],
+    categorySlug: "bookkeepers",
+    query: "бухгалтер",
+    title: { en: "Bookkeeping · Bookkeepers", uk: "Бухгалтерія · Бухгалтери" },
+  },
+  {
+    aliases: queryAliasGroups[5],
+    categorySlug: "moving",
+    query: "переїзд",
+    title: { en: "Moving · Moving services", uk: "Переїзд · Послуги переїзду" },
+  },
+  {
+    aliases: queryAliasGroups[6],
+    categorySlug: "restaurants",
+    query: "торт",
+    title: { en: "Cakes & desserts · Food", uk: "Торти й десерти · Їжа" },
+  },
+  {
+    aliases: queryAliasGroups[7],
+    categorySlug: "photographers",
+    query: "фото",
+    title: { en: "Photo & video · Photographers", uk: "Фото й відео · Фотографи" },
+  },
+  {
+    aliases: queryAliasGroups[8],
+    categorySlug: "repair-services",
+    query: "ремонт телефону",
+    title: { en: "Phone repair · Repair services", uk: "Ремонт телефону · Ремонтні послуги" },
+  },
+  {
+    aliases: queryAliasGroups[9],
+    categorySlug: "it-services",
+    query: "сайт",
+    title: { en: "Websites · IT services", uk: "Сайти · IT-послуги" },
+  },
+  {
+    aliases: queryAliasGroups[10],
+    categorySlug: "insurance-brokers",
+    query: "страхування",
+    title: { en: "Insurance · Insurance brokers", uk: "Страхування · Страхові брокери" },
+  },
+  {
+    aliases: queryAliasGroups[11],
+    categorySlug: "lawyers",
+    query: "юрист",
+    title: { en: "Legal help · Lawyers", uk: "Юридична допомога · Юристи" },
+  },
+  {
+    aliases: queryAliasGroups[12],
+    categorySlug: "tutors",
+    query: "репетитор",
+    title: { en: "Tutor · Education", uk: "Репетитор · Навчання" },
+  },
+  {
+    aliases: queryAliasGroups[13],
+    categorySlug: "cleaning",
+    query: "клінінг",
+    title: { en: "Cleaning · Cleaning services", uk: "Клінінг · Прибирання" },
+  },
+  {
+    aliases: queryAliasGroups[14],
+    categorySlug: "wellness-care",
+    query: "масаж",
+    title: { en: "Massage · Wellness & care", uk: "Масаж · Здоров'я та турбота" },
+  },
+] as const;
+
 export type SearchIntent = {
   expandedTerms: string[];
   inferredCategorySlugs: string[];
@@ -71,12 +164,46 @@ export type SearchQueryRule = {
   query: string;
 };
 
+export type SearchIntentSuggestion = {
+  categorySlug: string;
+  query: string;
+  title: string;
+};
+
 export function getCategorySearchAliases(categorySlug: string) {
   return categorySearchAliases[categorySlug] ?? "";
 }
 
 export function getExpandedSearchTerms(query: string | undefined) {
   return getSearchIntent(query).expandedTerms;
+}
+
+export function getSearchIntentSuggestions(
+  query: string | undefined,
+  locale: "en" | "uk",
+): SearchIntentSuggestion[] {
+  const normalizedQuery = normalizeSearchText(query);
+
+  if (normalizedQuery.length < 2) {
+    return [];
+  }
+
+  return querySuggestionGroups
+    .filter((group) =>
+      group.aliases
+        .map(normalizeSearchText)
+        .some(
+          (alias) =>
+            alias.startsWith(normalizedQuery) ||
+            isRuleMatch(normalizedQuery, alias),
+        ),
+    )
+    .slice(0, 3)
+    .map((group) => ({
+      categorySlug: group.categorySlug,
+      query: group.query,
+      title: group.title[locale],
+    }));
 }
 
 export function getSearchIntent(query: string | undefined): SearchIntent {

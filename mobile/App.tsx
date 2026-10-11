@@ -130,6 +130,7 @@ import {
   parseBusinessKeywords,
   validateRequiredBusinessKeywords,
 } from "./src/businessKeywords";
+import { getSearchIntentSuggestions } from "./src/search-relevance";
 import {
   createMobileFeedComment,
   createMobileFeedPost,
@@ -4826,6 +4827,10 @@ function SearchScreen({
   const loadingText = isResolvingCurrentLocation
     ? labels.detectingLocation
     : labels.loadingBusinesses;
+  const searchSuggestions = useMemo(
+    () => getSearchIntentSuggestions(query),
+    [query],
+  );
 
   useEffect(() => {
     if (hasBusinessSearchIntent) {
@@ -5113,6 +5118,54 @@ function SearchScreen({
             />
           </Pressable>
         </View>
+
+        {searchSuggestions.length ? (
+          <View style={styles.searchSuggestions}>
+            <Text
+              style={[
+                styles.searchSuggestionsTitle,
+                isDarkMode ? styles.darkMutedText : null,
+              ]}
+            >
+              {locale === "uk" ? "Підказки" : "Suggestions"}
+            </Text>
+            <ScrollView
+              contentContainerStyle={styles.searchSuggestionsRow}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+            >
+              {searchSuggestions.map((suggestion) => (
+                <Pressable
+                  accessibilityRole="button"
+                  key={`${suggestion.categorySlug}-${suggestion.query}`}
+                  onPress={() => {
+                    setQuery(suggestion.query);
+                    setSelectedCategory(suggestion.categorySlug);
+                  }}
+                  style={[
+                    styles.searchSuggestionChip,
+                    isDarkMode ? styles.darkSearchSuggestionChip : null,
+                  ]}
+                >
+                  <Sparkles
+                    color={isDarkMode ? "#E5E5EA" : "#111111"}
+                    size={13}
+                    strokeWidth={2.6}
+                  />
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.searchSuggestionText,
+                      isDarkMode ? styles.darkText : null,
+                    ]}
+                  >
+                    {locale === "uk" ? suggestion.titleUk : suggestion.titleEn}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
 
         {isFilterPanelOpen ? (
           <View style={[styles.searchFilterPanel, isDarkMode ? styles.darkCard : null]}>
@@ -19323,6 +19376,41 @@ const styles = StyleSheet.create({
     shadowOffset: { height: 10, width: 0 },
     shadowOpacity: 0.07,
     shadowRadius: 18,
+  },
+  searchSuggestions: {
+    gap: 6,
+  },
+  searchSuggestionsRow: {
+    gap: 8,
+    paddingHorizontal: 2,
+  },
+  searchSuggestionsTitle: {
+    color: "#6E6E73",
+    fontSize: 12,
+    fontWeight: "800",
+    paddingHorizontal: 4,
+  },
+  searchSuggestionChip: {
+    alignItems: "center",
+    backgroundColor: "#F3EEE6",
+    borderColor: "#DED5C8",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    maxWidth: 260,
+    minHeight: 36,
+    paddingHorizontal: 12,
+  },
+  searchSuggestionText: {
+    color: "#111111",
+    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  darkSearchSuggestionChip: {
+    backgroundColor: "#1C1C1E",
+    borderColor: "#3A3A3C",
   },
   searchPanel: {
     backgroundColor: "#FFFEFB",

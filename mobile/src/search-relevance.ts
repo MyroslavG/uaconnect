@@ -44,10 +44,35 @@ const queryAliasGroups = [
   ["масаж", "massage", "wellness"],
 ];
 
+const querySuggestionGroups = [
+  { aliases: queryAliasGroups[0], categorySlug: "beauty", query: "манікюр", titleEn: "Manicure & pedicure · Beauty", titleUk: "Манікюр і педикюр · Краса" },
+  { aliases: queryAliasGroups[1], categorySlug: "beauty", query: "брови", titleEn: "Brows · Beauty", titleUk: "Брови · Краса" },
+  { aliases: queryAliasGroups[2], categorySlug: "beauty", query: "макіяж", titleEn: "Makeup · Beauty", titleUk: "Макіяж · Краса" },
+  { aliases: queryAliasGroups[3], categorySlug: "mortgage-brokers", query: "іпотека", titleEn: "Mortgage · Mortgage brokers", titleUk: "Іпотека · Іпотечні брокери" },
+  { aliases: queryAliasGroups[4], categorySlug: "bookkeepers", query: "бухгалтер", titleEn: "Bookkeeping · Bookkeepers", titleUk: "Бухгалтерія · Бухгалтери" },
+  { aliases: queryAliasGroups[5], categorySlug: "moving", query: "переїзд", titleEn: "Moving · Moving services", titleUk: "Переїзд · Послуги переїзду" },
+  { aliases: queryAliasGroups[6], categorySlug: "restaurants", query: "торт", titleEn: "Cakes & desserts · Food", titleUk: "Торти й десерти · Їжа" },
+  { aliases: queryAliasGroups[7], categorySlug: "photographers", query: "фото", titleEn: "Photo & video · Photographers", titleUk: "Фото й відео · Фотографи" },
+  { aliases: queryAliasGroups[8], categorySlug: "repair-services", query: "ремонт телефону", titleEn: "Phone repair · Repair services", titleUk: "Ремонт телефону · Ремонтні послуги" },
+  { aliases: queryAliasGroups[9], categorySlug: "it-services", query: "сайт", titleEn: "Websites · IT services", titleUk: "Сайти · IT-послуги" },
+  { aliases: queryAliasGroups[10], categorySlug: "insurance-brokers", query: "страхування", titleEn: "Insurance · Insurance brokers", titleUk: "Страхування · Страхові брокери" },
+  { aliases: queryAliasGroups[11], categorySlug: "lawyers", query: "юрист", titleEn: "Legal help · Lawyers", titleUk: "Юридична допомога · Юристи" },
+  { aliases: queryAliasGroups[12], categorySlug: "tutors", query: "репетитор", titleEn: "Tutor · Education", titleUk: "Репетитор · Навчання" },
+  { aliases: queryAliasGroups[13], categorySlug: "cleaning", query: "клінінг", titleEn: "Cleaning · Cleaning services", titleUk: "Клінінг · Прибирання" },
+  { aliases: queryAliasGroups[14], categorySlug: "wellness-care", query: "масаж", titleEn: "Massage · Wellness & care", titleUk: "Масаж · Здоров'я та турбота" },
+] as const;
+
 export type SearchIntent = {
   expandedTerms: string[];
   inferredCategorySlugs: string[];
   normalizedQuery: string;
+};
+
+export type SearchIntentSuggestion = {
+  categorySlug: string;
+  query: string;
+  titleEn: string;
+  titleUk: string;
 };
 
 type SearchQueryRule = {
@@ -107,6 +132,34 @@ export async function getSearchIntentWithQueryRules(
 
   const rules = await getActiveSearchQueryRules();
   return mergeSearchIntentWithRules(staticIntent, rules);
+}
+
+export function getSearchIntentSuggestions(
+  query: string | undefined,
+): SearchIntentSuggestion[] {
+  const normalizedQuery = normalizeSearchText(query);
+
+  if (normalizedQuery.length < 2) {
+    return [];
+  }
+
+  return querySuggestionGroups
+    .filter((group) =>
+      group.aliases
+        .map(normalizeSearchText)
+        .some(
+          (alias) =>
+            alias.startsWith(normalizedQuery) ||
+            isRuleMatch(normalizedQuery, alias),
+        ),
+    )
+    .slice(0, 3)
+    .map((group) => ({
+      categorySlug: group.categorySlug,
+      query: group.query,
+      titleEn: group.titleEn,
+      titleUk: group.titleUk,
+    }));
 }
 
 export function getExpandedSearchTerms(query: string | undefined) {

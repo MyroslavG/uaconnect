@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Search, SlidersHorizontal, Tags } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { geocodeSearchLocation } from "@/lib/client-geocoding";
 import { copy, type Locale } from "@/lib/i18n";
 import type { Coordinates } from "@/lib/location";
+import { getSearchIntentSuggestions } from "@/lib/search-aliases";
 
 type SearchPanelProps = {
   cities: City[];
@@ -82,6 +83,39 @@ export function SearchPanel({
     variant !== "compact" || defaultFiltersOpen,
   );
   const isCompact = variant === "compact";
+  const searchSuggestions = useMemo(
+    () => getSearchIntentSuggestions(query, locale),
+    [locale, query],
+  );
+
+  function applySearchSuggestion(
+    suggestion: (typeof searchSuggestions)[number],
+  ) {
+    setQuery(suggestion.query);
+    setCategorySlug(suggestion.categorySlug);
+  }
+
+  const searchSuggestionsView = searchSuggestions.length ? (
+    <div
+      aria-label={locale === "uk" ? "Підказки пошуку" : "Search suggestions"}
+      className="flex min-w-0 flex-wrap items-center gap-1.5 px-1"
+    >
+      <span className="text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground">
+        {locale === "uk" ? "Підказки" : "Suggestions"}
+      </span>
+      {searchSuggestions.map((suggestion) => (
+        <Button
+          className="h-7 max-w-full rounded-full border-border/70 bg-card px-2.5 text-xs font-bold text-foreground shadow-none hover:bg-hover-blue"
+          key={`${suggestion.categorySlug}-${suggestion.query}`}
+          onClick={() => applySearchSuggestion(suggestion)}
+          type="button"
+          variant="outline"
+        >
+          <span className="truncate">{suggestion.title}</span>
+        </Button>
+      ))}
+    </div>
+  ) : null;
 
   useEffect(() => {
     setQuery(defaultQuery);
@@ -206,16 +240,19 @@ export function SearchPanel({
     return (
       <form onSubmit={handleSubmit} className="grid w-full max-w-full gap-2">
         <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_4rem_auto] md:grid-cols-[minmax(0,1fr)_auto_auto]">
-          <label className={fieldShellClass}>
-            <span className={fieldLabelClass}>{labels.search.label}</span>
-            <Search className={fieldIconClass} />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className={fieldControlClass}
-              placeholder={labels.search.placeholder}
-            />
-          </label>
+          <div className="min-w-0 space-y-1.5">
+            <label className={fieldShellClass}>
+              <span className={fieldLabelClass}>{labels.search.label}</span>
+              <Search className={fieldIconClass} />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className={fieldControlClass}
+                placeholder={labels.search.placeholder}
+              />
+            </label>
+            {searchSuggestionsView}
+          </div>
           <Button
             type="button"
             variant="outline"
@@ -251,16 +288,19 @@ export function SearchPanel({
       onSubmit={handleSubmit}
       className="premium-panel grid w-full max-w-full min-w-0 items-stretch gap-2 overflow-visible rounded-lg p-2 text-foreground sm:grid-cols-2"
     >
-      <label className={fieldShellClass}>
-        <span className={fieldLabelClass}>{labels.search.label}</span>
-        <Search className={fieldIconClass} />
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          className={fieldControlClass}
-          placeholder={labels.search.placeholder}
-        />
-      </label>
+      <div className="min-w-0 space-y-1.5">
+        <label className={fieldShellClass}>
+          <span className={fieldLabelClass}>{labels.search.label}</span>
+          <Search className={fieldIconClass} />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className={fieldControlClass}
+            placeholder={labels.search.placeholder}
+          />
+        </label>
+        {searchSuggestionsView}
+      </div>
       {advancedFilters}
       <Button
         type="submit"
