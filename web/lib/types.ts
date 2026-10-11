@@ -79,6 +79,10 @@ export type Business = {
   distanceInKm?: number;
   isSaved?: boolean;
   followerCount?: number;
+  searchMatch?: {
+    reason: "name" | "keyword" | "content" | "category" | "description" | "typo" | "match";
+    score: number;
+  };
   verifiedAt?: string;
   createdAt?: string;
   rankingSignals?: BusinessRankingSignals;

@@ -40,6 +40,12 @@ type BusinessProfilePageProps = {
   params: Promise<{
     slug: string;
   }>;
+  searchParams?: Promise<{
+    from?: string;
+    matchReason?: string;
+    position?: string;
+    score?: string;
+  }>;
 };
 
 export function generateStaticParams() {
@@ -77,8 +83,10 @@ export async function generateMetadata({
 
 export default async function BusinessProfilePage({
   params,
+  searchParams,
 }: BusinessProfilePageProps) {
   const { slug } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
   const locale = await getRequestLocale();
   const labels = copy[locale];
   const user = await getCurrentUser();
@@ -132,6 +140,23 @@ export default async function BusinessProfilePage({
   const productItems = (business.contentItems ?? []).filter(
     (item) => item.type === "product",
   );
+  const searchMatchReason = isSearchMatchReason(resolvedSearchParams.matchReason)
+    ? resolvedSearchParams.matchReason
+    : "match";
+  const searchPosition = Number(resolvedSearchParams.position);
+  const searchScore = Number(resolvedSearchParams.score);
+  const searchMetadata =
+    resolvedSearchParams.from === "search" &&
+    Number.isInteger(searchPosition) &&
+    searchPosition > 0
+      ? {
+          homeSection: "search",
+          position: searchPosition,
+          recommendationReason: searchMatchReason,
+          relevanceScore: Number.isFinite(searchScore) ? searchScore : 0,
+          source: "search",
+        }
+      : undefined;
 
   return (
     <article>
@@ -141,6 +166,7 @@ export default async function BusinessProfilePage({
         businessSlug={rawBusiness.slug}
         categorySlug={rawBusiness.categorySlug}
         city={rawBusiness.city}
+        metadata={searchMetadata}
       />
       <section className="container py-6">
         <div className="mb-5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -558,4 +584,18 @@ function getFollowerLabel(count: number, locale: "uk" | "en") {
   }
 
   return `${safeCount} ${safeCount === 1 ? "follower" : "followers"}`;
+}
+
+function isSearchMatchReason(
+  value: string | undefined,
+): value is "name" | "keyword" | "content" | "category" | "description" | "typo" | "match" {
+  return [
+    "name",
+    "keyword",
+    "content",
+    "category",
+    "description",
+    "typo",
+    "match",
+  ].includes(value ?? "");
 }

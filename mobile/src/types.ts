@@ -26,6 +26,10 @@ export type Business = {
   ownedByCurrentUser?: boolean;
   isSaved?: boolean;
   followerCount?: number;
+  searchMatch?: {
+    reason: "name" | "keyword" | "content" | "category" | "description" | "typo" | "match";
+    score: number;
+  };
   contentItems?: BusinessContentItem[];
   createdAt?: string;
   updatedAt?: string;

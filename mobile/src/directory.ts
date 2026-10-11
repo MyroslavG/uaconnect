@@ -4,6 +4,7 @@ import {
   validateRequiredBusinessKeywords,
 } from "./businessKeywords";
 import { getPublicBusinessContentItems } from "./contentVisibility";
+import { getSearchIntent } from "./search-relevance";
 import type {
   Business,
   BusinessContentImageInput,
@@ -113,6 +114,18 @@ type FollowerCountRow = {
 type WeeklyTrendingBusinessScoreRow = {
   business_id: string;
   score: number | string | null;
+};
+
+export type BusinessSearchMatch = {
+  businessId: string;
+  reason: "name" | "keyword" | "content" | "category" | "description" | "typo" | "match";
+  score: number;
+};
+
+type BusinessSearchMatchRow = {
+  business_id: string;
+  match_reason: BusinessSearchMatch["reason"];
+  relevance_score: number | string | null;
 };
 
 export async function fetchPublishedBusinesses(currentUserId?: string) {
@@ -225,6 +238,62 @@ export async function fetchWeeklyTrendingBusinessScores(resultLimit = 18) {
   }
 
   return scores;
+}
+
+export async function fetchPublishedBusinessSearchMatches({
+  categorySlug,
+  city,
+  localOnly = false,
+  query,
+}: {
+  categorySlug?: string;
+  city?: string;
+  localOnly?: boolean;
+  query: string;
+}): Promise<BusinessSearchMatch[] | null> {
+  if (!isSupabaseConfigured) {
+    return null;
+  }
+
+  const intent = getSearchIntent(query);
+
+  if (!intent.normalizedQuery) {
+    return null;
+  }
+
+  const { data, error } = await supabase.rpc("search_published_businesses", {
+    p_category_filter: categorySlug || null,
+    p_city_filter: city?.trim() || null,
+    p_expanded_terms: intent.expandedTerms,
+    p_inferred_category_slugs: intent.inferredCategorySlugs,
+    p_limit: 100,
+    p_local_only: localOnly,
+    p_query: intent.normalizedQuery,
+  });
+
+  if (error) {
+    if (!isMissingRpcError(error)) {
+      console.error("[kolo:mobile-search-relevance]", error);
+    }
+
+    return null;
+  }
+
+  return ((data ?? []) as BusinessSearchMatchRow[])
+    .map((match) => {
+      const score = Number(match.relevance_score ?? 0);
+
+      if (!match.business_id || !Number.isFinite(score)) {
+        return null;
+      }
+
+      return {
+        businessId: match.business_id,
+        reason: match.match_reason,
+        score,
+      } satisfies BusinessSearchMatch;
+    })
+    .filter((match): match is BusinessSearchMatch => Boolean(match));
 }
 
 export async function saveBusiness(businessId: string, userId: string) {

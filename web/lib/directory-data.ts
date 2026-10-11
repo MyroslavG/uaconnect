@@ -6,6 +6,7 @@ import {
   type Coordinates,
 } from "@/lib/location";
 import { rankBusinesses } from "@/lib/business-ranking";
+import { getSearchIntent } from "@/lib/search-aliases";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
@@ -40,6 +41,12 @@ type SearchDirectoryBusinessesOptions = {
 type GetDirectoryBusinessesOptions = {
   contentItemsLimit?: number;
   includeContentItems?: boolean;
+};
+
+type SearchRelevanceMatch = {
+  business_id: string;
+  match_reason: NonNullable<Business["searchMatch"]>["reason"];
+  relevance_score: number;
 };
 
 export async function getDirectoryBusinesses(
@@ -107,9 +114,20 @@ export async function searchDirectoryBusinesses({
   currentUserId,
 }: SearchDirectoryBusinessesOptions) {
   const hasContentSearch = Boolean(query?.trim());
-  const directoryBusinesses = await getDirectoryBusinesses(currentUserId, {
-    includeContentItems: hasContentSearch,
-  });
+  const searchIntent = getSearchIntent(query);
+  const selectedCity = citySlug ? cities.find((city) => city.slug === citySlug) : undefined;
+  const [directoryBusinesses, relevanceMatches] = await Promise.all([
+    getDirectoryBusinesses(currentUserId, {
+      includeContentItems: hasContentSearch,
+    }),
+    fetchSearchRelevanceMatches({
+      categorySlug,
+      city: selectedCity?.name,
+      localOnly,
+      query: searchIntent.normalizedQuery,
+      searchIntent,
+    }),
+  ]);
   const filteredBusinesses = directoryBusinesses
     .map((business) => {
       if (!coordinates || business.servesAllCanada) {
@@ -150,11 +168,72 @@ export async function searchDirectoryBusinesses({
 
       return matchesCity && matchesCategory && matchesDistance && matchesOnline;
     })
+  if (searchIntent.normalizedQuery && relevanceMatches) {
+    const businessesById = new Map(
+      filteredBusinesses.map((business) => [business.id, business]),
+    );
+
+    return relevanceMatches.flatMap((match) => {
+      const business = businessesById.get(match.business_id);
+
+      return business
+        ? [
+            stripListingSignals({
+              ...business,
+              searchMatch: {
+                reason: match.match_reason,
+                score: match.relevance_score,
+              },
+            }),
+          ]
+        : [];
+    });
+  }
+
   return rankBusinesses(searchBusinesses(filteredBusinesses, query), {
     categorySlug,
     citySlug,
     query,
   }).map(stripListingSignals);
+}
+
+async function fetchSearchRelevanceMatches({
+  categorySlug,
+  city,
+  localOnly,
+  query,
+  searchIntent,
+}: {
+  categorySlug?: string;
+  city?: string;
+  localOnly: boolean;
+  query: string;
+  searchIntent: ReturnType<typeof getSearchIntent>;
+}): Promise<SearchRelevanceMatch[] | null> {
+  if (!query || !isSupabaseConfigured()) {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("search_published_businesses", {
+    p_category_filter: categorySlug ?? null,
+    p_city_filter: city ?? null,
+    p_expanded_terms: searchIntent.expandedTerms,
+    p_inferred_category_slugs: searchIntent.inferredCategorySlugs,
+    p_limit: 100,
+    p_local_only: localOnly,
+    p_query: query,
+  });
+
+  if (error || !data) {
+    if (error) {
+      console.error("[kolo:web-search-relevance]", error);
+    }
+
+    return null;
+  }
+
+  return data as SearchRelevanceMatch[];
 }
 
 export async function getSavedDirectoryBusinesses(currentUserId: string) {

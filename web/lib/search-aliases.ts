@@ -59,15 +59,29 @@ const queryAliasGroups = [
   ["масаж", "massage", "wellness"],
 ];
 
+export type SearchIntent = {
+  expandedTerms: string[];
+  inferredCategorySlugs: string[];
+  normalizedQuery: string;
+};
+
 export function getCategorySearchAliases(categorySlug: string) {
   return categorySearchAliases[categorySlug] ?? "";
 }
 
 export function getExpandedSearchTerms(query: string | undefined) {
+  return getSearchIntent(query).expandedTerms;
+}
+
+export function getSearchIntent(query: string | undefined): SearchIntent {
   const normalizedQuery = normalizeSearchText(query);
 
   if (!normalizedQuery) {
-    return [];
+    return {
+      expandedTerms: [],
+      inferredCategorySlugs: [],
+      normalizedQuery,
+    };
   }
 
   const terms = new Set([normalizedQuery]);
@@ -86,7 +100,23 @@ export function getExpandedSearchTerms(query: string | undefined) {
     }
   }
 
-  return Array.from(terms);
+  const inferredCategorySlugs = Object.entries(categorySearchAliases)
+    .filter(([, aliases]) => {
+      const normalizedAliases = normalizeSearchText(aliases);
+
+      return Array.from(terms).some(
+        (term) =>
+          normalizedAliases.includes(term) ||
+          term.includes(normalizedAliases),
+      );
+    })
+    .map(([categorySlug]) => categorySlug);
+
+  return {
+    expandedTerms: Array.from(terms),
+    inferredCategorySlugs,
+    normalizedQuery,
+  };
 }
 
 export function normalizeSearchText(value: string | undefined | null) {

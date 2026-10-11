@@ -15,10 +15,8 @@ import {
   getAllExploreParams,
   getCategory,
   getCity,
-  searchBusinesses,
 } from "@/lib/data";
-import { rankBusinesses } from "@/lib/business-ranking";
-import { getDirectoryBusinessesByCityAndCategory } from "@/lib/directory-data";
+import { searchDirectoryBusinesses } from "@/lib/directory-data";
 import {
   copy,
   localizeBusinesses,
@@ -117,28 +115,16 @@ export default async function ExplorePage({
     summary: "",
   }));
   const localizedCategories = localizeCategories(categories, locale);
-  const baseBusinesses = await getDirectoryBusinessesByCityAndCategory(
-    city.slug,
-    category.slug,
-    user?.id,
-    localOnly,
-    Boolean(query?.trim()),
-  );
-  const localizedBaseBusinesses = localizeBusinesses(baseBusinesses, locale);
-  const exploreBusinesses = rankBusinesses(
-    searchBusinesses(localizedBaseBusinesses, query),
-    {
+  const exploreBusinesses = localizeBusinesses(
+    await searchDirectoryBusinesses({
       categorySlug: category.slug,
       citySlug: city.slug,
+      currentUserId: user?.id,
+      localOnly,
       query,
-    },
-  ).map((business) => {
-    const businessWithoutListingSignals = { ...business };
-    delete businessWithoutListingSignals.contentItems;
-    delete businessWithoutListingSignals.rankingSignals;
-
-    return businessWithoutListingSignals;
-  });
+    }),
+    locale,
+  );
   const mapBusinesses = exploreBusinesses.map(({ address, id, name, slug }) => ({
     address,
     id,
@@ -206,6 +192,7 @@ export default async function ExplorePage({
                   canViewContacts={canViewContacts}
                   priority={index < 2}
                   locale={locale}
+                  searchTracking={query?.trim() ? { position: index + 1 } : undefined}
                 />
               ))}
             </div>

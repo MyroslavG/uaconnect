@@ -148,6 +148,7 @@ import {
   fetchOwnedBusinessContent,
   fetchOwnedBusiness,
   fetchPublishedBusinesses,
+  fetchPublishedBusinessSearchMatches,
   fetchWeeklyTrendingBusinessScores,
   saveBusiness,
   unsaveBusiness,
@@ -155,6 +156,7 @@ import {
   updateOwnedBusiness,
   type BusinessLogoInput,
   type BusinessRegistrationInput,
+  type BusinessSearchMatch,
 } from "./src/directory";
 import { isSupabaseConfigured, supabase } from "./src/supabase";
 import {
@@ -1257,6 +1259,9 @@ function KoloApp() {
     useState<Map<string, number>>(() => new Map());
   const [isDirectoryLoading, setIsDirectoryLoading] =
     useState(isSupabaseConfigured);
+  const [searchMatches, setSearchMatches] = useState<
+    BusinessSearchMatch[] | null | undefined
+  >(undefined);
   const [ownedBusiness, setOwnedBusiness] = useState<Business | null>(
     isSupabaseConfigured ? null : defaultOwnedBusiness,
   );
@@ -2263,10 +2268,49 @@ function KoloApp() {
     ],
   };
 
+  const effectiveSearchQuery = useMemo(
+    () => getEffectiveSearchQuery(query),
+    [query],
+  );
+
+  useEffect(() => {
+    if (!effectiveSearchQuery) {
+      setSearchMatches(undefined);
+      return;
+    }
+
+    let isMounted = true;
+    setSearchMatches(undefined);
+    const timeout = setTimeout(() => {
+      void fetchPublishedBusinessSearchMatches({
+        categorySlug: selectedCategory === "all" ? undefined : selectedCategory,
+        city: location,
+        localOnly,
+        query: effectiveSearchQuery,
+      }).then((matches) => {
+        if (isMounted) {
+          setSearchMatches(matches);
+        }
+      }).catch((error) => {
+        console.error("[kolo:mobile-search-relevance]", error);
+
+        if (isMounted) {
+          setSearchMatches(null);
+        }
+      });
+    }, 180);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeout);
+    };
+  }, [effectiveSearchQuery, localOnly, location, selectedCategory]);
+
   const results = useMemo(
     () => {
-      const searchQuery = getEffectiveSearchQuery(query);
+      const searchQuery = effectiveSearchQuery;
       const searchTerms = getExpandedSearchTerms(searchQuery);
+      const useServerSearch = Boolean(searchQuery && Array.isArray(searchMatches));
       const filteredBusinesses = businesses.filter((business) => {
         const category = getCategoryName(business.categorySlug, locale);
         const aliases = getSearchAliases(business.categorySlug);
@@ -2278,6 +2322,7 @@ function KoloApp() {
           `${business.name} ${business.description} ${business.keywords ?? ""} ${business.city} ${locationAliases} ${category} ${aliases} ${contentText}`,
         );
         const matchesQuery =
+          useServerSearch ||
           searchTerms.length === 0 ||
           searchTerms.some((term) => haystack.includes(term));
         const matchesCategory =
@@ -2291,13 +2336,43 @@ function KoloApp() {
         return matchesQuery && matchesCategory && matchesLocation && matchesOnline;
       });
 
+      if (searchQuery && Array.isArray(searchMatches)) {
+        const businessesById = new Map(
+          filteredBusinesses.map((business) => [business.id, business]),
+        );
+
+        return searchMatches.flatMap((match) => {
+          const business = businessesById.get(match.businessId);
+
+          return business
+            ? [
+                {
+                  ...business,
+                  searchMatch: {
+                    reason: match.reason,
+                    score: match.score,
+                  },
+                },
+              ]
+            : [];
+        });
+      }
+
       return rankBusinesses(filteredBusinesses, {
         categorySlug: selectedCategory === "all" ? undefined : selectedCategory,
         location,
         query: searchQuery,
       });
     },
-    [businesses, localOnly, locale, location, query, selectedCategory],
+    [
+      businesses,
+      effectiveSearchQuery,
+      localOnly,
+      locale,
+      location,
+      searchMatches,
+      selectedCategory,
+    ],
   );
 
   const profileName = getProfileDisplayName(currentProfile, session);
@@ -2389,7 +2464,7 @@ function KoloApp() {
     const hasLocation = Boolean(location.trim());
     const hasSearchIntent = hasKeyword || hasCategory || hasLocation || localOnly;
 
-    if (!hasSearchIntent) {
+    if (!hasSearchIntent || (hasKeyword && searchMatches === undefined)) {
       return;
     }
 
@@ -2399,6 +2474,11 @@ function KoloApp() {
       location,
       query: searchQuery,
       resultCount: results.length,
+      searchEngine: hasKeyword
+        ? searchMatches === null
+          ? "local_fallback"
+          : "relevance_v1"
+        : "directory",
     });
 
     if (lastTrackedSearchKey.current === searchKey) {
@@ -2418,6 +2498,11 @@ function KoloApp() {
           hasLocation,
           localOnly,
           resultCount: results.length,
+          searchEngine: hasKeyword
+            ? searchMatches === null
+              ? "local_fallback"
+              : "relevance_v1"
+            : "directory",
           source: "search_screen",
         },
         searchQuery: searchQuery || undefined,
@@ -2434,6 +2519,7 @@ function KoloApp() {
     location,
     query,
     results.length,
+    searchMatches,
     selectedCategory,
     session?.user.id,
   ]);
@@ -4164,7 +4250,9 @@ function KoloApp() {
               setLocation={setLocation}
               setLocalOnly={setLocalOnly}
               setQuery={setQuery}
-              setSelectedBusiness={openBusinessScreen}
+              setSelectedBusiness={(business, metadata) =>
+                openBusinessScreen(business, "search", metadata)
+              }
               setSelectedCategory={setSelectedCategory}
               onShareContent={handleShareContent}
               onShareBusiness={handleShareBusiness}
@@ -4688,7 +4776,10 @@ function SearchScreen({
   setLocation: (value: string) => void;
   setLocalOnly: (value: boolean) => void;
   setQuery: (value: string) => void;
-  setSelectedBusiness: (value: Business) => void;
+  setSelectedBusiness: (
+    value: Business,
+    metadata?: Record<string, unknown>,
+  ) => void;
   setSelectedCategory: (value: string) => void;
   totalCount: number;
 }) {
@@ -5121,7 +5212,7 @@ function SearchScreen({
           <Text style={[styles.loadingLineShort, isDarkMode ? styles.darkLoadingLine : null]} />
         </View>
       ) : results.length > 0 ? (
-        results.map((business) => (
+        results.map((business, index) => (
           <BusinessCard
             business={business}
             canViewContacts={canViewContacts}
@@ -5129,7 +5220,15 @@ function SearchScreen({
             key={business.id}
             labels={labels}
             locale={locale}
-            onPress={() => setSelectedBusiness(business)}
+            onPress={() =>
+              setSelectedBusiness(business, {
+                homeSection: "search",
+                position: index + 1,
+                recommendationReason: business.searchMatch?.reason ?? "match",
+                relevanceScore: business.searchMatch?.score ?? 0,
+                source: "search",
+              })
+            }
             onShare={() => {
               void onShareBusiness(business);
             }}

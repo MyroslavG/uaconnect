@@ -15,6 +15,9 @@ type BusinessCardProps = {
   canViewContacts: boolean;
   priority?: boolean;
   locale: Locale;
+  searchTracking?: {
+    position: number;
+  };
 };
 
 export function BusinessCard({
@@ -22,6 +25,7 @@ export function BusinessCard({
   canViewContacts,
   locale,
   priority = false,
+  searchTracking,
 }: BusinessCardProps) {
   const hasContactPreview = Boolean(business.phone || business.website);
   const distanceLabel =
@@ -41,11 +45,19 @@ export function BusinessCard({
   const followerCount = business.followerCount ?? 0;
   const followerLabel = getFollowerLabel(followerCount, locale);
   const descriptionPreview = truncateText(business.description, 150);
+  const businessHref = searchTracking
+    ? `/business/${business.slug}?${new URLSearchParams({
+        from: "search",
+        matchReason: business.searchMatch?.reason ?? "match",
+        position: String(searchTracking.position),
+        score: String(business.searchMatch?.score ?? 0),
+      }).toString()}`
+    : `/business/${business.slug}`;
 
   return (
     <Card className="group relative overflow-hidden border-border bg-card shadow-sm transition duration-300 hover:-translate-y-1 hover:border-hover-blue-border hover:shadow-soft">
       <Link
-        href={`/business/${business.slug}`}
+        href={businessHref}
         className="absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         aria-label={business.name}
       />

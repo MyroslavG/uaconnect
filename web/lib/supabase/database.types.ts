@@ -848,6 +848,22 @@ export type Database = {
           follower_count: number;
         }[];
       };
+      search_published_businesses: {
+        Args: {
+          p_query: string;
+          p_expanded_terms?: string[];
+          p_inferred_category_slugs?: string[];
+          p_city_filter?: string | null;
+          p_category_filter?: string | null;
+          p_local_only?: boolean;
+          p_limit?: number;
+        };
+        Returns: {
+          business_id: string;
+          relevance_score: number;
+          match_reason: string;
+        }[];
+      };
       get_feed_post_stats: {
         Args: {
           post_ids: string[];

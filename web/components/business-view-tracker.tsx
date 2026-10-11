@@ -10,6 +10,7 @@ type BusinessViewTrackerProps = {
   businessSlug: string;
   categorySlug: string;
   city: string;
+  metadata?: Record<string, string | number>;
 };
 
 export function BusinessViewTracker({
@@ -18,6 +19,7 @@ export function BusinessViewTracker({
   businessSlug,
   categorySlug,
   city,
+  metadata,
 }: BusinessViewTrackerProps) {
   useEffect(() => {
     void trackAnalyticsEvent({
@@ -27,8 +29,9 @@ export function BusinessViewTracker({
       category_slug: categorySlug,
       city,
       event_type: "business_profile_view",
+      metadata,
     });
-  }, [businessId, businessName, businessSlug, categorySlug, city]);
+  }, [businessId, businessName, businessSlug, categorySlug, city, metadata]);
 
   return null;
 }
