@@ -161,6 +161,14 @@ import {
   type BusinessRegistrationInput,
   type BusinessSearchMatch,
 } from "./src/directory";
+import {
+  createSavedSearch,
+  fetchSavedSearches,
+  getSavedSearchKey,
+  removeSavedSearch,
+  type SavedSearch,
+  type SavedSearchInput,
+} from "./src/saved-searches";
 import { isSupabaseConfigured, supabase } from "./src/supabase";
 import {
   fetchBusinessConversations,
@@ -580,6 +588,17 @@ const copy = {
     saveBusiness: "Стежити",
     savedBusiness: "Ви стежите",
     savedBusinesses: "Підписки",
+    savedSearches: "Збережені пошуки",
+    savedSearchesIntro:
+      "Отримуйте сповіщення, коли з'являється новий відповідний бізнес, товар, послуга або подія.",
+    savedSearch: "Стежити за пошуком",
+    savedSearchFollowing: "Ви стежите",
+    savedSearchAdded: "Пошук збережено. Ми повідомимо про нові відповідності.",
+    savedSearchExists: "Ви вже стежите за цим пошуком.",
+    savedSearchSignIn: "Увійдіть, щоб зберігати пошуки та отримувати сповіщення.",
+    savedSearchesEmpty: "Збережіть пошук, щоб не пропустити нові відповідності.",
+    removeSavedSearch: "Прибрати пошук",
+    savedSearchLocal: "Лише локальні",
     followers: "підписників",
     followerOne: "підписник",
     user: "Користувач",
@@ -901,6 +920,17 @@ const copy = {
     saveBusiness: "Follow",
     savedBusiness: "Following",
     savedBusinesses: "Following",
+    savedSearches: "Збережені пошуки",
+    savedSearchesIntro:
+      "Отримуйте сповіщення, коли з'являється новий відповідний бізнес, товар, послуга або подія.",
+    savedSearch: "Стежити за пошуком",
+    savedSearchFollowing: "Ви стежите",
+    savedSearchAdded: "Пошук збережено. Ми повідомимо про нові відповідності.",
+    savedSearchExists: "Ви вже стежите за цим пошуком.",
+    savedSearchSignIn: "Увійдіть, щоб зберігати пошуки та отримувати сповіщення.",
+    savedSearchesEmpty: "Збережіть пошук, щоб не пропустити нові відповідності.",
+    removeSavedSearch: "Прибрати пошук",
+    savedSearchLocal: "Лише локальні",
     followers: "followers",
     followerOne: "follower",
     user: "User",
@@ -1315,6 +1345,10 @@ function KoloApp() {
     useState<AppTourPhase>("text");
   const [walkthroughStepIndex, setWalkthroughStepIndex] = useState(0);
   const [savedBusyBusinessId, setSavedBusyBusinessId] = useState<string | null>(
+    null,
+  );
+  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
+  const [savedSearchBusyKey, setSavedSearchBusyKey] = useState<string | null>(
     null,
   );
   const [conversations, setConversations] = useState<MobileConversation[]>([]);
@@ -2113,6 +2147,32 @@ function KoloApp() {
     }
 
     void loadDirectory();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [session?.user.id]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !session?.user.id) {
+      setSavedSearches([]);
+      return;
+    }
+
+    let isMounted = true;
+
+    fetchSavedSearches(session.user.id)
+      .then((nextSavedSearches) => {
+        if (isMounted) {
+          setSavedSearches(nextSavedSearches);
+        }
+      })
+      .catch((error) => {
+        console.error("[kolo:mobile-saved-searches]", error);
+        if (isMounted) {
+          setSavedSearches([]);
+        }
+      });
 
     return () => {
       isMounted = false;
@@ -2929,6 +2989,7 @@ function KoloApp() {
       setSession(null);
       setOwnedBusiness(null);
       setOwnedContentItems([]);
+      setSavedSearches([]);
       setSelectedBusiness(null);
       setActiveProfilePanel("account");
       setActiveTab("profile");
@@ -3038,6 +3099,69 @@ function KoloApp() {
       );
     } finally {
       setSavedBusyBusinessId(null);
+    }
+  }
+
+  async function handleSaveSearch(input: SavedSearchInput) {
+    if (!isSupabaseConfigured || !session?.user.id) {
+      setAuthMessage(labels.savedSearchSignIn);
+      setActiveProfilePanel("account");
+      setActiveTab("profile");
+      return;
+    }
+
+    const searchKey = getSavedSearchKey(input);
+
+    if (
+      savedSearches.some(
+        (savedSearch) =>
+          getSavedSearchKey({
+            categorySlug: savedSearch.categorySlug,
+            city: savedSearch.city,
+            localOnly: savedSearch.localOnly,
+            query: savedSearch.query,
+          }) === searchKey,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setSavedSearchBusyKey(searchKey);
+      const savedSearch = await createSavedSearch(input, session.user.id);
+
+      if (savedSearch) {
+        setSavedSearches((currentSearches) => [savedSearch, ...currentSearches]);
+      } else {
+        const refreshedSavedSearches = await fetchSavedSearches(session.user.id);
+        setSavedSearches(refreshedSavedSearches);
+      }
+    } catch (error) {
+      console.error("[kolo:mobile-save-search]", error);
+      setAuthMessage(getErrorMessage(error));
+    } finally {
+      setSavedSearchBusyKey(null);
+    }
+  }
+
+  async function handleRemoveSavedSearch(savedSearch: SavedSearch) {
+    if (!isSupabaseConfigured || !session?.user.id) {
+      return;
+    }
+
+    try {
+      setSavedSearchBusyKey(savedSearch.id);
+      setSavedSearches((currentSearches) =>
+        currentSearches.filter((currentSearch) => currentSearch.id !== savedSearch.id),
+      );
+      await removeSavedSearch(savedSearch.id, session.user.id);
+    } catch (error) {
+      console.error("[kolo:mobile-remove-saved-search]", error);
+      setAuthMessage(getErrorMessage(error));
+      const refreshedSavedSearches = await fetchSavedSearches(session.user.id);
+      setSavedSearches(refreshedSavedSearches);
+    } finally {
+      setSavedSearchBusyKey(null);
     }
   }
 
@@ -4322,8 +4446,11 @@ function KoloApp() {
               setSelectedCategory={setSelectedCategory}
               onShareContent={handleShareContent}
               onShareBusiness={handleShareBusiness}
+              onSaveSearch={handleSaveSearch}
               onToggleSavedBusiness={handleToggleSavedBusiness}
               savedBusyBusinessId={savedBusyBusinessId}
+              savedSearchBusyKey={savedSearchBusyKey}
+              savedSearches={savedSearches}
               totalCount={totalBusinessesCount}
               onRestoreDiscoveryTile={() => setDiscoveryReturnPostKey(null)}
             />
@@ -4464,12 +4591,15 @@ function KoloApp() {
               onEnablePushNotifications={() => showNotificationPrompt("onboarding")}
               onShowWalkthrough={showWalkthrough}
               onProfilePanelChange={setActiveProfilePanel}
+              onRemoveSavedSearch={handleRemoveSavedSearch}
               onToggleSavedBusiness={handleToggleSavedBusiness}
               onUpdateContent={handleBusinessContentUpdate}
               profile={currentProfile}
               pushNotificationStatus={pushNotificationStatus}
               savedBusinesses={savedBusinesses}
               savedBusyBusinessId={savedBusyBusinessId}
+              savedSearchBusyKey={savedSearchBusyKey}
+              savedSearches={savedSearches}
               onSignIn={handleGoogleSignIn}
               onSignOut={handleSignOut}
               session={session}
@@ -4801,6 +4931,7 @@ function SearchScreen({
   onOpenBusinessFromDiscovery,
   onSearchFeedback,
   onRestoreDiscoveryTile,
+  onSaveSearch,
   onShareBusiness,
   onShareContent,
   onToggleSavedBusiness,
@@ -4809,6 +4940,8 @@ function SearchScreen({
   restoreDiscoveryTileKey,
   results,
   savedBusyBusinessId,
+  savedSearchBusyKey,
+  savedSearches,
   selectedCategory,
   setLocation,
   setLocalOnly,
@@ -4832,6 +4965,7 @@ function SearchScreen({
   onOpenBusinessFromDiscovery: (business: Business, tileKey: string) => void;
   onSearchFeedback: (helpful: boolean) => void;
   onRestoreDiscoveryTile: () => void;
+  onSaveSearch: (input: SavedSearchInput) => Promise<void> | void;
   onShareBusiness: (business: Business) => Promise<void>;
   onShareContent: (entry: ContentDetailEntry) => Promise<void>;
   onToggleSavedBusiness: (business: Business) => void;
@@ -4840,6 +4974,8 @@ function SearchScreen({
   restoreDiscoveryTileKey: string | null;
   results: Business[];
   savedBusyBusinessId: string | null;
+  savedSearchBusyKey: string | null;
+  savedSearches: SavedSearch[];
   selectedCategory: string;
   setLocation: (value: string) => void;
   setLocalOnly: (value: boolean) => void;
@@ -4907,6 +5043,30 @@ function SearchScreen({
   });
   const showSearchFeedback =
     isDataReady && hasBusinessSearchIntent && results.length > 0;
+  const currentSavedSearchInput = useMemo<SavedSearchInput>(
+    () => ({
+      categorySlug: selectedCategory === "all" ? "" : selectedCategory,
+      city: location,
+      localOnly,
+      query: getEffectiveSearchQuery(query),
+    }),
+    [localOnly, location, query, selectedCategory],
+  );
+  const currentSavedSearchKey = getSavedSearchKey(currentSavedSearchInput);
+  const canSaveCurrentSearch = Boolean(
+    currentSavedSearchInput.query ||
+      currentSavedSearchInput.city ||
+      currentSavedSearchInput.categorySlug,
+  );
+  const hasSavedCurrentSearch = savedSearches.some(
+    (savedSearch) =>
+      getSavedSearchKey({
+        categorySlug: savedSearch.categorySlug,
+        city: savedSearch.city,
+        localOnly: savedSearch.localOnly,
+        query: savedSearch.query,
+      }) === currentSavedSearchKey,
+  );
 
   useEffect(() => {
     if (hasBusinessSearchIntent) {
@@ -5293,6 +5453,52 @@ function SearchScreen({
             {labels.find}
           </Text>
           <View style={styles.resultsHeaderActions}>
+              {canSaveCurrentSearch ? (
+                <Pressable
+                  accessibilityLabel={
+                    hasSavedCurrentSearch
+                      ? labels.savedSearchExists
+                      : labels.savedSearch
+                  }
+                  accessibilityRole="button"
+                  disabled={savedSearchBusyKey === currentSavedSearchKey || hasSavedCurrentSearch}
+                  onPress={() => {
+                    void onSaveSearch(currentSavedSearchInput);
+                  }}
+                  style={[
+                    styles.saveSearchButton,
+                    isDarkMode ? styles.darkSettingRow : null,
+                    hasSavedCurrentSearch ? styles.saveSearchButtonActive : null,
+                  ]}
+                >
+                  <Bookmark
+                    color={
+                      hasSavedCurrentSearch
+                        ? isDarkMode
+                          ? "#111111"
+                          : "#FFFFFF"
+                        : isDarkMode
+                          ? "#E5E5EA"
+                          : "#111111"
+                    }
+                    fill={hasSavedCurrentSearch ? "currentColor" : "none"}
+                    size={15}
+                    strokeWidth={2.7}
+                  />
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.saveSearchButtonText,
+                      isDarkMode ? styles.darkText : null,
+                      hasSavedCurrentSearch ? styles.saveSearchButtonTextActive : null,
+                    ]}
+                  >
+                    {hasSavedCurrentSearch
+                      ? labels.savedSearchFollowing
+                      : labels.savedSearch}
+                  </Text>
+                </Pressable>
+              ) : null}
             <Pressable
               accessibilityRole="button"
               onPress={clearBusinessSearch}
@@ -11197,6 +11403,7 @@ function ProfileScreen({
   onEmailSignUp,
   onProfileSave,
   onProfilePanelChange,
+  onRemoveSavedSearch,
   onShareBusiness,
   onEnablePushNotifications,
   onShowWalkthrough,
@@ -11208,6 +11415,8 @@ function ProfileScreen({
   pushNotificationStatus,
   savedBusinesses,
   savedBusyBusinessId,
+  savedSearchBusyKey,
+  savedSearches,
   session,
   setIsDarkMode,
 }: {
@@ -11233,6 +11442,7 @@ function ProfileScreen({
   onEmailSignUp: (email: string, password: string) => Promise<void>;
   onProfileSave: (input: ProfileUpdateInput) => Promise<UserProfile>;
   onProfilePanelChange: (panel: ProfilePanel) => void;
+  onRemoveSavedSearch: (savedSearch: SavedSearch) => Promise<void> | void;
   onShareBusiness: (business: Business) => Promise<void>;
   onEnablePushNotifications: () => Promise<void>;
   onShowWalkthrough: () => void;
@@ -11244,6 +11454,8 @@ function ProfileScreen({
   pushNotificationStatus: PushNotificationStatus;
   savedBusinesses: Business[];
   savedBusyBusinessId: string | null;
+  savedSearchBusyKey: string | null;
+  savedSearches: SavedSearch[];
   session: Session | null;
   setIsDarkMode: (value: boolean) => void;
 }) {
@@ -11705,6 +11917,67 @@ function ProfileScreen({
           ) : (
             <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
               {labels.noSavedBusinesses}
+            </Text>
+          )}
+        </View>
+      ) : null}
+
+      {session ? (
+        <View style={[styles.card, isDarkMode ? styles.darkCard : null]}>
+          <Text style={[styles.sectionTitle, isDarkMode ? styles.darkText : null]}>
+            {labels.savedSearches}
+          </Text>
+          <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+            {labels.savedSearchesIntro}
+          </Text>
+          {savedSearches.length > 0 ? (
+            <View style={styles.savedSearchList}>
+              {savedSearches.map((savedSearch) => (
+                <View
+                  key={savedSearch.id}
+                  style={[
+                    styles.savedSearchRow,
+                    isDarkMode ? styles.darkSettingRow : null,
+                  ]}
+                >
+                  <Bookmark
+                    color={isDarkMode ? "#E5E5EA" : "#111111"}
+                    size={17}
+                    strokeWidth={2.5}
+                  />
+                  <Text
+                    numberOfLines={2}
+                    style={[
+                      styles.savedSearchRowText,
+                      isDarkMode ? styles.darkText : null,
+                    ]}
+                  >
+                    {getSavedSearchDescription(savedSearch, locale, labels)}
+                  </Text>
+                  <Pressable
+                    accessibilityLabel={labels.removeSavedSearch}
+                    accessibilityRole="button"
+                    disabled={savedSearchBusyKey === savedSearch.id}
+                    onPress={() => {
+                      void onRemoveSavedSearch(savedSearch);
+                    }}
+                    style={[
+                      styles.savedSearchRemoveButton,
+                      isDarkMode ? styles.darkIconBox : null,
+                    ]}
+                  >
+                    <X
+                      color={isDarkMode ? "#E5E5EA" : "#6E6E73"}
+                      size={16}
+                      strokeWidth={2.8}
+                    />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
+              {labels.savedSearchesEmpty}
             </Text>
           )}
         </View>
@@ -15252,6 +15525,25 @@ function getFollowerLabel(business: Business, labels: Record<string, string>) {
   return `${followerCount} ${label}`;
 }
 
+function getSavedSearchDescription(
+  savedSearch: SavedSearch,
+  locale: Locale,
+  labels: Record<string, string>,
+) {
+  const categoryName = savedSearch.categorySlug
+    ? categories.find((category) => category.slug === savedSearch.categorySlug)?.name[
+        locale
+      ] ?? savedSearch.categorySlug
+    : "";
+  const parts = [savedSearch.query, categoryName, savedSearch.city].filter(Boolean);
+
+  if (savedSearch.localOnly) {
+    parts.push(labels.savedSearchLocal);
+  }
+
+  return parts.join(" · ");
+}
+
 function hasBusinessFollowers(business: Business) {
   return Math.max(0, business.followerCount ?? 0) > 0;
 }
@@ -16202,6 +16494,31 @@ const styles = StyleSheet.create({
     color: "#6E6E73",
     fontSize: 12,
     fontWeight: "900",
+  },
+  saveSearchButton: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E5EA",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 5,
+    maxWidth: 156,
+    minHeight: 32,
+    paddingHorizontal: 10,
+  },
+  saveSearchButtonActive: {
+    backgroundColor: "#111111",
+    borderColor: "#111111",
+  },
+  saveSearchButtonText: {
+    color: "#111111",
+    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  saveSearchButtonTextActive: {
+    color: "#FFFFFF",
   },
   cardHeader: {
     alignItems: "center",
@@ -19014,6 +19331,38 @@ const styles = StyleSheet.create({
     height: 34,
     justifyContent: "center",
     width: 34,
+  },
+  savedSearchList: {
+    gap: 8,
+  },
+  savedSearchRemoveButton: {
+    alignItems: "center",
+    backgroundColor: "#F5F5F7",
+    borderColor: "#E5E5EA",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 32,
+    justifyContent: "center",
+    width: 32,
+  },
+  savedSearchRow: {
+    alignItems: "center",
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    minHeight: 54,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+  },
+  savedSearchRowText: {
+    color: "#111111",
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "800",
+    lineHeight: 18,
   },
   metaRow: {
     alignItems: "center",

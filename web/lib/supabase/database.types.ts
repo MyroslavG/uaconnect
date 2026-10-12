@@ -367,6 +367,78 @@ export type Database = {
         };
         Relationships: [];
       };
+      saved_searches: {
+        Row: {
+          id: string;
+          user_id: string;
+          query: string;
+          city: string;
+          category_slug: string;
+          local_only: boolean;
+          last_notified_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          query?: string;
+          city?: string;
+          category_slug?: string;
+          local_only?: boolean;
+          last_notified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          query?: string;
+          city?: string;
+          category_slug?: string;
+          local_only?: boolean;
+          last_notified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      saved_search_notifications: {
+        Row: {
+          id: string;
+          saved_search_id: string;
+          user_id: string;
+          entity_type: "business" | "service" | "event" | "product";
+          entity_id: string;
+          business_id: string;
+          content_item_id: string | null;
+          push_sent_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          saved_search_id: string;
+          user_id: string;
+          entity_type: "business" | "service" | "event" | "product";
+          entity_id: string;
+          business_id: string;
+          content_item_id?: string | null;
+          push_sent_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          saved_search_id?: string;
+          user_id?: string;
+          entity_type?: "business" | "service" | "event" | "product";
+          entity_id?: string;
+          business_id?: string;
+          content_item_id?: string | null;
+          push_sent_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       business_conversations: {
         Row: {
           id: string;

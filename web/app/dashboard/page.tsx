@@ -13,6 +13,7 @@ import { signInWithGoogle } from "@/app/auth/actions";
 import { BusinessCard } from "@/components/business-card";
 import { DashboardBusinessEditor } from "@/components/dashboard-business-editor";
 import { DashboardProfileEditor } from "@/components/dashboard-profile-editor";
+import { SavedSearchesSection } from "@/components/saved-searches-section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,6 +39,7 @@ type BusinessRow = Database["public"]["Tables"]["businesses"]["Row"];
 type BusinessContentRow =
   Database["public"]["Tables"]["business_content_items"]["Row"];
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+type SavedSearch = Database["public"]["Tables"]["saved_searches"]["Row"];
 
 type OwnerProfile = {
   avatarUrl: string;
@@ -102,11 +104,17 @@ export default async function DashboardPage() {
   const contentItemsByRegistrationId = new Map<string, BusinessContentRow[]>();
   let profile: ProfileRow | null = null;
   let savedBusinesses: Business[] = [];
+  let savedSearches: SavedSearch[] = [];
   let errorMessage = "";
 
   if (isSupabaseConfigured() && user) {
     const supabase = await createClient();
-    const [{ data: profileData }, { data, error }, savedDirectoryBusinesses] = await Promise.all([
+    const [
+      { data: profileData },
+      { data, error },
+      savedDirectoryBusinesses,
+      { data: savedSearchRows },
+    ] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
       supabase
         .from("business_registrations")
@@ -114,11 +122,17 @@ export default async function DashboardPage() {
         .eq("owner_id", user.id)
         .order("created_at", { ascending: false }),
       getSavedDirectoryBusinesses(user.id),
+      supabase
+        .from("saved_searches")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }),
     ]);
 
     profile = profileData ?? null;
     registrations = data ?? [];
     savedBusinesses = savedDirectoryBusinesses;
+    savedSearches = savedSearchRows ?? [];
     errorMessage = error?.message ?? "";
 
     if (registrations.length > 0) {
@@ -219,6 +233,11 @@ export default async function DashboardPage() {
             businesses={localizeBusinesses(savedBusinesses, locale)}
             labels={labels}
             locale={locale}
+          />
+          <SavedSearchesSection
+            categories={categories}
+            locale={locale}
+            searches={savedSearches}
           />
         </div>
       )}

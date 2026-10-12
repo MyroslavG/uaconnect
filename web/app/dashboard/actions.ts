@@ -840,6 +840,110 @@ export async function toggleSavedBusiness(formData: FormData) {
   });
 }
 
+export async function saveSearch(formData: FormData) {
+  if (!isSupabaseConfigured()) {
+    logServerEvent("saved_search.not_configured");
+    return;
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    logServerError("saved_search.auth_failed", userError, {
+      hasUser: Boolean(user),
+    });
+    return;
+  }
+
+  const query = String(formData.get("query") ?? "").trim().replace(/\s+/g, " ");
+  const city = String(formData.get("city") ?? "").trim();
+  const categorySlug = String(formData.get("categorySlug") ?? "").trim();
+  const localOnly = formData.get("localOnly") === "1";
+
+  if (!query && !city && !categorySlug) {
+    logServerEvent("saved_search.validation_failed", { userId: user.id });
+    return;
+  }
+
+  const { error } = await supabase.from("saved_searches").upsert(
+    {
+      category_slug: categorySlug,
+      city,
+      local_only: localOnly,
+      query,
+      user_id: user.id,
+    },
+    {
+      ignoreDuplicates: true,
+      onConflict: "user_id,query,city,category_slug,local_only",
+    },
+  );
+
+  if (error) {
+    logServerError("saved_search.create_failed", error, {
+      categorySlug,
+      city,
+      localOnly,
+      userId: user.id,
+    });
+    return;
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/search");
+
+  logServerEvent("saved_search.created", {
+    categorySlug,
+    city,
+    hasQuery: Boolean(query),
+    localOnly,
+    userId: user.id,
+  });
+}
+
+export async function removeSavedSearch(formData: FormData) {
+  if (!isSupabaseConfigured()) {
+    return;
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+  const savedSearchId = String(formData.get("savedSearchId") ?? "").trim();
+
+  if (userError || !user || !savedSearchId) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from("saved_searches")
+    .delete()
+    .eq("id", savedSearchId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    logServerError("saved_search.remove_failed", error, {
+      savedSearchId,
+      userId: user.id,
+    });
+    return;
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/search");
+
+  logServerEvent("saved_search.removed", {
+    savedSearchId,
+    userId: user.id,
+  });
+}
+
 function getBusinessContentInput(formData: FormData) {
   const rawType = String(formData.get("contentType") ?? "").trim();
   const type: BusinessContentType =

@@ -10,6 +10,7 @@ import { SearchLauncher } from "@/components/search-launcher";
 import { SearchLocationAutoFilter } from "@/components/search-location-auto-filter";
 import { SearchFeedback } from "@/components/search-feedback";
 import { SearchResultsTracker } from "@/components/search-results-tracker";
+import { SaveSearchButton } from "@/components/save-search-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,6 +31,7 @@ import {
 } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/locale";
 import { getCurrentUser } from "@/lib/supabase/auth";
+import { createClient } from "@/lib/supabase/server";
 import type { Business } from "@/lib/types";
 
 type SearchPageProps = {
@@ -182,6 +184,26 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const localizedCategory = category
     ? localizeCategory(category, locale)
     : undefined;
+  const savedSearchCity = city?.name ?? near ?? "";
+  const canSaveSearch = Boolean(
+    query?.trim() || savedSearchCity.trim() || category?.slug,
+  );
+  let isSavedSearch = false;
+
+  if (user && canSaveSearch) {
+    const supabase = await createClient();
+    const { data: savedSearch } = await supabase
+      .from("saved_searches")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("query", query?.trim() ?? "")
+      .eq("city", savedSearchCity.trim())
+      .eq("category_slug", category?.slug ?? "")
+      .eq("local_only", localOnly)
+      .maybeSingle();
+
+    isSavedSearch = Boolean(savedSearch);
+  }
   const results = shouldAutoDetectLocation
     ? []
     : await searchDirectoryBusinesses({
@@ -319,6 +341,18 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             />
           ) : localizedResults.length > 0 ? (
             <div>
+              {canSaveSearch ? (
+                <div className="mb-3 flex justify-end">
+                  <SaveSearchButton
+                    canSave={Boolean(user)}
+                    categorySlug={category?.slug}
+                    city={savedSearchCity}
+                    isSaved={isSavedSearch}
+                    localOnly={localOnly}
+                    query={query}
+                  />
+                </div>
+              ) : null}
               <div className="grid gap-4 sm:grid-cols-2">
                 {localizedResults.map((business, index) => (
                   <BusinessCard
@@ -388,6 +422,18 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
                       );
                     })}
                   </div>
+                </div>
+              ) : null}
+              {canSaveSearch ? (
+                <div className="mt-5 flex justify-center">
+                  <SaveSearchButton
+                    canSave={Boolean(user)}
+                    categorySlug={category?.slug}
+                    city={savedSearchCity}
+                    isSaved={isSavedSearch}
+                    localOnly={localOnly}
+                    query={query}
+                  />
                 </div>
               ) : null}
               <Button asChild className="mt-5" variant="outline">
