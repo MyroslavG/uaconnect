@@ -8,6 +8,7 @@ import {
   Search,
   SearchCheck,
   ShieldCheck,
+  ThumbsDown,
   UsersRound,
 } from "lucide-react";
 
@@ -87,10 +88,12 @@ type QueryQualityRow = {
   city: string;
   displayQuery: string;
   noResultSearches: number;
+  notHelpfulFeedback: number;
   platforms: string[];
   saves: number;
   searches: number;
   shares: number;
+  helpfulFeedback: number;
   variants: string[];
   value: string;
 };
@@ -135,6 +138,7 @@ export default async function AdminSearchQualityPage() {
         .in("event_type", [
           "search",
           "search_zero_results",
+          "search_feedback",
           "business_profile_view",
           "contact_click",
           "save_business",
@@ -197,8 +201,9 @@ export default async function AdminSearchQualityPage() {
   const weakQueries = queryRows
     .filter(
       (query) =>
-        query.searches >= 2 &&
-        (query.noResultSearches > 0 || query.businessOpens === 0),
+        query.notHelpfulFeedback > 0 ||
+        (query.searches >= 2 &&
+          (query.noResultSearches > 0 || query.businessOpens === 0)),
     )
     .sort((first, second) =>
       getWeakQueryScore(second) - getWeakQueryScore(first) ||
@@ -207,10 +212,14 @@ export default async function AdminSearchQualityPage() {
     .slice(0, 20);
   const successfulQueries = queryRows
     .filter(
-      (query) => getQueryOutcomeCount(query) > 0)
+      (query) =>
+        getQueryOutcomeCount(query) > 0 || query.helpfulFeedback > 0,
+    )
     .sort(
       (first, second) =>
-        getQueryOutcomeCount(second) - getQueryOutcomeCount(first) ||
+        getQueryOutcomeCount(second) +
+          second.helpfulFeedback -
+          (getQueryOutcomeCount(first) + first.helpfulFeedback) ||
         second.searches - first.searches,
     )
     .slice(0, 20);
@@ -221,6 +230,10 @@ export default async function AdminSearchQualityPage() {
   );
   const totalOutcomeEvents = queryRows.reduce(
     (total, query) => total + getQueryOutcomeCount(query),
+    0,
+  );
+  const totalNegativeFeedback = queryRows.reduce(
+    (total, query) => total + query.notHelpfulFeedback,
     0,
   );
 
@@ -269,7 +282,7 @@ export default async function AdminSearchQualityPage() {
         </Card>
       ) : null}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Metric icon={<Search />} label="Запити за 30 днів" value={totalSearches} />
         <Metric
           icon={<AlertTriangle />}
@@ -286,19 +299,24 @@ export default async function AdminSearchQualityPage() {
           label="Дії після пошуку"
           value={totalOutcomeEvents}
         />
+        <Metric
+          icon={<ThumbsDown />}
+          label="Некорисні результати"
+          value={totalNegativeFeedback}
+        />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
         <QualityTable
           empty="Поки що немає повторюваних запитів, які потребують уваги."
-          intro="Повторювані пошуки без результатів або без відкриття профілю. Почніть із них: додайте синоніми, уточніть опис чи ключові слова бізнесів."
+          intro="Пошуки без результатів, без відкриття профілю або з негативним відгуком. Почніть із них: додайте синоніми, уточніть опис чи ключові слова бізнесів."
           rows={weakQueries}
           title="Запити, які треба покращити"
           variant="warning"
         />
         <QualityTable
           empty="Поки що немає зафіксованих дій після пошуку."
-          intro="Запити, після яких люди відкривали бізнеси, зберігали їх, ділилися ними або натискали контакти."
+          intro="Запити, після яких люди відкривали бізнеси, зберігали їх, ділилися ними, натискали контакти або прямо підтвердили корисність результатів."
           rows={successfulQueries}
           title="Запити, які працюють"
           variant="success"
@@ -397,7 +415,7 @@ function QualityTable({
         <p className="mt-1 text-sm leading-6 text-muted-foreground">{intro}</p>
         {rows.length ? (
           <div className="mt-5 overflow-x-auto">
-            <table className="w-full min-w-[50rem] text-left text-sm">
+            <table className="w-full min-w-[57rem] text-left text-sm">
               <thead className="border-b text-xs font-bold uppercase text-muted-foreground">
                 <tr>
                   <th className="pb-2 pr-4">Запит</th>
@@ -406,6 +424,7 @@ function QualityTable({
                   <th className="pb-2 pr-4 text-right">Пошуки</th>
                   <th className="pb-2 pr-4 text-right">0 результатів</th>
                   <th className="pb-2 pr-4 text-right">Відкриття</th>
+                  <th className="pb-2 pr-4 text-right">Відгук</th>
                   <th className="pb-2 text-right">Дії</th>
                 </tr>
               </thead>
@@ -434,6 +453,11 @@ function QualityTable({
                     <td className="py-3 pr-4 text-right tabular-nums">{row.searches}</td>
                     <td className="py-3 pr-4 text-right tabular-nums">{row.noResultSearches}</td>
                     <td className="py-3 pr-4 text-right tabular-nums">{row.businessOpens}</td>
+                    <td className="py-3 pr-4 text-right tabular-nums">
+                      <span title={formatFeedbackBreakdown(row)}>
+                        {formatFeedbackSummary(row)}
+                      </span>
+                    </td>
                     <td className="py-3 text-right tabular-nums">
                       <span title={formatOutcomeBreakdown(row)}>
                         {getQueryOutcomeCount(row)}
@@ -476,7 +500,9 @@ function getQueryQualityRows(events: SearchQualityEvent[]) {
     const intent = getSearchIntent(event);
 
     if (
-      (event.event_type === "search" || event.event_type === "search_zero_results") &&
+      (event.event_type === "search" ||
+        event.event_type === "search_zero_results" ||
+        event.event_type === "search_feedback") &&
       intent
     ) {
       const row = getOrCreateQuery(queries, intent);
@@ -489,7 +515,13 @@ function getQueryQualityRows(events: SearchQualityEvent[]) {
           row.noResultSearches += 1;
         }
       } else {
-        row.noResultSearches += 1;
+        if (event.event_type === "search_zero_results") {
+          row.noResultSearches += 1;
+        } else if (getMetadataBoolean(event.metadata, "helpful")) {
+          row.helpfulFeedback += 1;
+        } else {
+          row.notHelpfulFeedback += 1;
+        }
       }
     }
 
@@ -557,10 +589,12 @@ function getOrCreateQuery(
     city: intent.city,
     displayQuery: intent.displayQuery,
     noResultSearches: 0,
+    notHelpfulFeedback: 0,
     platforms: [],
     saves: 0,
     searches: 0,
     shares: 0,
+    helpfulFeedback: 0,
     variants: [],
     value: intent.value,
   };
@@ -611,12 +645,24 @@ function getMetadataNumber(metadata: Json, key: string) {
   return Number.isFinite(numberValue) ? numberValue : null;
 }
 
+function getMetadataBoolean(metadata: Json, key: string) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return false;
+  }
+
+  return metadata[key] === true;
+}
+
 function getQueryOutcomeCount(query: QueryQualityRow) {
   return query.contactClicks + query.saves + query.shares;
 }
 
 function getWeakQueryScore(query: QueryQualityRow) {
-  return query.noResultSearches * 4 + (query.businessOpens === 0 ? query.searches : 0);
+  return (
+    query.notHelpfulFeedback * 8 +
+    query.noResultSearches * 4 +
+    (query.businessOpens === 0 ? query.searches : 0)
+  );
 }
 
 function formatSearchContext({
@@ -651,6 +697,22 @@ function formatOutcomeBreakdown(query: QueryQualityRow) {
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+function formatFeedbackSummary(query: QueryQualityRow) {
+  if (!query.helpfulFeedback && !query.notHelpfulFeedback) {
+    return "—";
+  }
+
+  return `${query.helpfulFeedback} так · ${query.notHelpfulFeedback} ні`;
+}
+
+function formatFeedbackBreakdown(query: QueryQualityRow) {
+  if (!query.helpfulFeedback && !query.notHelpfulFeedback) {
+    return "Відгуків поки немає";
+  }
+
+  return `Корисно: ${query.helpfulFeedback} · Некорисно: ${query.notHelpfulFeedback}`;
 }
 
 function addUniqueValue(values: string[], value: string | null) {

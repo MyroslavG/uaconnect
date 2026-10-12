@@ -40,6 +40,7 @@ export type AnalyticsEventType =
   | "notification_view"
   | "page_view"
   | "search"
+  | "search_feedback"
   | "search_zero_results"
   | "save_business"
   | "share"

@@ -92,6 +92,8 @@ import {
   Trash2,
   type LucideIcon,
   Truck,
+  ThumbsDown,
+  ThumbsUp,
   Upload,
   Utensils,
   UserRound,
@@ -4277,6 +4279,35 @@ function KoloApp() {
               }}
               onUseCurrentLocation={applyCurrentLocation}
               onOpenBusinessFromDiscovery={openBusinessFromDiscoveryPost}
+              onSearchFeedback={(helpful) => {
+                const searchQuery = getEffectiveSearchQuery(query);
+                const hasKeyword = Boolean(searchQuery);
+                const hasCategory = selectedCategory !== "all";
+                const hasLocation = Boolean(location.trim());
+
+                void trackMobileAnalyticsEvent({
+                  categorySlug:
+                    selectedCategory === "all" ? undefined : selectedCategory,
+                  city: location.trim() || undefined,
+                  eventType: "search_feedback",
+                  metadata: {
+                    hasCategory,
+                    hasKeyword,
+                    hasLocation,
+                    helpful,
+                    localOnly,
+                    resultCount: results.length,
+                    searchEngine: hasKeyword
+                      ? searchMatches === null
+                        ? "local_fallback"
+                        : "relevance_v2"
+                      : "directory",
+                    source: "search_screen",
+                  },
+                  searchQuery: searchQuery || undefined,
+                  userId: session?.user.id,
+                });
+              }}
               localOnly={localOnly}
               query={query}
               restoreDiscoveryTileKey={discoveryReturnPostKey}
@@ -4768,6 +4799,7 @@ function SearchScreen({
   localOnly,
   onClearFilters,
   onOpenBusinessFromDiscovery,
+  onSearchFeedback,
   onRestoreDiscoveryTile,
   onShareBusiness,
   onShareContent,
@@ -4798,6 +4830,7 @@ function SearchScreen({
   localOnly: boolean;
   onClearFilters: () => void;
   onOpenBusinessFromDiscovery: (business: Business, tileKey: string) => void;
+  onSearchFeedback: (helpful: boolean) => void;
   onRestoreDiscoveryTile: () => void;
   onShareBusiness: (business: Business) => Promise<void>;
   onShareContent: (entry: ContentDetailEntry) => Promise<void>;
@@ -4819,6 +4852,7 @@ function SearchScreen({
   totalCount: number;
 }) {
   const [isBusinessSearchOpen, setIsBusinessSearchOpen] = useState(false);
+  const [searchFeedback, setSearchFeedback] = useState<boolean | null>(null);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [selectedDiscoveryTileIndex, setSelectedDiscoveryTileIndex] =
     useState<number | null>(null);
@@ -4864,12 +4898,25 @@ function SearchScreen({
     hasBusinessSearchIntent &&
     results.length === 0 &&
     searchSuggestions.length > 0;
+  const searchFeedbackKey = JSON.stringify({
+    location,
+    localOnly,
+    query: getEffectiveSearchQuery(query),
+    resultCount: results.length,
+    selectedCategory,
+  });
+  const showSearchFeedback =
+    isDataReady && hasBusinessSearchIntent && results.length > 0;
 
   useEffect(() => {
     if (hasBusinessSearchIntent) {
       setIsBusinessSearchOpen(true);
     }
   }, [hasBusinessSearchIntent]);
+
+  useEffect(() => {
+    setSearchFeedback(null);
+  }, [searchFeedbackKey]);
 
   useEffect(() => {
     if (!showBusinessSearch || !shouldFocusSearchInput.current) {
@@ -5304,31 +5351,84 @@ function SearchScreen({
           <Text style={[styles.loadingLineShort, isDarkMode ? styles.darkLoadingLine : null]} />
         </View>
       ) : results.length > 0 ? (
-        results.map((business, index) => (
-          <BusinessCard
-            business={business}
-            canViewContacts={canViewContacts}
-            isDarkMode={isDarkMode}
-            key={business.id}
-            labels={labels}
-            locale={locale}
-            onPress={() =>
-              setSelectedBusiness(business, {
-                homeSection: "search",
-                position: index + 1,
-                recommendationReason: business.searchMatch?.reason ?? "match",
-                relevanceScore: business.searchMatch?.score ?? 0,
-                searchQuery: getEffectiveSearchQuery(query),
-                source: "search",
-              })
-            }
-            onShare={() => {
-              void onShareBusiness(business);
-            }}
-            onToggleSaved={() => onToggleSavedBusiness(business)}
-            saveBusy={savedBusyBusinessId === business.id}
-          />
-        ))
+        <>
+          {results.map((business, index) => (
+            <BusinessCard
+              business={business}
+              canViewContacts={canViewContacts}
+              isDarkMode={isDarkMode}
+              key={business.id}
+              labels={labels}
+              locale={locale}
+              onPress={() =>
+                setSelectedBusiness(business, {
+                  homeSection: "search",
+                  position: index + 1,
+                  recommendationReason: business.searchMatch?.reason ?? "match",
+                  relevanceScore: business.searchMatch?.score ?? 0,
+                  searchQuery: getEffectiveSearchQuery(query),
+                  source: "search",
+                })
+              }
+              onShare={() => {
+                void onShareBusiness(business);
+              }}
+              onToggleSaved={() => onToggleSavedBusiness(business)}
+              saveBusy={savedBusyBusinessId === business.id}
+            />
+          ))}
+          {showSearchFeedback ? (
+            <View style={[styles.searchFeedback, isDarkMode ? styles.darkCard : null]}>
+              <Text style={[styles.searchFeedbackQuestion, isDarkMode ? styles.darkText : null]}>
+                {searchFeedback === null
+                  ? locale === "uk"
+                    ? "Результати були корисними?"
+                    : "Were these results helpful?"
+                  : locale === "uk"
+                    ? "Дякуємо за відгук."
+                    : "Thank you for your feedback."}
+              </Text>
+              {searchFeedback === null ? (
+                <View style={styles.searchFeedbackActions}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setSearchFeedback(true);
+                      onSearchFeedback(true);
+                    }}
+                    style={[styles.searchFeedbackButton, isDarkMode ? styles.darkSettingRow : null]}
+                  >
+                    <ThumbsUp
+                      color={isDarkMode ? "#F5F5F7" : "#111111"}
+                      size={16}
+                      strokeWidth={2.7}
+                    />
+                    <Text style={[styles.searchFeedbackButtonText, isDarkMode ? styles.darkText : null]}>
+                      {locale === "uk" ? "Так" : "Yes"}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setSearchFeedback(false);
+                      onSearchFeedback(false);
+                    }}
+                    style={[styles.searchFeedbackButton, isDarkMode ? styles.darkSettingRow : null]}
+                  >
+                    <ThumbsDown
+                      color={isDarkMode ? "#F5F5F7" : "#111111"}
+                      size={16}
+                      strokeWidth={2.7}
+                    />
+                    <Text style={[styles.searchFeedbackButtonText, isDarkMode ? styles.darkText : null]}>
+                      {locale === "uk" ? "Ні" : "No"}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+        </>
       ) : showSearchRecovery ? (
         <View style={styles.searchRecovery}>
           <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
@@ -19417,6 +19517,45 @@ const styles = StyleSheet.create({
     shadowOffset: { height: 10, width: 0 },
     shadowOpacity: 0.06,
     shadowRadius: 18,
+  },
+  searchFeedback: {
+    alignItems: "center",
+    backgroundColor: "#FFFEFB",
+    borderColor: "#E4DDD2",
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between",
+    marginHorizontal: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  searchFeedbackActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  searchFeedbackButton: {
+    alignItems: "center",
+    backgroundColor: "#F3EEE6",
+    borderColor: "#DED5C8",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    minHeight: 36,
+    paddingHorizontal: 12,
+  },
+  searchFeedbackButtonText: {
+    color: "#111111",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  searchFeedbackQuestion: {
+    color: "#111111",
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "800",
   },
   searchInlineIconButton: {
     alignItems: "center",

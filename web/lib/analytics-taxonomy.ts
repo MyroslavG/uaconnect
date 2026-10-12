@@ -5,6 +5,7 @@ export const analyticsEventTypes = [
   "signin",
   "search",
   "search_zero_results",
+  "search_feedback",
   "business_profile_view",
   "content_view",
   "contact_click",
@@ -74,6 +75,16 @@ export const analyticsTaxonomy = {
       "city",
       "category_slug",
       "metadata.localOnly",
+    ],
+  },
+  search_feedback: {
+    description: "A user rates whether the search results were useful.",
+    primaryFields: [
+      "search_query",
+      "city",
+      "category_slug",
+      "metadata.helpful",
+      "metadata.resultCount",
     ],
   },
   business_profile_view: {

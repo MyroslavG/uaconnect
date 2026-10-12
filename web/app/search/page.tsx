@@ -8,6 +8,7 @@ import { ContactAccessCard } from "@/components/contact-access-card";
 import { ResultsMap } from "@/components/results-map";
 import { SearchLauncher } from "@/components/search-launcher";
 import { SearchLocationAutoFilter } from "@/components/search-location-auto-filter";
+import { SearchFeedback } from "@/components/search-feedback";
 import { SearchResultsTracker } from "@/components/search-results-tracker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -129,6 +130,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     !locationReady;
   const shouldAutoDetectLocation =
     !shouldShowDiscovery && !citySlug && !near && !coordinates && !locationReady;
+  const hasSearchIntent = Boolean(
+    query?.trim() || citySlug || categorySlug || near || coordinates || localOnly,
+  );
   const city = citySlug ? getCity(citySlug) : undefined;
   const category = categorySlug ? getCategory(categorySlug) : undefined;
   const user = await getCurrentUser();
@@ -314,21 +318,38 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               text={labels.detectingLocationText as string}
             />
           ) : localizedResults.length > 0 ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              {localizedResults.map((business, index) => (
-                <BusinessCard
-                  key={business.slug}
-                  business={business}
-                  canViewContacts={canViewContacts}
-                  priority={index < 2}
-                  locale={locale}
-                  searchTracking={
-                    query?.trim()
-                      ? { position: index + 1, query }
-                      : undefined
-                  }
-                />
-              ))}
+            <div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {localizedResults.map((business, index) => (
+                  <BusinessCard
+                    key={business.slug}
+                    business={business}
+                    canViewContacts={canViewContacts}
+                    priority={index < 2}
+                    locale={locale}
+                    searchTracking={
+                      query?.trim()
+                        ? { position: index + 1, query }
+                        : undefined
+                    }
+                  />
+                ))}
+              </div>
+              <SearchFeedback
+                categorySlug={category?.slug}
+                city={coordinates ? near : city?.slug ?? near}
+                enabled={
+                  hasSearchIntent &&
+                  !shouldAutoDetectLocation &&
+                  !shouldShowDiscovery
+                }
+                locale={locale}
+                localOnly={localOnly}
+                query={query}
+                radiusInKm={coordinates ? radiusInKm : undefined}
+                resultCount={localizedResults.length}
+                source="web_search"
+              />
             </div>
           ) : (
             <div className="rounded-lg border bg-card p-8 text-center">

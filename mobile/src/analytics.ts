@@ -52,13 +52,17 @@ export async function trackMobileAnalyticsEvent({
   try {
     const rawCategorySlug = categorySlug ?? business?.categorySlug ?? null;
     const rawCity = city ?? business?.city ?? null;
+    const hasSearchContext =
+      eventType === "search" ||
+      eventType === "search_zero_results" ||
+      eventType === "search_feedback";
     const normalizedCategorySlug = normalizeAnalyticsCategorySlug(
       rawCategorySlug,
-      eventType === "search" ? ANALYTICS_ALL_CATEGORY : null,
+      hasSearchContext ? ANALYTICS_ALL_CATEGORY : null,
     );
     const normalizedCity = normalizeAnalyticsCity(
       rawCity,
-      eventType === "search" ? ANALYTICS_ALL_LOCATION : null,
+      hasSearchContext ? ANALYTICS_ALL_LOCATION : null,
     );
 
     await supabase.from("analytics_events").insert({

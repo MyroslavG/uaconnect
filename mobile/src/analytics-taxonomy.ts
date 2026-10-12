@@ -5,6 +5,7 @@ export const analyticsEventTypes = [
   "signin",
   "search",
   "search_zero_results",
+  "search_feedback",
   "business_profile_view",
   "content_view",
   "contact_click",

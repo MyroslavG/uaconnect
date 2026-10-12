@@ -50,13 +50,17 @@ export async function trackAnalyticsEvent(input: TrackAnalyticsEventInput) {
       data: { session },
     } = await supabase.auth.getSession();
     const metadata = removeUndefinedValues(input.metadata ?? {});
+    const hasSearchContext =
+      input.event_type === "search" ||
+      input.event_type === "search_zero_results" ||
+      input.event_type === "search_feedback";
     const categorySlug = normalizeAnalyticsCategorySlug(
       input.category_slug,
-      input.event_type === "search" ? ANALYTICS_ALL_CATEGORY : null,
+      hasSearchContext ? ANALYTICS_ALL_CATEGORY : null,
     );
     const city = normalizeAnalyticsCity(
       input.city,
-      input.event_type === "search" ? ANALYTICS_ALL_LOCATION : null,
+      hasSearchContext ? ANALYTICS_ALL_LOCATION : null,
     );
 
     const { error } = await supabase.from("analytics_events").insert({
