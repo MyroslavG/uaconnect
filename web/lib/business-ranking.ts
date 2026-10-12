@@ -49,7 +49,8 @@ function getBusinessRankScore(
     getCategoryScore(business, options.categorySlug) +
     getProfileCompletenessScore(business) +
     getActivityScore(business, now) +
-    getNewBusinessScore(business, now)
+    getNewBusinessScore(business, now) +
+    getFollowingScore(business)
   );
 }
 
@@ -174,6 +175,10 @@ function getNewBusinessScore(business: Business, now: number) {
     quarter: 0,
     halfYear: 0,
   });
+}
+
+function getFollowingScore(business: Business) {
+  return business.isSaved ? 7 : 0;
 }
 
 function getActivitySignals(business: Business, now: number) {

@@ -2488,7 +2488,7 @@ function KoloApp() {
       searchEngine: hasKeyword
         ? searchMatches === null
           ? "local_fallback"
-          : "relevance_v1"
+          : "relevance_v2"
         : "directory",
     });
 
@@ -2512,7 +2512,7 @@ function KoloApp() {
           searchEngine: hasKeyword
             ? searchMatches === null
               ? "local_fallback"
-              : "relevance_v1"
+              : "relevance_v2"
             : "directory",
           source: "search_screen",
         },
@@ -2535,7 +2535,7 @@ function KoloApp() {
             searchEngine: hasKeyword
               ? searchMatches === null
                 ? "local_fallback"
-                : "relevance_v1"
+                : "relevance_v2"
               : "directory",
             source: "search_screen",
           },

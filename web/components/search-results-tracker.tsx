@@ -54,6 +54,7 @@ export function SearchResultsTracker({
       localOnly,
       radiusInKm,
       resultCount,
+      searchEngine: hasKeyword ? "relevance_v2" : "directory",
       source,
     };
 

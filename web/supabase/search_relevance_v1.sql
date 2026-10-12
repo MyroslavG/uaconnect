@@ -1,4 +1,4 @@
--- Search relevance v1
+-- Search relevance v2
 --
 -- Shared by the web and mobile clients. The function only exposes published
 -- businesses and runs as the caller, so normal RLS rules continue to apply.
@@ -116,7 +116,10 @@ as $$
           concat_ws(' ', item.title, item.description, item.location),
           ' '
         )
-      ) as content_text
+      ) as content_text,
+      count(*)::integer as content_count,
+      count(*) filter (where item.content_type = 'event')::integer as upcoming_event_count,
+      max(coalesce(item.updated_at, item.created_at)) as latest_content_at
     from public.business_content_items as item
     where item.status = 'published'
       and (
@@ -131,6 +134,12 @@ as $$
       business.category_slug,
       business.serves_all_canada,
       business.verified_at,
+      business.logo_url,
+      business.phone,
+      business.website,
+      business.instagram,
+      business.address,
+      business.created_at,
       business.updated_at,
       public.kolo_normalize_search_text(business.name) as name_text,
       public.kolo_normalize_search_text(coalesce(business.keywords, '')) as keywords_text,
@@ -145,6 +154,10 @@ as $$
         business.keywords
       ) as business_text,
       coalesce(content.content_text, '') as content_text,
+      coalesce(content.content_count, 0) as content_count,
+      coalesce(content.upcoming_event_count, 0) as upcoming_event_count,
+      content.latest_content_at,
+      saved.business_id is not null as is_saved_by_current_user,
       input.query,
       input.city_filter,
       input.expanded_terms,
@@ -153,6 +166,9 @@ as $$
     cross join input
     left join content_documents as content
       on content.registration_id = business.registration_id
+    left join public.saved_businesses as saved
+      on saved.business_id = business.id
+      and saved.user_id = (select auth.uid())
     where business.status = 'published'
       and (
         input.category_filter = ''
@@ -220,7 +236,27 @@ as $$
             else 0.76
           end then 95
         else 0
-      end as typo_score
+      end as typo_score,
+      (
+        case when nullif(logo_url, '') is not null then 6 else 0 end +
+        case when char_length(description_text) >= 80 then 5 else 0 end +
+        case when char_length(description_text) >= 160 then 3 else 0 end +
+        case when nullif(phone, '') is not null
+                    or nullif(website, '') is not null
+                    or nullif(instagram, '') is not null then 5 else 0 end +
+        case when nullif(address, '') is not null or serves_all_canada then 4 else 0 end +
+        case when verified_at is not null then 8 else 0 end
+      ) as profile_score,
+      (
+        least(content_count, 3) * 3 +
+        least(upcoming_event_count, 2) * 5 +
+        case
+          when greatest(updated_at, coalesce(latest_content_at, updated_at)) >= now() - interval '14 days' then 8
+          when greatest(updated_at, coalesce(latest_content_at, updated_at)) >= now() - interval '30 days' then 4
+          else 0
+        end
+      ) as activity_score,
+      case when is_saved_by_current_user then 7 else 0 end as following_score
     from candidates
   )
   select
@@ -235,7 +271,9 @@ as $$
       city_score +
       alias_score +
       typo_score +
-      case when verified_at is not null then 20 else 0 end
+      profile_score +
+      activity_score +
+      following_score
     )::integer as relevance_score,
     case
       when name_score > 0 then 'name'
