@@ -24,8 +24,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { parseBusinessKeywords } from "@/lib/business-keywords";
-import { categories } from "@/lib/data";
-import { localizeCategories } from "@/lib/i18n";
+import { categories, getCategory, getCity } from "@/lib/data";
+import {
+  localizeCategories,
+  localizeCategory,
+  localizeCity,
+} from "@/lib/i18n";
+import {
+  ANALYTICS_ALL_CATEGORY,
+  ANALYTICS_ALL_LOCATION,
+  normalizeAnalyticsCategorySlug,
+  normalizeAnalyticsCity,
+} from "@/lib/analytics-normalization";
 import { getCurrentUser, isCurrentUserAdmin } from "@/lib/supabase/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import type { Database, Json } from "@/lib/supabase/database.types";
@@ -50,9 +60,12 @@ type BusinessRow = Pick<
 type SearchQualityEvent = Pick<
   Database["public"]["Tables"]["analytics_events"]["Row"],
   | "business_id"
+  | "category_slug"
+  | "city"
   | "event_type"
   | "metadata"
   | "occurred_at"
+  | "platform"
   | "search_query"
   | "session_id"
 >;
@@ -69,13 +82,25 @@ type SearchQueryRuleRow = Pick<
 
 type QueryQualityRow = {
   businessOpens: number;
+  categorySlug: string;
   contactClicks: number;
+  city: string;
   displayQuery: string;
   noResultSearches: number;
+  platforms: string[];
   saves: number;
   searches: number;
   shares: number;
+  variants: string[];
   value: string;
+};
+
+type SearchIntent = {
+  categorySlug: string;
+  city: string;
+  displayQuery: string;
+  value: string;
+  variant: string;
 };
 
 const dayInMs = 24 * 60 * 60 * 1000;
@@ -103,7 +128,9 @@ export default async function AdminSearchQualityPage() {
         .limit(2000),
       supabase
         .from("analytics_events")
-        .select("event_type, search_query, business_id, metadata, occurred_at, session_id")
+        .select(
+          "event_type, search_query, business_id, city, category_slug, metadata, occurred_at, platform, session_id",
+        )
         .gte("occurred_at", since)
         .in("event_type", [
           "search",
@@ -328,7 +355,7 @@ export default async function AdminSearchQualityPage() {
 
       <p className="text-xs leading-5 text-muted-foreground">
         Період: останні 30 днів. Дії після пошуку прив&apos;язуються до останнього
-        ключового запиту в межах 30-хвилинної сесії.
+        останнього пошуку в межах 30-хвилинної сесії.
       </p>
     </main>
   );
@@ -370,10 +397,12 @@ function QualityTable({
         <p className="mt-1 text-sm leading-6 text-muted-foreground">{intro}</p>
         {rows.length ? (
           <div className="mt-5 overflow-x-auto">
-            <table className="w-full min-w-[34rem] text-left text-sm">
+            <table className="w-full min-w-[50rem] text-left text-sm">
               <thead className="border-b text-xs font-bold uppercase text-muted-foreground">
                 <tr>
                   <th className="pb-2 pr-4">Запит</th>
+                  <th className="pb-2 pr-4">Контекст</th>
+                  <th className="pb-2 pr-4">Платформа</th>
                   <th className="pb-2 pr-4 text-right">Пошуки</th>
                   <th className="pb-2 pr-4 text-right">0 результатів</th>
                   <th className="pb-2 pr-4 text-right">Відкриття</th>
@@ -383,13 +412,33 @@ function QualityTable({
               <tbody>
                 {rows.map((row) => (
                   <tr className="border-b last:border-b-0" key={row.value}>
-                    <td className="max-w-48 truncate py-3 pr-4 font-bold" title={row.displayQuery}>
-                      {row.displayQuery}
+                    <td className="max-w-48 py-3 pr-4">
+                      <p className="truncate font-bold" title={row.displayQuery}>
+                        {row.displayQuery}
+                      </p>
+                      {row.variants.length > 1 ? (
+                        <p
+                          className="mt-1 truncate text-xs text-muted-foreground"
+                          title={row.variants.join(", ")}
+                        >
+                          Варіанти: {row.variants.join(", ")}
+                        </p>
+                      ) : null}
+                    </td>
+                    <td className="max-w-44 py-3 pr-4 text-xs leading-5 text-muted-foreground">
+                      {formatSearchContext(row)}
+                    </td>
+                    <td className="py-3 pr-4 text-xs text-muted-foreground">
+                      {formatPlatforms(row.platforms)}
                     </td>
                     <td className="py-3 pr-4 text-right tabular-nums">{row.searches}</td>
                     <td className="py-3 pr-4 text-right tabular-nums">{row.noResultSearches}</td>
                     <td className="py-3 pr-4 text-right tabular-nums">{row.businessOpens}</td>
-                    <td className="py-3 text-right tabular-nums">{getQueryOutcomeCount(row)}</td>
+                    <td className="py-3 text-right tabular-nums">
+                      <span title={formatOutcomeBreakdown(row)}>
+                        {getQueryOutcomeCount(row)}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -424,10 +473,15 @@ function getQueryQualityRows(events: SearchQualityEvent[]) {
   const eventsBySession = new Map<string, SearchQualityEvent[]>();
 
   for (const event of events) {
-    const query = normalizeSearchQuery(event.search_query);
+    const intent = getSearchIntent(event);
 
-    if ((event.event_type === "search" || event.event_type === "search_zero_results") && query) {
-      const row = getOrCreateQuery(queries, query, event.search_query ?? query);
+    if (
+      (event.event_type === "search" || event.event_type === "search_zero_results") &&
+      intent
+    ) {
+      const row = getOrCreateQuery(queries, intent);
+      addUniqueValue(row.platforms, event.platform);
+      addUniqueValue(row.variants, intent.variant);
 
       if (event.event_type === "search") {
         row.searches += 1;
@@ -451,10 +505,10 @@ function getQueryQualityRows(events: SearchQualityEvent[]) {
 
     for (const event of sessionEvents) {
       const occurredAt = Date.parse(event.occurred_at);
-      const query = normalizeSearchQuery(event.search_query);
+      const intent = getSearchIntent(event);
 
-      if (event.event_type === "search" && query && Number.isFinite(occurredAt)) {
-        lastSearch = { occurredAt, query };
+      if (event.event_type === "search" && intent && Number.isFinite(occurredAt)) {
+        lastSearch = { occurredAt, query: intent.value };
         continue;
       }
 
@@ -489,26 +543,54 @@ function getQueryQualityRows(events: SearchQualityEvent[]) {
 
 function getOrCreateQuery(
   queries: Map<string, QueryQualityRow>,
-  value: string,
-  displayQuery: string,
+  intent: SearchIntent,
 ) {
-  const existing = queries.get(value);
+  const existing = queries.get(intent.value);
   if (existing) {
     return existing;
   }
 
   const next: QueryQualityRow = {
     businessOpens: 0,
+    categorySlug: intent.categorySlug,
     contactClicks: 0,
-    displayQuery: displayQuery.trim(),
+    city: intent.city,
+    displayQuery: intent.displayQuery,
     noResultSearches: 0,
+    platforms: [],
     saves: 0,
     searches: 0,
     shares: 0,
-    value,
+    variants: [],
+    value: intent.value,
   };
-  queries.set(value, next);
+  queries.set(intent.value, next);
   return next;
+}
+
+function getSearchIntent(event: SearchQualityEvent): SearchIntent | null {
+  const query = normalizeSearchQuery(event.search_query);
+  const categorySlug = normalizeAnalyticsCategorySlug(
+    event.category_slug,
+    ANALYTICS_ALL_CATEGORY,
+  ) ?? ANALYTICS_ALL_CATEGORY;
+  const city = normalizeAnalyticsCity(event.city, ANALYTICS_ALL_LOCATION) ?? ANALYTICS_ALL_LOCATION;
+
+  if (!query && categorySlug === ANALYTICS_ALL_CATEGORY && city === ANALYTICS_ALL_LOCATION) {
+    return null;
+  }
+
+  const rawQuery = String(event.search_query ?? "").trim();
+  const displayQuery = rawQuery || "Пошук за фільтрами";
+  const variant = rawQuery || formatSearchContext({ categorySlug, city });
+
+  return {
+    categorySlug,
+    city,
+    displayQuery,
+    value: `${query || "filters"}|${categorySlug}|${city}`,
+    variant,
+  };
 }
 
 function normalizeSearchQuery(value: string | null) {
@@ -535,4 +617,44 @@ function getQueryOutcomeCount(query: QueryQualityRow) {
 
 function getWeakQueryScore(query: QueryQualityRow) {
   return query.noResultSearches * 4 + (query.businessOpens === 0 ? query.searches : 0);
+}
+
+function formatSearchContext({
+  categorySlug,
+  city,
+}: Pick<QueryQualityRow, "categorySlug" | "city">) {
+  const segments: string[] = [];
+  const category = getCategory(categorySlug);
+  const searchCity = getCity(city);
+
+  if (categorySlug !== ANALYTICS_ALL_CATEGORY) {
+    segments.push(`Категорія: ${category ? localizeCategory(category, "uk").name : categorySlug}`);
+  }
+  if (city !== ANALYTICS_ALL_LOCATION) {
+    segments.push(`Місто: ${searchCity ? localizeCity(searchCity, "uk").name : city}`);
+  }
+
+  return segments.join(" · ") || "Уся Канада · усі категорії";
+}
+
+function formatPlatforms(platforms: string[]) {
+  return platforms
+    .map((platform) => ({ mobile: "Застосунок", web: "Веб" })[platform] ?? platform)
+    .join(", ");
+}
+
+function formatOutcomeBreakdown(query: QueryQualityRow) {
+  return [
+    query.contactClicks ? `Контакти: ${query.contactClicks}` : null,
+    query.saves ? `Збереження: ${query.saves}` : null,
+    query.shares ? `Поширення: ${query.shares}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function addUniqueValue(values: string[], value: string | null) {
+  if (value && !values.includes(value)) {
+    values.push(value);
+  }
 }
