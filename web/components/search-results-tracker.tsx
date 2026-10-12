@@ -47,21 +47,33 @@ export function SearchResultsTracker({
     const hasCategory = Boolean(categorySlug && categorySlug !== "all");
     const hasLocation = Boolean(city && city !== "all-canada");
 
+    const metadata = {
+      hasCategory,
+      hasKeyword,
+      hasLocation,
+      localOnly,
+      radiusInKm,
+      resultCount,
+      source,
+    };
+
     void trackAnalyticsEvent({
       category_slug: categorySlug,
       city,
       event_type: "search",
-      metadata: {
-        hasCategory,
-        hasKeyword,
-        hasLocation,
-        localOnly,
-        radiusInKm,
-        resultCount,
-        source,
-      },
+      metadata,
       search_query: normalizedQuery || null,
     });
+
+    if (resultCount === 0) {
+      void trackAnalyticsEvent({
+        category_slug: categorySlug,
+        city,
+        event_type: "search_zero_results",
+        metadata,
+        search_query: normalizedQuery || null,
+      });
+    }
   }, [
     categorySlug,
     city,

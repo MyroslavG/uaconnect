@@ -17,6 +17,7 @@ import {
   getDirectoryBusinesses,
   searchDirectoryBusinesses,
 } from "@/lib/directory-data";
+import { getSearchIntentSuggestions } from "@/lib/search-aliases";
 import {
   copy,
   localizeBusinesses,
@@ -59,6 +60,8 @@ const text = {
     noResults: "Нічого не знайдено",
     noResultsText:
       "Спробуйте змінити ключове слово, локацію або категорію.",
+    recoveryTitle: "Можливо, ви шукали",
+    recoveryText: "Оберіть один із близьких варіантів.",
     discoverTitle: "Огляд",
     discoverText:
       "Пости, події, послуги й продукти від українських бізнесів у Kolo.",
@@ -80,6 +83,8 @@ const text = {
     noResults: "No results found",
     noResultsText:
       "Try changing the keyword, location, or category.",
+    recoveryTitle: "Maybe you meant",
+    recoveryText: "Choose one of these close matches.",
     discoverTitle: "Explore",
     discoverText:
       "Posts, events, services, and products from Ukrainian businesses on Kolo.",
@@ -163,6 +168,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   }
 
   const nextPath = `/search${nextParams.size ? `?${nextParams.toString()}` : ""}`;
+  const recoverySuggestions = getSearchIntentSuggestions(query, locale);
   const localizedCities = localizeCities(cities, locale).map((cityOption) => ({
     ...cityOption,
     summary: "",
@@ -333,6 +339,36 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
                 {labels.noResultsText as string}
               </p>
+              {recoverySuggestions.length ? (
+                <div className="mx-auto mt-5 max-w-lg border-t pt-5">
+                  <p className="text-sm font-black">
+                    {labels.recoveryTitle as string}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {labels.recoveryText as string}
+                  </p>
+                  <div className="mt-3 flex flex-wrap justify-center gap-2">
+                    {recoverySuggestions.map((suggestion) => {
+                      const suggestionParams = new URLSearchParams(nextParams);
+                      suggestionParams.set("q", suggestion.query);
+                      suggestionParams.set("category", suggestion.categorySlug);
+
+                      return (
+                        <Button
+                          asChild
+                          key={`${suggestion.categorySlug}-${suggestion.query}`}
+                          size="sm"
+                          variant="outline"
+                        >
+                          <Link href={`/search?${suggestionParams.toString()}`}>
+                            {suggestion.title}
+                          </Link>
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
               <Button asChild className="mt-5" variant="outline">
                 <Link href="/search">{labels.clear as string}</Link>
               </Button>

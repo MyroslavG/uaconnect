@@ -189,17 +189,14 @@ export function getSearchIntentSuggestions(
   }
 
   return querySuggestionGroups
-    .filter((group) =>
-      group.aliases
-        .map(normalizeSearchText)
-        .some(
-          (alias) =>
-            alias.startsWith(normalizedQuery) ||
-            isRuleMatch(normalizedQuery, alias),
-        ),
-    )
-    .slice(0, 3)
     .map((group) => ({
+      group,
+      score: getSuggestionMatchScore(normalizedQuery, group.aliases),
+    }))
+    .filter(({ score }) => score >= 0.72)
+    .sort((first, second) => second.score - first.score)
+    .slice(0, 3)
+    .map(({ group }) => ({
       categorySlug: group.categorySlug,
       query: group.query,
       title: group.title[locale],
@@ -296,4 +293,61 @@ function isRuleMatch(query: string, ruleTerm: string) {
     (ruleTerm.length >= 3 && query.includes(ruleTerm)) ||
     (query.length >= 3 && ruleTerm.includes(query))
   );
+}
+
+function getSuggestionMatchScore(query: string, aliases: readonly string[]) {
+  const queryParts = query.split(" ").filter((part) => part.length >= 2);
+  const candidates = queryParts.length > 1 ? [query, ...queryParts] : [query];
+
+  return Math.max(
+    0,
+    ...aliases.flatMap((rawAlias) => {
+      const alias = normalizeSearchText(rawAlias);
+
+      return candidates.map((candidate) => {
+        if (alias.startsWith(candidate) || isRuleMatch(candidate, alias)) {
+          return 1;
+        }
+
+        if (candidate.length < 4 || alias.length < 4) {
+          return 0;
+        }
+
+        return getEditSimilarity(candidate, alias);
+      });
+    }),
+  );
+}
+
+function getEditSimilarity(first: string, second: string) {
+  const lengthDifference = Math.abs(first.length - second.length);
+
+  if (lengthDifference > 2) {
+    return 0;
+  }
+
+  const previousRow = Array.from(
+    { length: second.length + 1 },
+    (_, index) => index,
+  );
+
+  for (let firstIndex = 1; firstIndex <= first.length; firstIndex += 1) {
+    let previousDiagonal = previousRow[0];
+    previousRow[0] = firstIndex;
+
+    for (let secondIndex = 1; secondIndex <= second.length; secondIndex += 1) {
+      const previousAbove = previousRow[secondIndex];
+      const substitutionCost =
+        first[firstIndex - 1] === second[secondIndex - 1] ? 0 : 1;
+
+      previousRow[secondIndex] = Math.min(
+        previousRow[secondIndex] + 1,
+        previousRow[secondIndex - 1] + 1,
+        previousDiagonal + substitutionCost,
+      );
+      previousDiagonal = previousAbove;
+    }
+  }
+
+  return 1 - previousRow[second.length] / Math.max(first.length, second.length);
 }

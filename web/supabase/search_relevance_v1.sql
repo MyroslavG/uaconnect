@@ -212,8 +212,13 @@ as $$
         when char_length(query) >= 4
           and greatest(
             extensions.word_similarity(query, name_text),
-            extensions.word_similarity(query, keywords_text)
-          ) >= 0.72 then 75
+            extensions.word_similarity(query, keywords_text),
+            extensions.word_similarity(query, business_text),
+            extensions.word_similarity(query, content_text)
+          ) >= case
+            when char_length(query) >= 6 then 0.68
+            else 0.76
+          end then 95
         else 0
       end as typo_score
     from candidates

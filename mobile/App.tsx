@@ -596,6 +596,8 @@ const copy = {
     searchBusinesses: "Знайти бізнес",
     searchStartHint: "Почніть вводити назву, послугу або виберіть категорію.",
     searchPlaceholder: "Назва, послуга або категорія",
+    searchRecoveryText: "Оберіть підказку, щоб знайти близький варіант.",
+    searchRecoveryTitle: "Можливо, ви шукали",
     selected: "Вибрано",
     sendMessage: "Надіслати",
     serviceTitle: "Назва послуги",
@@ -915,6 +917,8 @@ const copy = {
     searchBusinesses: "Find a business",
     searchStartHint: "Start typing a name, service, or choose a category.",
     searchPlaceholder: "Name, service, or category",
+    searchRecoveryText: "Choose a suggestion to find a close match.",
+    searchRecoveryTitle: "Maybe you meant",
     selected: "Selected",
     sendMessage: "Send",
     serviceTitle: "Service title",
@@ -2515,6 +2519,30 @@ function KoloApp() {
         searchQuery: searchQuery || undefined,
         userId: session?.user.id,
       });
+
+      if (results.length === 0) {
+        void trackMobileAnalyticsEvent({
+          categorySlug:
+            selectedCategory === "all" ? undefined : selectedCategory,
+          city: location.trim() || undefined,
+          eventType: "search_zero_results",
+          metadata: {
+            hasCategory,
+            hasKeyword,
+            hasLocation,
+            localOnly,
+            resultCount: results.length,
+            searchEngine: hasKeyword
+              ? searchMatches === null
+                ? "local_fallback"
+                : "relevance_v1"
+              : "directory",
+            source: "search_screen",
+          },
+          searchQuery: searchQuery || undefined,
+          userId: session?.user.id,
+        });
+      }
     }, 700);
 
     return () => clearTimeout(timeout);
@@ -4831,6 +4859,11 @@ function SearchScreen({
     () => getSearchIntentSuggestions(query),
     [query],
   );
+  const showSearchRecovery =
+    isDataReady &&
+    hasBusinessSearchIntent &&
+    results.length === 0 &&
+    searchSuggestions.length > 0;
 
   useEffect(() => {
     if (hasBusinessSearchIntent) {
@@ -5119,7 +5152,7 @@ function SearchScreen({
           </Pressable>
         </View>
 
-        {searchSuggestions.length ? (
+        {searchSuggestions.length && !showSearchRecovery ? (
           <View style={styles.searchSuggestions}>
             <Text
               style={[
@@ -5296,6 +5329,44 @@ function SearchScreen({
             saveBusy={savedBusyBusinessId === business.id}
           />
         ))
+      ) : showSearchRecovery ? (
+        <View style={styles.searchRecovery}>
+          <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
+            {labels.noResults}
+          </Text>
+          <Text style={[styles.searchRecoveryTitle, isDarkMode ? styles.darkText : null]}>
+            {labels.searchRecoveryTitle}
+          </Text>
+          <Text style={[styles.mutedText, isDarkMode ? styles.darkMutedText : null]}>
+            {labels.searchRecoveryText}
+          </Text>
+          <View style={styles.searchRecoveryActions}>
+            {searchSuggestions.map((suggestion) => (
+              <Pressable
+                accessibilityRole="button"
+                key={`${suggestion.categorySlug}-${suggestion.query}`}
+                onPress={() => {
+                  setQuery(suggestion.query);
+                  setSelectedCategory(suggestion.categorySlug);
+                }}
+                style={[
+                  styles.searchSuggestionChip,
+                  isDarkMode ? styles.darkSearchSuggestionChip : null,
+                ]}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.searchSuggestionText,
+                    isDarkMode ? styles.darkText : null,
+                  ]}
+                >
+                  {locale === "uk" ? suggestion.titleUk : suggestion.titleEn}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
       ) : (
         <Text style={[styles.emptyState, isDarkMode ? styles.darkEmptyState : null]}>
           {labels.noResults}
@@ -19407,6 +19478,21 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontSize: 12,
     fontWeight: "800",
+  },
+  searchRecovery: {
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  searchRecoveryActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  searchRecoveryTitle: {
+    color: "#111111",
+    fontSize: 16,
+    fontWeight: "900",
   },
   darkSearchSuggestionChip: {
     backgroundColor: "#1C1C1E",
